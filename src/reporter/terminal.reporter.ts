@@ -390,6 +390,59 @@ function renderConnectionsSummary(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
+function renderSpeedTest(result: NetworkScanResult): string {
+  const s = result.speed;
+  if (!s) return "";
+
+  const lines: string[] = [sectionHeader("SPEED TEST"), row("")];
+
+  // Rating badge
+  const ratingColors: Record<string, (s: string) => string> = {
+    excellent: chalk.green,
+    good: chalk.green,
+    fair: chalk.yellow,
+    poor: chalk.red,
+    unusable: chalk.red,
+  };
+  const colorFn = ratingColors[s.rating] ?? chalk.white;
+  lines.push(row(`  Rating:  ${colorFn(s.rating.toUpperCase())}`));
+  lines.push(row(""));
+
+  // Download/Upload bars
+  const maxBar = 40;
+  const dlBar = Math.min(maxBar, Math.round(s.download.speedMbps / 5));
+  const ulBar = Math.min(maxBar, Math.round(s.upload.speedMbps / 5));
+  const dlColor = s.download.speedMbps >= 50 ? chalk.green : s.download.speedMbps >= 10 ? chalk.yellow : chalk.red;
+  const ulColor = s.upload.speedMbps >= 20 ? chalk.green : s.upload.speedMbps >= 5 ? chalk.yellow : chalk.red;
+
+  lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(Math.max(0, 10 - dlBar)))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
+  lines.push(row(`  Upload    ${ulColor("█".repeat(ulBar) + "░".repeat(Math.max(0, 10 - ulBar)))}  ${chalk.bold(s.upload.speedMbps.toFixed(1) + " Mbps")}`));
+  lines.push(row(""));
+
+  // Latency
+  const latColor = (ms: number) => ms < 20 ? chalk.green : ms < 50 ? chalk.yellow : chalk.red;
+  lines.push(row(`  Latency`));
+  lines.push(row(`    Gateway:     ${latColor(s.latency.gatewayMs)(s.latency.gatewayMs.toFixed(1) + " ms")}   jitter: ${s.jitter.gatewayMs.toFixed(1)} ms`));
+  lines.push(row(`    Internet:    ${latColor(s.latency.internetMs)(s.latency.internetMs.toFixed(1) + " ms")}   jitter: ${s.jitter.internetMs.toFixed(1)} ms`));
+  lines.push(row(`    DNS resolve: ${s.latency.dnsResolutionMs} ms`));
+  lines.push(row(""));
+
+  // Packet loss
+  const plColor = (pct: number) => pct === 0 ? chalk.green : pct < 5 ? chalk.yellow : chalk.red;
+  lines.push(row(`  Packet Loss`));
+  lines.push(row(`    Gateway:   ${plColor(s.packetLoss.gatewayPercent)(s.packetLoss.gatewayPercent.toFixed(0) + "%")}    Internet: ${plColor(s.packetLoss.internetPercent)(s.packetLoss.internetPercent.toFixed(0) + "%")}`));
+  lines.push(row(""));
+
+  // WiFi utilisation
+  if (s.wifiLinkRate > 0) {
+    const utilColor = s.effectiveUtilisation > 50 ? chalk.green : s.effectiveUtilisation > 20 ? chalk.yellow : chalk.red;
+    lines.push(row(`  WiFi Link Rate: ${s.wifiLinkRate} Mbps → actual throughput: ${s.download.speedMbps.toFixed(1)} Mbps (${utilColor(s.effectiveUtilisation.toFixed(1) + "% utilisation")})`));
+    lines.push(row(""));
+  }
+
+  return lines.join("\n");
+}
+
 function computeScore(result: NetworkScanResult): number {
   let score = 10;
 
@@ -477,6 +530,7 @@ export function renderTerminalReport(result: NetworkScanResult): string {
     renderIntrusionIndicators(result),
     renderExposedServices(result),
     renderConnectionsSummary(result),
+    renderSpeedTest(result),
     renderScorecard(result),
   ].filter(Boolean);
 

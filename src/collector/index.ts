@@ -15,6 +15,7 @@ import { scanSecurityPosture } from "./scanners/security-posture.scanner.js";
 import { scanConnections } from "./scanners/connection.scanner.js";
 import { scanHiddenDevices } from "./scanners/hidden-device.scanner.js";
 import { scanForIntrusions } from "./scanners/intrusion-detection.scanner.js";
+import { scanSpeed } from "./scanners/speed.scanner.js";
 import { withSpan } from "../telemetry/tracing.js";
 import {
   recordScanDuration,
@@ -77,6 +78,7 @@ export interface ScanOptions {
   timeout?: number;
   skipTraffic?: boolean;
   skipPortScan?: boolean;
+  skipSpeed?: boolean;
   verbose?: boolean;
 }
 
@@ -183,7 +185,14 @@ export async function collectNetworkScan(
       }
     );
 
-    // Step 6: Look up gateway vendor
+    // Step 6: Speed test (runs after other scans to avoid skewing results)
+    const speed = options.skipSpeed
+      ? undefined
+      : await withSpan("speed-test", {}, () =>
+          scanSpeed(bootstrap.gateway.ip, wifi.txRate)
+        );
+
+    // Step 7: Look up gateway vendor
     let gatewayVendor: string | undefined;
     try {
       const prefix = bootstrap.gateway.mac.split(":").slice(0, 3).join(":");
@@ -204,7 +213,7 @@ export async function collectNetworkScan(
     const duration = Date.now() - startTime;
     recordScanDuration("total", duration);
 
-    // Step 7: Assemble result
+    // Step 8: Assemble result
     const result: NetworkScanResult = {
       meta: {
         scanId,
@@ -232,6 +241,7 @@ export async function collectNetworkScan(
       connections,
       hiddenDevices,
       intrusionIndicators,
+      speed,
     };
 
     return result;

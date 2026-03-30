@@ -196,6 +196,39 @@ export const NetworkScanResult = z.object({
       ),
     })
     .optional(),
+
+  speed: z
+    .object({
+      latency: z.object({
+        gatewayMs: z.number(),
+        internetMs: z.number(),
+        dnsResolutionMs: z.number(),
+      }),
+      jitter: z.object({
+        gatewayMs: z.number(),
+        internetMs: z.number(),
+      }),
+      download: z.object({
+        speedMbps: z.number(),
+        bytesTransferred: z.number(),
+        durationMs: z.number(),
+        testUrl: z.string(),
+      }),
+      upload: z.object({
+        speedMbps: z.number(),
+        bytesTransferred: z.number(),
+        durationMs: z.number(),
+        testUrl: z.string(),
+      }),
+      packetLoss: z.object({
+        gatewayPercent: z.number(),
+        internetPercent: z.number(),
+      }),
+      wifiLinkRate: z.number(),
+      effectiveUtilisation: z.number(),
+      rating: z.enum(["excellent", "good", "fair", "poor", "unusable"]),
+    })
+    .optional(),
 });
 
 export type NetworkScanResult = z.infer<typeof NetworkScanResult>;

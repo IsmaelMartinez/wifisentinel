@@ -22,6 +22,7 @@ program
   .option("-f, --file <path>", "Write output to file instead of stdout")
   .option("--skip-ports", "Skip port scanning on discovered hosts")
   .option("--skip-traffic", "Skip traffic analysis")
+  .option("--skip-speed", "Skip speed test")
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
   .option("-v, --verbose", "Verbose output to stderr")
   .action(async (opts) => {
@@ -38,6 +39,7 @@ program
       const result = await collectNetworkScan({
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic,
+        skipSpeed: opts.skipSpeed,
         verbose: opts.verbose,
       });
 
