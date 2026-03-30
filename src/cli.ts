@@ -74,7 +74,7 @@ program
         console.log(output);
       }
 
-      if (!opts.noSave) {
+      if (opts.save) {
         const compliance = scoreAllStandards(result);
         const analysis = analyseAllPersonas(result);
         saveScan(result, compliance, analysis);
@@ -138,7 +138,7 @@ program
         console.log(output);
       }
 
-      if (!opts.noSave) {
+      if (opts.save) {
         const compliance = scoreAllStandards(result);
         const analysis = analyseAllPersonas(result);
         saveScan(result, compliance, analysis);
