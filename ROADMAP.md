@@ -21,12 +21,12 @@
 - [x] Standards scoring modules (CIS wireless, NIST 800-153, IEEE 802.11, OWASP)
 - [x] Audience-adaptive reporter (personal terminal, JSON+OTEL, analysis command)
 
-## Phase 2: Observability Pipeline (NOT STARTED)
+## Phase 2: Observability Pipeline (COMPLETE)
 
-- [ ] Persistent OTEL export (JSON files or SQLite)
-- [ ] Scan history and trend comparison
-- [ ] Scheduled scanning via cron
-- [ ] Diff reports between scans
+- [x] Persistent scan export (JSON files in ~/.wifisentinel/scans/)
+- [x] Scan history and trend comparison (history, trend commands)
+- [x] Scheduled scanning via launchd/cron (schedule command)
+- [x] Diff reports between scans (diff command)
 
 ## Phase 3: Dashboard (NOT STARTED)
 
