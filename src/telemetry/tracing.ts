@@ -13,7 +13,7 @@ import {
   type SpanOptions,
 } from "@opentelemetry/api";
 
-const SERVICE_NAME = "network-analyser";
+const SERVICE_NAME = "wifisentinel";
 const SERVICE_VERSION = "0.1.0";
 
 let sdk: NodeSDK | null = null;

@@ -1,71 +1,18 @@
-import chalk, { type ChalkInstance } from "chalk";
+import chalk from "chalk";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
-
-// ─── Box drawing helpers ───────────────────────────────────────────────────
-
-const W = 72; // inner width of report boxes
-
-function hRule(left: string, fill: string, right: string, width = W + 2): string {
-  return left + fill.repeat(width) + right;
-}
-
-function boxLine(content: string): string {
-  return "║" + " " + content.padEnd(W) + " " + "║";
-}
-
-function sectionHeader(title: string): string {
-  const bar = chalk.cyan(hRule("├", "─", "┤"));
-  const label = chalk.cyan("│") + " " + chalk.cyan.bold(` ${title} `).padEnd(W + 10) + chalk.cyan("│");
-  return bar + "\n" + label;
-}
-
-function pad(s: string, width: number): string {
-  // strip ANSI before measuring
-  const plain = s.replace(/\x1B\[[0-9;]*m/g, "");
-  const diff = width - plain.length;
-  return s + (diff > 0 ? " ".repeat(diff) : "");
-}
-
-function row(content: string): string {
-  return chalk.cyan("│") + " " + pad(content, W) + " " + chalk.cyan("│");
-}
-
-// ─── Visual helpers ────────────────────────────────────────────────────────
-
-function signalBar(signal: number): string {
-  // signal is typically negative dBm; -50 is excellent, -80 is poor
-  const pct = Math.max(0, Math.min(100, ((signal + 100) / 70) * 100));
-  const bars = Math.round(pct / 10);
-  const filled = "█".repeat(bars);
-  const empty = "░".repeat(10 - bars);
-  const color = pct > 70 ? chalk.green : pct > 40 ? chalk.yellow : chalk.red;
-  return color(filled) + chalk.gray(empty) + chalk.dim(` ${signal} dBm`);
-}
-
-function snrLabel(snr: number): string {
-  if (snr >= 25) return chalk.green("Excellent");
-  if (snr >= 15) return chalk.green("Good");
-  if (snr >= 10) return chalk.yellow("Fair");
-  return chalk.red("Poor");
-}
-
-function scoreBar(score: number): string {
-  const filled = Math.round(score);
-  const empty = 10 - filled;
-  const color = score >= 7 ? chalk.green : score >= 4 ? chalk.yellow : chalk.red;
-  return color("■".repeat(filled)) + chalk.gray("□".repeat(empty));
-}
-
-function severityColor(severity: "high" | "medium" | "low"): ChalkInstance {
-  if (severity === "high") return chalk.red;
-  if (severity === "medium") return chalk.yellow;
-  return chalk.dim;
-}
-
-function boolStatus(value: boolean, goodWhenTrue: boolean): string {
-  const good = goodWhenTrue ? value : !value;
-  return good ? chalk.green("✔") : chalk.red("✘");
-}
+import {
+  W,
+  hRule,
+  boxLine,
+  sectionHeader,
+  pad,
+  row,
+  signalBar,
+  snrLabel,
+  scoreBar,
+  severityColor,
+  boolStatus,
+} from "./render-helpers.js";
 
 // ─── Section renderers ─────────────────────────────────────────────────────
 

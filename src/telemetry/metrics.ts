@@ -6,7 +6,7 @@ import {
 } from "@opentelemetry/semantic-conventions";
 import { metrics, type Counter, type Histogram } from "@opentelemetry/api";
 
-const SERVICE_NAME = "network-analyser";
+const SERVICE_NAME = "wifisentinel";
 const SERVICE_VERSION = "0.1.0";
 
 let meterProvider: MeterProvider | null = null;

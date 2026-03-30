@@ -209,8 +209,8 @@ export function registerTVCommands(program: Command): void {
         }
         console.log();
       }
-      console.log(chalk.dim("  Usage: netaudit tv watch <channel-id>"));
-      console.log(chalk.dim("         netaudit tv watch gb-news\n"));
+      console.log(chalk.dim("  Usage: wifisentinel tv watch <channel-id>"));
+      console.log(chalk.dim("         wifisentinel tv watch gb-news\n"));
     });
 
   tv.command("watch <channelIdOrUrl>")

@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const CONFIG_DIR = join(homedir(), ".netaudit");
+const CONFIG_DIR = join(homedir(), ".wifisentinel");
 const PAIRING_FILE = join(CONFIG_DIR, "tv-pairing.json");
 
 // SSAP registration payload — tells the TV what permissions we want
@@ -15,10 +15,10 @@ const REGISTRATION_PAYLOAD = {
     appVersion: "1.0.0",
     signed: {
       created: "20250101000000",
-      appId: "com.netaudit.tvcontrol",
-      vendorId: "com.netaudit",
-      localizedAppNames: { "": "Network Analyser TV Control" },
-      localizedVendorNames: { "": "netaudit" },
+      appId: "com.wifisentinel.tvcontrol",
+      vendorId: "com.wifisentinel",
+      localizedAppNames: { "": "WiFi Sentinel TV Control" },
+      localizedVendorNames: { "": "wifisentinel" },
       permissions: [
         "LAUNCH",
         "LAUNCH_WEBAPP",
@@ -41,7 +41,7 @@ const REGISTRATION_PAYLOAD = {
         "READ_TV_CHANNEL_LIST",
         "WRITE_NOTIFICATION",
       ],
-      serial: "netaudit001",
+      serial: "wifisentinel001",
     },
     permissions: [
       "LAUNCH",

@@ -1,10 +1,10 @@
 {
-  "name": "network-analyser",
+  "name": "wifisentinel",
   "version": "0.1.0",
   "description": "Multi-persona WiFi/network security analyser with OTEL instrumentation",
   "type": "module",
   "bin": {
-    "netaudit": "./dist/cli.js"
+    "wifisentinel": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
