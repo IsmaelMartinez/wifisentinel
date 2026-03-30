@@ -124,35 +124,16 @@ export class SSAPClient {
   }
 
   async connect(timeoutMs = 15_000): Promise<void> {
-    // webOS 4.0+ uses secure port 3001; older models use plain 3000
-    const ports: Array<{ port: number; secure: boolean }> = [
-      { port: 3001, secure: true },
-      { port: 3000, secure: false },
-    ];
-
-    for (const { port, secure } of ports) {
-      try {
-        await this.tryConnect(port, secure, timeoutMs);
-        return; // Success
-      } catch {
-        // Try next port
-      }
-    }
-    throw new Error(`Could not connect to TV at ${this.ip} on ports 3001 or 3000`);
-  }
-
-  private tryConnect(port: number, secure: boolean, timeoutMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`Connection to ${this.ip}:${port} timed out`));
+        if (this.ws) this.ws.close();
+        reject(new Error(`Connection to ${this.ip} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
-      const protocol = secure ? "wss" : "ws";
-      this.ws = new WebSocket(`${protocol}://${this.ip}:${port}`, {
-        origin: secure ? `https://${this.ip}:${port}` : `http://${this.ip}:${port}`,
-        headers: { "User-Agent": "netaudit/1.0" },
-        handshakeTimeout: 5_000,
+      // webOS 4.0+ uses wss:// on port 3001 (self-signed LG cert)
+      this.ws = new WebSocket(`wss://${this.ip}:3001`, {
         rejectUnauthorized: false,
+        handshakeTimeout: timeoutMs,
       });
 
       this.ws.on("open", () => {
