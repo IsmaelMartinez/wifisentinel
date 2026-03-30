@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { collectNetworkScan } from "./collector/index.js";
 import { renderTerminalReport } from "./reporter/terminal.reporter.js";
 import { initTelemetry, shutdownTelemetry } from "./telemetry/index.js";
+import { registerTVCommands } from "./tools/tv/tv-commands.js";
 
 const program = new Command();
 
@@ -64,5 +65,7 @@ program
       await shutdownTelemetry();
     }
   });
+
+registerTVCommands(program);
 
 program.parse();
