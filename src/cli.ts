@@ -6,6 +6,9 @@ import { renderAnalysisReport } from "./reporter/analysis.reporter.js";
 import { renderJsonReport } from "./reporter/json.reporter.js";
 import { initTelemetry, shutdownTelemetry } from "./telemetry/index.js";
 import { registerTVCommands } from "./tools/tv/tv-commands.js";
+import { saveScan } from "./store/index.js";
+import { scoreAllStandards } from "./analyser/standards/index.js";
+import { analyseAllPersonas } from "./analyser/personas/index.js";
 
 const program = new Command();
 
@@ -29,6 +32,7 @@ program
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
   .option("-v, --verbose", "Verbose output to stderr")
   .option("--analyse", "Include multi-persona analysis in the output")
+  .option("--no-save", "Skip saving scan to history")
   .action(async (opts) => {
     initTelemetry({
       tracing: opts.otel as "console" | "otlp" | "none",
@@ -65,6 +69,15 @@ program
       } else {
         console.log(output);
       }
+
+      if (!opts.noSave) {
+        const compliance = scoreAllStandards(result);
+        const analysis = analyseAllPersonas(result);
+        saveScan(result, compliance, analysis);
+        if (opts.verbose) {
+          console.error("[wifisentinel] Scan saved to history.");
+        }
+      }
     } catch (err) {
       console.error("[wifisentinel] Scan failed:", err);
       process.exit(1);
@@ -87,6 +100,7 @@ program
   .option("--skip-speed", "Skip speed test")
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
   .option("-v, --verbose", "Show detailed findings per standard/persona")
+  .option("--no-save", "Skip saving scan to history")
   .action(async (opts) => {
     initTelemetry({
       tracing: opts.otel as "console" | "otlp" | "none",
@@ -118,6 +132,15 @@ program
         console.error(`[wifisentinel] Report written to ${opts.file}`);
       } else {
         console.log(output);
+      }
+
+      if (!opts.noSave) {
+        const compliance = scoreAllStandards(result);
+        const analysis = analyseAllPersonas(result);
+        saveScan(result, compliance, analysis);
+        if (opts.verbose) {
+          console.error("[wifisentinel] Scan saved to history.");
+        }
       }
     } catch (err) {
       console.error("[wifisentinel] Analysis failed:", err);
