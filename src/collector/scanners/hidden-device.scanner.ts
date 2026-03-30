@@ -10,30 +10,18 @@ interface InputHost {
   ports?: Array<{ port: number; service: string; state: string }>;
 }
 
-const CAMERA_VENDORS = [
-  "Hikvision",
-  "Dahua",
-  "Reolink",
-  "Amcrest",
-  "Wyze",
-  "Ring",
-  "Arlo",
-  "Nest",
-  "Eufy",
-  "TP-Link",
-  "Xiaomi",
+// Vendors that ONLY make cameras/surveillance — high confidence
+const CAMERA_ONLY_VENDORS = [
+  "Hikvision", "Dahua", "Reolink", "Amcrest", "Arlo",
+  "Axis Communications", "Vivotek", "Hanwha", "FLIR",
+  "Lorex", "Swann", "Annke", "Foscam", "Wansview",
   "YI Technology",
-  "Axis Communications",
-  "Vivotek",
-  "Ubiquiti",
-  "Hanwha",
-  "FLIR",
-  "Lorex",
-  "Swann",
-  "Annke",
-  "Foscam",
-  "Wansview",
-  "Blink",
+];
+
+// Vendors that make cameras AND other devices — only flag if combined with camera ports
+const MIXED_VENDORS = [
+  "TP-Link", "Xiaomi", "Ring", "Nest", "Eufy", "Wyze",
+  "Ubiquiti", "Blink",
 ];
 
 const RTSP_PORTS = new Set([554, 8554]);
@@ -41,9 +29,14 @@ const ONVIF_PORT = 3702;
 const HTTP_PORTS = new Set([80, 443, 8080]);
 const TYPICAL_SERVER_PORTS = new Set([21, 22, 25, 53, 110, 143, 389, 445, 465, 587, 636, 993, 995, 1433, 3306, 5432, 6379, 27017]);
 
-function isKnownCameraVendor(vendor: string): boolean {
+function isCameraOnlyVendor(vendor: string): boolean {
   const lower = vendor.toLowerCase();
-  return CAMERA_VENDORS.some((v) => lower.includes(v.toLowerCase()));
+  return CAMERA_ONLY_VENDORS.some((v) => lower.includes(v.toLowerCase()));
+}
+
+function isMixedVendor(vendor: string): boolean {
+  const lower = vendor.toLowerCase();
+  return MIXED_VENDORS.some((v) => lower.includes(v.toLowerCase()));
 }
 
 function scoreHost(host: InputHost): { score: number; indicators: string[] } {
@@ -52,9 +45,16 @@ function scoreHost(host: InputHost): { score: number; indicators: string[] } {
   const openPorts = (host.ports ?? []).filter((p) => p.state === "open").map((p) => p.port);
   const portSet = new Set(openPorts);
 
-  if (host.vendor && isKnownCameraVendor(host.vendor)) {
+  if (host.vendor && isCameraOnlyVendor(host.vendor)) {
     score += 50;
-    indicators.push(`Known camera vendor: ${host.vendor}`);
+    indicators.push(`Camera-only vendor: ${host.vendor}`);
+  } else if (host.vendor && isMixedVendor(host.vendor)) {
+    // Mixed vendors (TP-Link, Xiaomi, etc.) only get points if camera ports are also open
+    const hasCameraPorts = openPorts.some((p) => RTSP_PORTS.has(p) || p === ONVIF_PORT);
+    if (hasCameraPorts) {
+      score += 30;
+      indicators.push(`Mixed vendor with camera ports: ${host.vendor}`);
+    }
   }
 
   const hasRtsp = openPorts.some((p) => RTSP_PORTS.has(p));

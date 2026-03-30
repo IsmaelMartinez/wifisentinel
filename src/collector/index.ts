@@ -42,10 +42,21 @@ function detectNetwork(): NetworkBootstrap {
   const cidrBits = maskNum.toString(2).split("1").length - 1;
   const subnet = `${ip.split(".").slice(0, 3).join(".")}.0/${cidrBits}`;
 
-  // Use route -n get default on macOS for reliable gateway detection
-  const routeResult = run("route", ["-n", "get", "default"]);
-  const gwMatch = routeResult.stdout.match(/gateway:\s+(\d+\.\d+\.\d+\.\d+)/);
-  const gatewayIp = gwMatch?.[1] ?? "unknown";
+  // Use networksetup for reliable gateway detection (works even with VPN active)
+  const nsInfoResult = run("networksetup", ["-getinfo", "Wi-Fi"]);
+  let gatewayIp = "unknown";
+  const routerMatch = nsInfoResult.stdout.match(/Router:\s+(\d+\.\d+\.\d+\.\d+)/);
+  if (routerMatch) {
+    gatewayIp = routerMatch[1];
+  } else {
+    // Fallback: parse netstat for en0 specifically
+    const routeResult = run("netstat", ["-rn"]);
+    const en0Default = routeResult.stdout
+      .split("\n")
+      .find((l) => l.startsWith("default") && l.includes("en0"));
+    const gwMatch = en0Default?.match(/default\s+(\d+\.\d+\.\d+\.\d+)/);
+    if (gwMatch) gatewayIp = gwMatch[1];
+  }
 
   const arpResult = run("arp", ["-n", gatewayIp]);
   const macMatch = arpResult.stdout.match(

@@ -147,26 +147,43 @@ function parseSystemProfiler(output: string): WifiResult {
   const snr = noise !== 0 ? signal - noise : 0;
 
   // Parse nearby networks from "Other Local Wi-Fi Networks:" section
+  // Format: 12-space indented SSID heading, 14-space indented properties
   const nearbyNetworks: NearbyNetwork[] = [];
-  const nearbyMatch = output.match(/Other Local Wi-Fi Networks:\s*\n([\s\S]*?)(?:\n\s{0,3}\S|$)/i);
+  const nearbyMatch = output.match(/Other Local Wi-Fi Networks:\s*\n([\s\S]*?)(?:\n {0,7}\S|$)/);
   if (nearbyMatch) {
     const nearbySection = nearbyMatch[1];
-    // Each network starts with an indented SSID heading "          SomeName:"
-    const networkBlocks = nearbySection.split(/\n(?=\s{10,}\S)/);
-    for (const block of networkBlocks) {
+    // Split on lines that look like SSID headings (12 spaces + name + colon)
+    const blocks = nearbySection.split(/\n(?= {12}\S)/);
+    for (const block of blocks) {
       if (!block.trim()) continue;
-      const parsed = parseNetworkBlock(block);
-      // Extract SSID from the block heading (first indented line ending with ":")
-      const headingMatch = block.match(/^\s+(.+?):\s*$/m);
-      const blockSsid = headingMatch ? headingMatch[1].trim() : parsed.ssid ?? null;
+      // First line is the SSID: "            <redacted>:" or "            MyNetwork:"
+      const headingMatch = block.match(/^\s{8,}(.+?):\s*$/m);
+      const ssid = headingMatch ? headingMatch[1].trim() : null;
+      // Parse properties from the block
+      const getVal = (key: string): string => {
+        const re = new RegExp(`^\\s+${key}:\\s*(.+)$`, "im");
+        const m = block.match(re);
+        return m ? m[1].trim() : "";
+      };
+      const phyMode = getVal("PHY Mode");
+      const channelRaw = getVal("Channel");
+      const securityVal = getVal("Security");
+      const signalNoise = getVal("Signal / Noise");
+      if (!channelRaw && !phyMode && !signalNoise) continue; // not a real block
+      const { channel } = parseChannel(channelRaw);
+      let sig = 0, noi = 0;
+      if (signalNoise.includes("/")) {
+        const parts = signalNoise.split("/");
+        sig = parseInt(parts[0].replace(/dBm/i, "").trim(), 10) || 0;
+        noi = parseInt(parts[1]?.replace(/dBm/i, "").trim() ?? "0", 10) || 0;
+      }
       nearbyNetworks.push({
-        ssid: blockSsid,
-        bssid: parsed.bssid,
-        security: parsed.security ?? "Unknown",
-        protocol: parsed.protocol ?? "Unknown",
-        channel: parsed.channel ?? 0,
-        signal: parsed.signal ?? 0,
-        noise: parsed.noise ?? 0,
+        ssid: ssid === "<redacted>" ? "(hidden)" : ssid,
+        security: securityVal || "Unknown",
+        protocol: phyMode || "Unknown",
+        channel,
+        signal: sig,
+        noise: noi,
       });
     }
   }

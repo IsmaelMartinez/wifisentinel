@@ -87,33 +87,51 @@ function detectDohDot(servers: string[]): boolean {
 
 /**
  * DNS leak test: compare resolution results from the gateway DNS vs Cloudflare 1.1.1.1.
- * Flags anomalies when the gateway returns completely different results, indicating interception.
+ * Only flags genuine anomalies — different IPs for CDN-served domains like google.com
+ * are normal (geo-routing). We check for truly suspicious patterns instead.
  */
-function detectDnsLeakAnomalies(gatewayServers: string[]): string[] {
+function detectDnsLeakAnomalies(gatewayServers: string[], gateway: string): string[] {
   const anomalies: string[] = [];
   if (gatewayServers.length === 0) return anomalies;
 
-  const cfResult = digShort(CLOUDFLARE_DNS, TEST_DOMAIN, "A");
-  const cfIps = cfResult.split("\n").filter((l) => l.trim() && isIpAddress(l)).sort();
-
   for (const server of gatewayServers) {
-    if (server === CLOUDFLARE_DNS) continue;
-    const gwResult = digShort(server, TEST_DOMAIN, "A");
-    const gwIps = gwResult.split("\n").filter((l) => l.trim() && isIpAddress(l)).sort();
+    if (server === CLOUDFLARE_DNS || server === "8.8.8.8" || server === "8.8.4.4") continue;
 
-    if (cfIps.length > 0 && gwIps.length === 0) {
-      anomalies.push(`DNS server ${server} returned no results for ${TEST_DOMAIN} (possible filtering or failure)`);
-      continue;
+    // Check if the server is on a different subnet than the gateway (suspicious)
+    const serverParts = server.split(".");
+    const gatewayParts = gateway.split(".");
+    if (
+      serverParts.length === 4 &&
+      gatewayParts.length === 4 &&
+      isPrivateIp(server) &&
+      isPrivateIp(gateway) &&
+      (serverParts[0] !== gatewayParts[0] || serverParts[1] !== gatewayParts[1] || serverParts[2] !== gatewayParts[2])
+    ) {
+      anomalies.push(
+        `DNS server ${server} is on a different subnet than gateway ${gateway} — may indicate double NAT or rogue resolver`
+      );
     }
 
-    const cfSet = new Set(cfIps);
-    const overlap = gwIps.filter((ip) => cfSet.has(ip));
-    if (gwIps.length > 0 && cfIps.length > 0 && overlap.length === 0) {
-      anomalies.push(`DNS server ${server} returned different IPs for ${TEST_DOMAIN} than 1.1.1.1 — possible interception`);
+    // Check if the server resolves the NX test domain (hijack already caught above,
+    // but some resolvers hijack only popular domains)
+    const gwResult = digShort(server, TEST_DOMAIN, "A");
+    const gwIps = gwResult.split("\n").filter((l) => l.trim() && isIpAddress(l));
+    if (gwIps.length === 0) {
+      anomalies.push(`DNS server ${server} returned no results for ${TEST_DOMAIN} — possible filtering or failure`);
     }
   }
 
   return anomalies;
+}
+
+function isPrivateIp(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4) return false;
+  return (
+    parts[0] === 10 ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168)
+  );
 }
 
 /**
@@ -204,7 +222,7 @@ export async function scanDns(gateway: string): Promise<DnsResult> {
     }
 
     try {
-      const leakAnomalies = detectDnsLeakAnomalies(testServers);
+      const leakAnomalies = detectDnsLeakAnomalies(testServers, gateway);
       anomalies.push(...leakAnomalies);
     } catch {
       // ignore leak detection failures
