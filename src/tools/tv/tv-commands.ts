@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { SSAPClient } from "./ssap-client.js";
+import { UK_CHANNELS, getChannelsByGroup, findChannel } from "./channels.js";
 
 // Default TV IP — auto-detected from last scan or specified via flag
 const DEFAULT_TV_IP = "192.168.1.65";
@@ -189,28 +190,78 @@ export function registerTVCommands(program: Command): void {
       });
     });
 
+  // ─── IPTV Guide & Watch ─────────────────────────────────
+
+  tv.command("guide")
+    .description("Show available IPTV channels by category")
+    .action(async () => {
+      const groups = getChannelsByGroup();
+      console.log(chalk.cyan("\n  ╔══════════════════════════════════════════════╗"));
+      console.log(chalk.cyan("  ║            IPTV CHANNEL GUIDE                ║"));
+      console.log(chalk.cyan("  ╚══════════════════════════════════════════════╝\n"));
+      for (const [group, channels] of groups) {
+        console.log(chalk.yellow(`  ${group}`));
+        console.log(chalk.dim(`  ${"─".repeat(40)}`));
+        for (const ch of channels) {
+          const quality = chalk.dim(`[${ch.quality}]`);
+          const note = ch.note ? chalk.dim(` (${ch.note})`) : "";
+          console.log(`    ${chalk.green(ch.id.padEnd(22))} ${ch.name} ${quality}${note}`);
+        }
+        console.log();
+      }
+      console.log(chalk.dim("  Usage: netaudit tv watch <channel-id>"));
+      console.log(chalk.dim("         netaudit tv watch gb-news\n"));
+    });
+
+  tv.command("watch <channelIdOrUrl>")
+    .description("Watch an IPTV channel on the TV (use 'tv guide' for IDs)")
+    .action(async (channelIdOrUrl: string) => {
+      const ip = tv.opts().ip;
+
+      // Check if it's a channel ID from our guide
+      const channel = findChannel(channelIdOrUrl);
+      const streamUrl = channel?.url ?? channelIdOrUrl;
+      const label = channel?.name ?? channelIdOrUrl;
+
+      await withTV(ip, async (client) => {
+        console.log(chalk.cyan(`  Tuning to: ${label}`));
+        if (channel) {
+          console.log(chalk.dim(`  Quality: ${channel.quality}  Group: ${channel.group}`));
+        }
+
+        // Try the webOS media player first — it handles HLS natively
+        try {
+          await client.launchApp("com.webos.app.mediadiscovery", {
+            target: streamUrl,
+          });
+          console.log(chalk.green(`  Playing on TV media player`));
+        } catch {
+          try {
+            // Try the built-in browser as fallback
+            await client.openBrowser(streamUrl);
+            console.log(chalk.green(`  Opened in TV browser`));
+          } catch {
+            console.log(chalk.yellow(`  Could not launch — try opening manually on TV:`));
+            console.log(chalk.dim(`  ${streamUrl}`));
+          }
+        }
+      });
+    });
+
   tv.command("iptv <m3uUrl>")
-    .description("Open an IPTV M3U playlist URL in the TV browser")
+    .description("Open a raw M3U playlist URL on the TV")
     .action(async (m3uUrl: string) => {
       const ip = tv.opts().ip;
       await withTV(ip, async (client) => {
-        // Try launching the built-in media player with the M3U URL first
-        // webOS media player can handle M3U streams
         try {
-          await client.launchApp("com.webos.app.photovideo", {
-            target: m3uUrl,
-          });
-          console.log(chalk.green(`  Launched media player with: ${m3uUrl}`));
-        } catch {
-          // Fallback: open in browser (some IPTV web players work)
           await client.openBrowser(m3uUrl);
-          console.log(chalk.yellow(`  Opened in browser (media player unavailable): ${m3uUrl}`));
+          console.log(chalk.green(`  Opened playlist in TV browser: ${m3uUrl}`));
+        } catch {
+          console.log(chalk.yellow(`  Could not open — try installing an IPTV app on the TV`));
         }
-        console.log(chalk.dim("\n  Tip: For best IPTV experience, install an IPTV app on your TV:"));
-        console.log(chalk.dim("    - IPTV Smarters Pro (com.webos.app.iptv-smarters)"));
-        console.log(chalk.dim("    - OTTPlayer"));
-        console.log(chalk.dim("    - SS IPTV"));
-        console.log(chalk.dim("  Then load your M3U URL inside the app.\n"));
+        console.log(chalk.dim("\n  For best experience, install one of these from the LG Content Store:"));
+        console.log(chalk.dim("    SS IPTV — load the M3U URL in its settings"));
+        console.log(chalk.dim("    OTTPlayer — supports M3U and EPG\n"));
       });
     });
 
