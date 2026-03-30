@@ -6,6 +6,7 @@ import { renderAnalysisReport } from "./reporter/analysis.reporter.js";
 import { renderJsonReport } from "./reporter/json.reporter.js";
 import { initTelemetry, shutdownTelemetry } from "./telemetry/index.js";
 import { registerTVCommands } from "./tools/tv/tv-commands.js";
+import { registerHistoryCommand } from "./commands/history.js";
 import { saveScan } from "./store/index.js";
 import { scoreAllStandards } from "./analyser/standards/index.js";
 import { analyseAllPersonas } from "./analyser/personas/index.js";
@@ -151,5 +152,6 @@ program
   });
 
 registerTVCommands(program);
+registerHistoryCommand(program);
 
 program.parse();
