@@ -11,7 +11,7 @@ async function withTV(
 ): Promise<void> {
   const client = new SSAPClient(ip);
   try {
-    console.error(chalk.dim(`Connecting to TV at ${ip}:3000...`));
+    console.error(chalk.dim(`Connecting to TV at ${ip}...`));
     await client.connect();
     console.error(chalk.dim("Registering (check TV for pairing prompt on first use)..."));
     await client.register();

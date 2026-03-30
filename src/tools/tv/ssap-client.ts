@@ -123,18 +123,36 @@ export class SSAPClient {
     this.clientKey = loadPairing(ip);
   }
 
-  async connect(timeoutMs = 10_000): Promise<void> {
+  async connect(timeoutMs = 15_000): Promise<void> {
+    // webOS 4.0+ uses secure port 3001; older models use plain 3000
+    const ports: Array<{ port: number; secure: boolean }> = [
+      { port: 3001, secure: true },
+      { port: 3000, secure: false },
+    ];
+
+    for (const { port, secure } of ports) {
+      try {
+        await this.tryConnect(port, secure, timeoutMs);
+        return; // Success
+      } catch {
+        // Try next port
+      }
+    }
+    throw new Error(`Could not connect to TV at ${this.ip} on ports 3001 or 3000`);
+  }
+
+  private tryConnect(port: number, secure: boolean, timeoutMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error(`Connection to ${this.ip}:3000 timed out after ${timeoutMs}ms`));
+        reject(new Error(`Connection to ${this.ip}:${port} timed out`));
       }, timeoutMs);
 
-      this.ws = new WebSocket(`ws://${this.ip}:3000`, {
-        origin: `http://${this.ip}:3000`,
-        headers: {
-          "User-Agent": "netaudit/1.0",
-        },
-        handshakeTimeout: timeoutMs,
+      const protocol = secure ? "wss" : "ws";
+      this.ws = new WebSocket(`${protocol}://${this.ip}:${port}`, {
+        origin: secure ? `https://${this.ip}:${port}` : `http://${this.ip}:${port}`,
+        headers: { "User-Agent": "netaudit/1.0" },
+        handshakeTimeout: 5_000,
+        rejectUnauthorized: false,
       });
 
       this.ws.on("open", () => {
@@ -143,16 +161,7 @@ export class SSAPClient {
         resolve();
       });
 
-      this.ws.on("message", (data) => {
-        try {
-          const msg = JSON.parse(data.toString());
-          const cb = this.pendingCallbacks.get(msg.id);
-          if (cb) {
-            this.pendingCallbacks.delete(msg.id);
-            cb(msg);
-          }
-        } catch {}
-      });
+      this.ws.on("message", (data) => this.handleMessage(data));
 
       this.ws.on("error", (err) => {
         clearTimeout(timer);
@@ -163,6 +172,17 @@ export class SSAPClient {
         this.connected = false;
       });
     });
+  }
+
+  private handleMessage(data: WebSocket.RawData): void {
+    try {
+      const msg = JSON.parse(data.toString());
+      const cb = this.pendingCallbacks.get(msg.id);
+      if (cb) {
+        this.pendingCallbacks.delete(msg.id);
+        cb(msg);
+      }
+    } catch {}
   }
 
   private send(type: string, uri?: string, payload?: Record<string, any>): Promise<SSAPResponse> {
@@ -191,28 +211,53 @@ export class SSAPClient {
     });
   }
 
-  async register(): Promise<string> {
-    const payload: Record<string, any> = { ...REGISTRATION_PAYLOAD };
-    if (this.clientKey) {
-      payload["client-key"] = this.clientKey;
-    }
-
-    const resp = await this.send("register", undefined, payload);
-
-    if (resp.type === "registered") {
-      const key = resp.payload?.["client-key"];
-      if (key) {
-        this.clientKey = key;
-        savePairing(this.ip, key);
+  async register(timeoutMs = 30_000): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || !this.connected) {
+        reject(new Error("Not connected"));
+        return;
       }
-      return key || this.clientKey || "";
-    }
 
-    if (resp.type === "error") {
-      throw new Error(`Registration failed: ${JSON.stringify(resp.payload)}`);
-    }
+      const timer = setTimeout(() => {
+        reject(new Error("Registration timed out — check the TV for a pairing prompt"));
+      }, timeoutMs);
 
-    throw new Error(`Unexpected response: ${resp.type}`);
+      // Add a temporary listener for ALL messages during registration
+      const listener = (data: WebSocket.RawData) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === "registered") {
+            clearTimeout(timer);
+            this.ws?.removeListener("message", listener);
+            const key = msg.payload?.["client-key"];
+            if (key) {
+              this.clientKey = key;
+              savePairing(this.ip, key);
+            }
+            resolve(key || this.clientKey || "");
+          } else if (msg.type === "error") {
+            clearTimeout(timer);
+            this.ws?.removeListener("message", listener);
+            reject(new Error(`Registration failed: ${JSON.stringify(msg.payload)}`));
+          }
+          // "response" type = TV showing prompt, keep waiting
+        } catch {}
+      };
+
+      this.ws.on("message", listener);
+
+      // SSAP registration: payload fields at the top level, not nested
+      const msg: Record<string, any> = {
+        id: `register_${++this.msgId}`,
+        type: "register",
+        ...REGISTRATION_PAYLOAD,
+      };
+      if (this.clientKey) {
+        msg["client-key"] = this.clientKey;
+      }
+
+      this.ws.send(JSON.stringify(msg));
+    });
   }
 
   async request(uri: string, payload?: Record<string, any>): Promise<SSAPResponse> {
