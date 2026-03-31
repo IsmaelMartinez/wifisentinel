@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install CLI dependencies
+        run: npm ci
+
+      - name: Typecheck CLI
+        run: npx tsc --noEmit
+
+      - name: Build CLI
+        run: npm run build
+
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install CLI dependencies
+        run: npm ci
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && npm ci
+
+      - name: Build dashboard
+        run: cd dashboard && npx next build
