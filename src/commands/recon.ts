@@ -15,9 +15,10 @@ export function registerReconCommand(program: Command): void {
     .option("--analyse", "Include multi-persona analysis")
     .option("--no-save", "Skip saving to history")
     .option("-v, --verbose", "Verbose output")
+    .option("--zone-transfer", "Attempt DNS zone transfers (may trigger security alerts)")
     .action(async (domain: string, opts) => {
       try {
-        const result = await collectRecon(domain, { verbose: opts.verbose });
+        const result = await collectRecon(domain, { verbose: opts.verbose, zoneTransfer: opts.zoneTransfer });
 
         let output: string;
         if (opts.output === "json") {

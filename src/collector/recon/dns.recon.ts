@@ -101,7 +101,7 @@ function attemptZoneTransfer(
   return { attempted: true, vulnerable: false };
 }
 
-export function scanDns(domain: string): DnsRecon {
+export function scanDns(domain: string, options?: { zoneTransfer?: boolean }): DnsRecon {
   if (!DOMAIN_REGEX.test(domain)) {
     return { domain, records: [], subdomains: [], zoneTransfer: { attempted: false, vulnerable: false }, nameservers: [] };
   }
@@ -117,7 +117,9 @@ export function scanDns(domain: string): DnsRecon {
     .map((r) => r.value);
 
   const subdomains = discoverSubdomains(domain);
-  const zoneTransfer = attemptZoneTransfer(domain, nameservers);
+  const zoneTransfer = options?.zoneTransfer
+    ? attemptZoneTransfer(domain, nameservers)
+    : { attempted: false, vulnerable: false };
 
   return {
     domain,
