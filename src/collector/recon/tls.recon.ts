@@ -1,5 +1,7 @@
-import { run } from "../exec.js";
+import { execFileSync } from "node:child_process";
 import type { TlsRecon } from "./schema.js";
+
+const DOMAIN_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
 function emptyResult(domain: string, issues: string[]): TlsRecon {
   return {
@@ -75,21 +77,32 @@ function computeGrade(
 }
 
 export function scanTls(domain: string): TlsRecon {
-  // Use echo to pipe empty stdin so openssl doesn't hang
-  const connResult = run(
-    "bash",
-    [
-      "-c",
-      `echo "" | openssl s_client -connect ${domain}:443 -servername ${domain} 2>&1`,
-    ],
-    15_000
-  );
+  if (!DOMAIN_REGEX.test(domain)) {
+    return emptyResult(domain, ["Invalid domain"]);
+  }
 
-  if (!connResult.stdout && connResult.exitCode !== 0) {
+  // Pass empty stdin so openssl doesn't hang
+  let connStdout: string;
+  let connStderr: string;
+  let connExitCode = 0;
+  try {
+    connStdout = execFileSync(
+      "openssl",
+      ["s_client", "-connect", `${domain}:443`, "-servername", domain],
+      { input: "", encoding: "utf-8", timeout: 15_000, stdio: ["pipe", "pipe", "pipe"] },
+    );
+    connStderr = "";
+  } catch (err: any) {
+    connStdout = (err.stdout ?? "").toString();
+    connStderr = (err.stderr ?? "").toString();
+    connExitCode = err.status ?? 1;
+  }
+
+  if (!connStdout && connExitCode !== 0) {
     return emptyResult(domain, ["Connection failed: unable to reach host"]);
   }
 
-  const fullOutput = connResult.stdout + "\n" + connResult.stderr;
+  const fullOutput = connStdout + "\n" + connStderr;
 
   // Extract protocol and cipher from the connection output
   const protocol = extractField(fullOutput, /Protocol\s*:\s*(\S+)/) || "unknown";
@@ -99,17 +112,30 @@ export function scanTls(domain: string): TlsRecon {
   const depthMatch = fullOutput.match(/verify depth is (\d+)/);
   const chainDepth = depthMatch ? parseInt(depthMatch[1], 10) : 0;
 
-  // Now parse the certificate details
-  const certResult = run(
-    "bash",
-    [
-      "-c",
-      `echo "" | openssl s_client -connect ${domain}:443 -servername ${domain} 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>&1`,
-    ],
-    15_000
-  );
+  // Now parse the certificate details — two-step: get PEM from s_client, then parse with x509
+  let pemOutput: string;
+  try {
+    pemOutput = execFileSync(
+      "openssl",
+      ["s_client", "-connect", `${domain}:443`, "-servername", domain],
+      { input: "", encoding: "utf-8", timeout: 15_000, stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch (err: any) {
+    pemOutput = (err.stdout ?? "").toString();
+  }
 
-  const certOutput = certResult.stdout;
+  let certOutput: string;
+  try {
+    certOutput = execFileSync(
+      "openssl",
+      ["x509", "-noout", "-subject", "-issuer", "-dates", "-ext", "subjectAltName"],
+      { input: pemOutput, encoding: "utf-8", timeout: 10_000, stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch (err: any) {
+    certOutput = (err.stdout ?? "").toString();
+  }
+
+  // certOutput now comes from the two-step openssl pipeline above
 
   const subject = extractField(certOutput, /subject\s*=\s*(.+)/);
   const issuer = extractField(certOutput, /issuer\s*=\s*(.+)/);
