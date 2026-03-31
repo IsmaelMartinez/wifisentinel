@@ -66,8 +66,8 @@ function parseNetworkBlock(block: string): Partial<NearbyNetwork> & { ssid?: str
   const { channel } = parseChannel(channelRaw);
 
   const signalRaw = get("Signal / Noise") || get("Signal");
-  let signal = 0;
-  let noise = 0;
+  let signal: number;
+  let noise: number;
   if (signalRaw.includes("/")) {
     const parts = signalRaw.split("/");
     signal = parseInt(parts[0].trim(), 10) || 0;
@@ -135,14 +135,15 @@ function parseSystemProfiler(output: string): WifiResult {
   const macRandomised = parseMacRandomised(macRandRaw);
 
   const signalNoiseRaw = getFromBlock(currentBlock, "Signal / Noise") || get("Signal / Noise") || "";
-  let signal = 0;
-  let noise = 0;
+  let signal: number;
+  let noise: number;
   if (signalNoiseRaw.includes("/")) {
     const parts = signalNoiseRaw.split("/");
     signal = parseInt(parts[0].trim(), 10) || 0;
     noise = parseInt(parts[1]?.trim() ?? "0", 10) || 0;
   } else {
     signal = parseInt(signalNoiseRaw, 10) || 0;
+    noise = 0;
   }
   const snr = noise !== 0 ? signal - noise : 0;
 

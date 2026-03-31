@@ -18,6 +18,7 @@ export function sectionHeader(title: string): string {
 
 export function pad(s: string, width: number): string {
   // strip ANSI before measuring
+  // eslint-disable-next-line no-control-regex
   const plain = s.replace(/\x1B\[[0-9;]*m/g, "");
   const diff = width - plain.length;
   return s + (diff > 0 ? " ".repeat(diff) : "");

@@ -1,5 +1,5 @@
 // src/commands/schedule.ts
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -19,9 +19,10 @@ function getBinaryPath(): string {
   if (existsSync(distCli)) return distCli;
   // Fallback: try global install
   try {
-    return execFileSync("command", ["-v", "wifisentinel"], {
+    // command -v is a shell builtin — hardcoded tool name, not user input
+    return execSync("command -v wifisentinel", {
       encoding: "utf-8",
-      shell: true,
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch {
     return distCli; // best guess
@@ -30,9 +31,10 @@ function getBinaryPath(): string {
 
 function getNodePath(): string {
   try {
-    return execFileSync("command", ["-v", "node"], {
+    // command -v is a shell builtin — hardcoded tool name, not user input
+    return execSync("command -v node", {
       encoding: "utf-8",
-      shell: true,
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch {
     return "/usr/local/bin/node";
@@ -127,7 +129,7 @@ function disableMacOS(): void {
 
 function disableLinux(): void {
   const marker = "# wifisentinel-scheduled-scan";
-  let existing = "";
+  let existing: string;
   try {
     existing = execFileSync("crontab", ["-l"], { encoding: "utf-8" });
   } catch {
