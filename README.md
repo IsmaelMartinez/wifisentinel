@@ -35,7 +35,7 @@ Optional system tools (used when available, gracefully degraded otherwise):
 ## Installation
 
 ```bash
-git clone https://github.com/your-org/wifisentinel.git
+git clone https://github.com/IsmaelMartinez/wifisentinel.git
 cd wifisentinel
 npm install
 npm run build
@@ -92,7 +92,7 @@ wifisentinel recon example.com
 
 ### `scan` / `analyse` options
 
-```
+```text
 -o, --output <format>   Output format: terminal, json  (default: terminal)
 -f, --file <path>       Write output to file instead of stdout
 --skip-ports            Skip port scanning
@@ -118,9 +118,9 @@ The dashboard shows scan history with per-scan detail pages (raw data, persona p
 
 The pipeline flows: **CLI** (commander) → **Collector** → **Analyser** → **Reporter**.
 
-`src/collector/` orchestrates all scanning. `tool-resolver.ts` implements the three-tier fallback chain (preferred → fallback → minimal) for each capability. Nine scanner modules in `scanners/` each parse system tool output into typed data. All data is validated against the central Zod schema in `schema/scan-result.ts` — the `NetworkScanResult` type flows through everything.
+`src/collector/` orchestrates all scanning. `src/collector/tool-resolver.ts` implements the three-tier fallback chain (preferred → fallback → minimal) for each capability. Nine scanner modules in `src/collector/scanners/` each parse system tool output into typed data. All data is validated against the central Zod schema in `src/collector/schema/scan-result.ts` — the `NetworkScanResult` type flows through everything.
 
-`src/analyser/` contains two sub-modules: `personas/` (five analysis functions producing `PersonaAnalysis` with insights and risk ratings) and `standards/` (scoring against CIS, NIST, IEEE, and OWASP frameworks). The RF analyser in `analyser/rf/` reads both live scan data and historical scans from the store.
+`src/analyser/` contains two sub-modules: `src/analyser/personas/` (five analysis functions producing `PersonaAnalysis` with insights and risk ratings) and `src/analyser/standards/` (scoring against CIS, NIST, IEEE, and OWASP frameworks). The RF analyser in `src/analyser/rf/` reads both live scan data and historical scans from the store.
 
 `src/reporter/` provides three formatters: `terminal.reporter.ts` (coloured ASCII scorecard), `analysis.reporter.ts` (adds persona and standards output), and `json.reporter.ts` (structured JSON including analysis).
 

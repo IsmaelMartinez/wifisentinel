@@ -24,10 +24,15 @@ jobs:
         run: npm ci
 
       - name: Typecheck CLI
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Build CLI
         run: npm run build
+
+      - name: Smoke check CLI help
+        run: |
+          node dist/cli.js --help > /tmp/help.txt
+          ! grep -E '\btv\b' /tmp/help.txt
 
   dashboard:
     runs-on: ubuntu-latest

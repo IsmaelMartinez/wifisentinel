@@ -23,7 +23,7 @@ const program = new Command();
 program
   .name("wifisentinel")
   .description("Multi-persona WiFi/network security analyser")
-  .version("0.1.0");
+  .version("1.0.0");
 
 program
   .command("scan")
