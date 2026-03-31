@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import type { ToolTier } from "./schema/scan-result.js";
 
 export interface ToolChain {
@@ -14,10 +14,11 @@ export interface ResolvedToolResult {
 }
 
 function whichTool(name: string): string | null {
+  // command -v is a shell builtin — names come from hardcoded TOOL_CHAINS, not user input
   try {
-    return execFileSync("command", ["-v", name], {
+    return execSync(`command -v ${name}`, {
       encoding: "utf-8",
-      shell: true,
+      stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch {
     return null;
