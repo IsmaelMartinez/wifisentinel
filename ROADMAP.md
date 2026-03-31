@@ -28,12 +28,12 @@
 - [x] Scheduled scanning via launchd/cron (schedule command)
 - [x] Diff reports between scans (diff command)
 
-## Phase 3: Dashboard (NOT STARTED)
+## Phase 3: Dashboard (PARTIAL)
 
-- [ ] Next.js app with shadcn/ui
-- [ ] Real-time persona perspectives
-- [ ] Historical trends and compliance tracking
-- [ ] PDF/HTML report generation
+- [x] Next.js app with shadcn/ui (dark theme, sidebar nav, Geist fonts)
+- [x] Real-time persona perspectives (scan detail personas tab)
+- [x] Historical trends and compliance tracking (trends page, compliance tab)
+- [ ] PDF/HTML report generation (Phase 3b)
 
 ## Phase 4: WiFi RF Intelligence (COMPLETE)
 
