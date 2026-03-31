@@ -1041,7 +1041,7 @@ git commit -m "add history page with sortable scan table"
 - Create: `dashboard/components/channel-chart.tsx`
 - Create: `dashboard/app/scans/[id]/page.tsx`
 
-- [ ] **Step 1: Create PersonaCard component**
+- [x] **Step 1: Create PersonaCard component**
 
 ```tsx
 // dashboard/components/persona-card.tsx
@@ -1132,7 +1132,7 @@ export function PersonaCard({ analysis }: { analysis: PersonaAnalysis }) {
 }
 ```
 
-- [ ] **Step 2: Create ComplianceCard component**
+- [x] **Step 2: Create ComplianceCard component**
 
 ```tsx
 // dashboard/components/compliance-card.tsx
@@ -1217,7 +1217,7 @@ export function ComplianceCard({ standard }: { standard: StandardScore }) {
 }
 ```
 
-- [ ] **Step 3: Create ChannelChart component**
+- [x] **Step 3: Create ChannelChart component**
 
 ```tsx
 // dashboard/components/channel-chart.tsx
@@ -1278,7 +1278,7 @@ export function ChannelChart({
 }
 ```
 
-- [ ] **Step 4: Create the scan detail page**
+- [x] **Step 4: Create the scan detail page**
 
 ```tsx
 // dashboard/app/scans/[id]/page.tsx
@@ -1462,7 +1462,7 @@ export default async function ScanDetailPage({
 }
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/ismael.martinez/projects/github/wifisentinel
