@@ -12,6 +12,8 @@ import { registerTrendCommand } from "./commands/trend.js";
 import { registerScheduleCommand } from "./commands/schedule.js";
 import { registerRFCommand } from "./commands/rf.js";
 import { registerExportCommand } from "./commands/export.js";
+import { registerReconCommand } from "./commands/recon.js";
+import { registerReconHistoryCommand } from "./commands/recon-history.js";
 import { saveScan } from "./store/index.js";
 import { analyseRF } from "./analyser/rf/index.js";
 import { scoreAllStandards } from "./analyser/standards/index.js";
@@ -166,5 +168,7 @@ registerTrendCommand(program);
 registerScheduleCommand(program);
 registerRFCommand(program);
 registerExportCommand(program);
+registerReconCommand(program);
+registerReconHistoryCommand(program);
 
 program.parse();

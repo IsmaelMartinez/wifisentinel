@@ -45,16 +45,16 @@
 - [ ] Deauth flood detection via frame counters (deferred — requires monitor mode)
 - [x] WiFi environment change detection: new APs, signal anomalies, security downgrades between scans
 
-## Phase 5: External Reconnaissance (NOT STARTED)
+## Phase 5: External Reconnaissance (COMPLETE)
 
-- [ ] `wifisentinel recon <domain>` command for external attack surface mapping
-- [ ] DNS enumeration (subdomains, zone transfers, record types via dig)
-- [ ] Certificate transparency log queries (crt.sh)
-- [ ] WHOIS and registrar data lookup
-- [ ] TLS/SSL grading (protocol versions, cipher suites, cert chain via openssl s_client)
-- [ ] HTTP security headers analysis (HSTS, CSP, X-Frame-Options via curl)
-- [ ] External risk scoring with persona analysis (reuse Phase 1b personas)
-- [ ] Shodan/Censys integration for exposed service discovery (API key optional)
+- [x] `wifisentinel recon <domain>` command for external attack surface mapping
+- [x] DNS enumeration (subdomains via brute + CT, zone transfers, 7 record types via dig)
+- [x] Certificate transparency log queries (crt.sh)
+- [x] WHOIS and registrar data lookup
+- [x] TLS/SSL grading (protocol versions, cipher suites, cert chain via openssl s_client)
+- [x] HTTP security headers analysis (HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+- [x] External risk scoring with persona analysis (reuses Phase 1b persona types)
+- [ ] Shodan/Censys integration (deferred — requires API keys)
 
 ## Phase 6: Continuous Monitoring (NOT STARTED)
 
