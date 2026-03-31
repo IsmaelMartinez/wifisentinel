@@ -99,6 +99,8 @@ export function listScans(options: ListOptions = {}): IndexEntry[] {
   return entries;
 }
 
+const SAFE_FILENAME = /^[\w.-]+\.json$/;
+
 export function loadScan(scanId: string): StoredScan {
   const entries = readIndex();
   const entry = entries.find(
@@ -108,6 +110,9 @@ export function loadScan(scanId: string): StoredScan {
     throw new Error(
       `Scan "${scanId}" not found. Run "wifisentinel history" to list available scans.`,
     );
+  }
+  if (!SAFE_FILENAME.test(entry.filename)) {
+    throw new Error(`Invalid filename in index: ${entry.filename}`);
   }
   const filePath = join(getScansDir(), entry.filename);
   if (!existsSync(filePath)) {
