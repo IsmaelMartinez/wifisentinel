@@ -56,35 +56,36 @@
 - [x] External risk scoring with persona analysis (reuses Phase 1b persona types)
 - [ ] Shodan/Censys integration (deferred — requires API keys)
 
-## Security Hardening (NOT STARTED)
+## Security Hardening (COMPLETE)
 
 ### Critical
 
-- [ ] Fix command injection in `tls.recon.ts` — domain arg interpolated into `bash -c` shell string. Replace with direct `execFile("openssl", [...])` using `input` option for stdin
-- [ ] Fix command injection in `dns.recon.ts` — NS record values from DNS responses used unsanitised in `dig axfr @${server}`. Validate server values against strict hostname/IP regex
+- [x] Fix command injection in `tls.recon.ts` — domain arg interpolated into `bash -c` shell string. Replace with direct `execFile("openssl", [...])` using `input` option for stdin
+- [x] Fix command injection in `dns.recon.ts` — NS record values from DNS responses used unsanitised in `dig axfr @${server}`. Validate server values against strict hostname/IP regex
 
 ### High
 
-- [ ] Replace `execSync` in `schedule.ts` with `execFileSync("which", [...])` to avoid unnecessary shell spawning
-- [ ] Add path traversal protection in store — validate `filename` from index.json matches `/^[\w\-]+\.json$/` before `join()`. Apply Zod parsing to `recon-store.ts` index reads
-- [ ] Add security headers to dashboard HTML export route — `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'`, `Cache-Control: no-store`
+- [x] Replace `execSync` in `schedule.ts` with `execFileSync("which", [...])` to avoid unnecessary shell spawning
+- [x] Add path traversal protection in store — validate `filename` from index.json matches `/^[\w\-]+\.json$/` before `join()`. Apply Zod parsing to `recon-store.ts` index reads
+- [x] Add security headers to dashboard HTML export route — `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'`, `Cache-Control: no-store`
 
 ### Medium
 
-- [ ] Add `--no-vendor-lookup` flag and document that MAC OUI lookups are sent to api.macvendors.com. Consider bundling a local OUI database
-- [ ] Bind dashboard to localhost only — add `--hostname 127.0.0.1` to `next dev` invocation
-- [ ] Bounds-check `limit` query param in dashboard API (clamp to max 200, treat NaN as default)
+- [x] Add `--no-vendor-lookup` flag — MAC OUI lookups are sent to api.macvendors.com and can now be skipped
+- [ ] Bundle a local OUI database to avoid external MAC vendor lookups entirely (nice-to-have)
+- [x] Bind dashboard to localhost only — add `--hostname 127.0.0.1` to `next dev` invocation
+- [x] Bounds-check `limit` query param in dashboard API (clamp to max 200, treat NaN as default)
 
 ### Low
 
-- [ ] Add `--zone-transfer` flag to gate AXFR attempts behind explicit opt-in (may trigger security alerts)
-- [ ] Pin CI actions to commit SHAs instead of mutable tags (`actions/checkout@v4` -> SHA)
+- [x] Add `--zone-transfer` flag to gate AXFR attempts behind explicit opt-in (may trigger security alerts)
+- [x] Pin CI actions to commit SHAs instead of mutable tags (`actions/checkout@v4` -> SHA)
 
 ### Infrastructure
 
-- [ ] Add `npm audit` step to CI pipeline
-- [ ] Add domain validation regex for `recon` command input
-- [ ] Add SECURITY.md with responsible disclosure policy
+- [x] Add `npm audit` step to CI pipeline
+- [x] Add domain validation regex for `recon` command input
+- [x] Add SECURITY.md with responsible disclosure policy
 - [ ] Restrict file permissions on `~/.wifisentinel/` (mode 0700)
 
 ## Phase 6: Continuous Monitoring (NOT STARTED)
