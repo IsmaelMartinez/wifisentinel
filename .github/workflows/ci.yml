@@ -34,6 +34,12 @@ jobs:
           node dist/cli.js --help > /tmp/help.txt
           ! grep -E '\btv\b' /tmp/help.txt
 
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
   dashboard:
     runs-on: ubuntu-latest
     steps:
