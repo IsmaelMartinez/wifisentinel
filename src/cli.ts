@@ -10,6 +10,7 @@ import { registerHistoryCommand } from "./commands/history.js";
 import { registerDiffCommand } from "./commands/diff.js";
 import { registerTrendCommand } from "./commands/trend.js";
 import { registerScheduleCommand } from "./commands/schedule.js";
+import { registerRFCommand } from "./commands/rf.js";
 import { saveScan } from "./store/index.js";
 import { scoreAllStandards } from "./analyser/standards/index.js";
 import { analyseAllPersonas } from "./analyser/personas/index.js";
@@ -159,5 +160,6 @@ registerHistoryCommand(program);
 registerDiffCommand(program);
 registerTrendCommand(program);
 registerScheduleCommand(program);
+registerRFCommand(program);
 
 program.parse();
