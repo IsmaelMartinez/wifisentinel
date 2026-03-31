@@ -26,7 +26,7 @@
     "scan": "tsx src/cli.ts scan",
     "typecheck": "tsc --noEmit",
     "dashboard": "cd dashboard && npx next dev",
-    "test": "tsx --test 'tests/**/*.test.ts'",
+    "test": "node --import tsx --test tests/analyser/score.test.ts tests/analyser/rf/channel-map.test.ts tests/analyser/rf/rogue-ap.test.ts tests/analyser/rf/environment.test.ts tests/store/diff.test.ts",
     "lint": "eslint src/ tests/"
   },
   "dependencies": {
