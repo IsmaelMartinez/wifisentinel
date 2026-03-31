@@ -1,4 +1,5 @@
-import { execFileSync, execSync } from "node:child_process";
+import { accessSync, constants } from "node:fs";
+import { join } from "node:path";
 import type { ToolTier } from "./schema/scan-result.js";
 
 export interface ToolChain {
@@ -13,16 +14,19 @@ export interface ResolvedToolResult {
   tier: ToolTier;
 }
 
+/** Resolve a tool by searching PATH directories — no shell spawned. */
 function whichTool(name: string): string | null {
-  // command -v is a shell builtin — names come from hardcoded TOOL_CHAINS, not user input
-  try {
-    return execSync(`command -v ${name}`, {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null;
+  const dirs = (process.env.PATH ?? "").split(":");
+  for (const dir of dirs) {
+    const candidate = join(dir, name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // not found in this directory
+    }
   }
+  return null;
 }
 
 const TOOL_CHAINS: ToolChain[] = [
