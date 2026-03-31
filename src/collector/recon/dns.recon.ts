@@ -1,7 +1,7 @@
 import { run } from "../exec.js";
 import type { DnsRecon, DnsRecord } from "./schema.js";
 
-const DOMAIN_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const DOMAIN_REGEX = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*\.?$/;
 const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9.-]{0,253}[a-zA-Z0-9])?$/;
 
 const RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "SOA", "CNAME"] as const;

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import type { TlsRecon } from "./schema.js";
 
-const DOMAIN_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const DOMAIN_REGEX = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*\.?$/;
 
 function emptyResult(domain: string, issues: string[]): TlsRecon {
   return {
@@ -112,24 +112,13 @@ export function scanTls(domain: string): TlsRecon {
   const depthMatch = fullOutput.match(/verify depth is (\d+)/);
   const chainDepth = depthMatch ? parseInt(depthMatch[1], 10) : 0;
 
-  // Now parse the certificate details — two-step: get PEM from s_client, then parse with x509
-  let pemOutput: string;
-  try {
-    pemOutput = execFileSync(
-      "openssl",
-      ["s_client", "-connect", `${domain}:443`, "-servername", domain],
-      { input: "", encoding: "utf-8", timeout: 15_000, stdio: ["pipe", "pipe", "pipe"] },
-    );
-  } catch (err: any) {
-    pemOutput = (err.stdout ?? "").toString();
-  }
-
+  // Parse the certificate from the s_client output (reuse connStdout, no second connection)
   let certOutput: string;
   try {
     certOutput = execFileSync(
       "openssl",
       ["x509", "-noout", "-subject", "-issuer", "-dates", "-ext", "subjectAltName"],
-      { input: pemOutput, encoding: "utf-8", timeout: 10_000, stdio: ["pipe", "pipe", "pipe"] },
+      { input: connStdout, encoding: "utf-8", timeout: 10_000, stdio: ["pipe", "pipe", "pipe"] },
     );
   } catch (err: any) {
     certOutput = (err.stdout ?? "").toString();
