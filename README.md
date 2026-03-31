@@ -128,6 +128,104 @@ The pipeline flows: **CLI** (commander) → **Collector** → **Analyser** → *
 
 `src/telemetry/` wraps scan phases in OTEL spans via `withSpan()` and records tool resolution tier metrics.
 
+## Claude Code Integration
+
+WiFi Sentinel ships with a `/network-audit` skill for Claude Code. If you use Claude Code (claude.ai/code), you can run a full network security audit directly from a conversation:
+
+```
+/network-audit
+```
+
+This runs a scan, analyses the results through all five personas, and presents findings conversationally. You can ask follow-up questions like "what should I fix first?" or "explain the red team findings" and Claude will work with the live scan data.
+
+To set up the skill, add the `network-audit` skill definition to your `.claude/skills/` directory pointing at this project's `src/cli.ts` entry point.
+
+## Usage Examples
+
+The simplest way to check your network:
+
+```bash
+# Just scan — takes about 30-60 seconds
+npm run scan
+
+# Want the full picture with persona analysis? Add --analyse
+npm run dev -- analyse -v
+
+# Quick check without the slow bits (ports, speed test)
+npm run dev -- scan --skip-ports --skip-speed
+
+# Check your WiFi channel congestion
+npm run dev -- rf
+
+# Investigate a domain's external security
+npm run dev -- recon yourdomain.com --analyse
+
+# Export a past scan as a shareable HTML report
+npm run dev -- export <scan-id>
+
+# See how your network has changed over time
+npm run dev -- trend
+
+# Compare two scans side by side
+npm run dev -- diff <id1> <id2>
+
+# Set up automatic scanning every 6 hours
+npm run dev -- schedule enable
+```
+
+All scan data is stored locally in `~/.wifisentinel/` — nothing is sent to any external service.
+
+## Contributing
+
+Contributions are welcome. The project follows a standard fork-and-PR workflow.
+
+### Getting started
+
+```bash
+git clone https://github.com/IsmaelMartinez/wifisentinel.git
+cd wifisentinel
+npm install
+npm test        # 44 unit tests
+npm run lint    # ESLint with typescript-eslint
+npm run build   # compile TypeScript
+```
+
+### Development workflow
+
+Run the CLI in development mode (no build step needed):
+
+```bash
+npm run dev -- scan --skip-speed
+```
+
+Start the dashboard:
+
+```bash
+npm run dashboard
+```
+
+### Branch conventions
+
+All work goes through feature branches and pull requests — direct pushes to `main` are not accepted. Branch naming: `feature/<description>` for new work, `fix/<description>` for bug fixes.
+
+### Code conventions
+
+The project uses UK English spelling throughout (analyser, analyse, normalised, etc.). TypeScript is strict-mode with ESM modules and `.js` extensions in all imports. Schemas use Zod for validation and type inference. Terminal output uses chalk with the existing box-drawing style from `render-helpers.ts`.
+
+### Running tests
+
+```bash
+npm test                    # all 44 tests
+npm run typecheck           # tsc --noEmit
+npm run lint                # eslint
+```
+
+CI runs typecheck, build, lint, and tests on Node 20 and 22, plus a dashboard build, on every PR.
+
+### Areas for contribution
+
+There are several areas where contributions would be particularly valuable: adding Linux support (the WiFi scanner currently targets macOS `system_profiler` and `en0`), expanding the test suite beyond the current 44 unit tests, improving error messages when system tools are missing, adding Shodan/Censys integration to the recon command, and building Phase 6 (continuous monitoring with `wifisentinel watch`).
+
 ## Licence
 
 MIT
