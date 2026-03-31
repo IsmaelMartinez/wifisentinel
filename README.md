@@ -138,7 +138,7 @@ WiFi Sentinel ships with a `/network-audit` skill for Claude Code. If you use Cl
 
 This runs a scan, analyses the results through all five personas, and presents findings conversationally. You can ask follow-up questions like "what should I fix first?" or "explain the red team findings" and Claude will work with the live scan data.
 
-To set up the skill, add the `network-audit` skill definition to your `.claude/skills/` directory pointing at this project's `src/cli.ts` entry point.
+To set up the skill, add the `network-audit` skill definition to your `.claude/skills/` directory. The skill should invoke the built CLI (`node /path/to/wifisentinel/dist/cli.js analyse`) or use tsx for development (`npx tsx /path/to/wifisentinel/src/cli.ts analyse`).
 
 ## Usage Examples
 
@@ -146,32 +146,34 @@ The simplest way to check your network:
 
 ```bash
 # Just scan — takes about 30-60 seconds
-npm run scan
+wifisentinel scan
 
 # Want the full picture with persona analysis? Add --analyse
-npm run dev -- analyse -v
+wifisentinel analyse -v
 
 # Quick check without the slow bits (ports, speed test)
-npm run dev -- scan --skip-ports --skip-speed
+wifisentinel scan --skip-ports --skip-speed
 
 # Check your WiFi channel congestion
-npm run dev -- rf
+wifisentinel rf
 
 # Investigate a domain's external security
-npm run dev -- recon yourdomain.com --analyse
+wifisentinel recon yourdomain.com --analyse
 
 # Export a past scan as a shareable HTML report
-npm run dev -- export <scan-id>
+wifisentinel export <scan-id>
 
 # See how your network has changed over time
-npm run dev -- trend
+wifisentinel trend
 
 # Compare two scans side by side
-npm run dev -- diff <id1> <id2>
+wifisentinel diff <id1> <id2>
 
 # Set up automatic scanning every 6 hours
-npm run dev -- schedule enable
+wifisentinel schedule enable
 ```
+
+If you haven't run `npm link`, use `npm run dev -- <command>` instead.
 
 All scan data is stored locally in `~/.wifisentinel/` — nothing is sent to any external service.
 
@@ -185,7 +187,7 @@ Contributions are welcome. The project follows a standard fork-and-PR workflow.
 git clone https://github.com/IsmaelMartinez/wifisentinel.git
 cd wifisentinel
 npm install
-npm test        # 44 unit tests
+npm test        # run unit tests
 npm run lint    # ESLint with typescript-eslint
 npm run build   # compile TypeScript
 ```
@@ -215,7 +217,7 @@ The project uses UK English spelling throughout (analyser, analyse, normalised, 
 ### Running tests
 
 ```bash
-npm test                    # all 44 tests
+npm test                    # run all tests
 npm run typecheck           # tsc --noEmit
 npm run lint                # eslint
 ```
@@ -224,7 +226,7 @@ CI runs typecheck, build, lint, and tests on Node 20 and 22, plus a dashboard bu
 
 ### Areas for contribution
 
-There are several areas where contributions would be particularly valuable: adding Linux support (the WiFi scanner currently targets macOS `system_profiler` and `en0`), expanding the test suite beyond the current 44 unit tests, improving error messages when system tools are missing, adding Shodan/Censys integration to the recon command, and building Phase 6 (continuous monitoring with `wifisentinel watch`).
+There are several areas where contributions would be particularly valuable: adding Linux support (the WiFi scanner currently targets macOS `system_profiler` and `en0`), expanding the test suite, improving error messages when system tools are missing, adding Shodan/Censys integration to the recon command, and building Phase 6 (continuous monitoring with `wifisentinel watch`).
 
 ## Licence
 
