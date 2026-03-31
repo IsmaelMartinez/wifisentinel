@@ -25,7 +25,7 @@
 - Create: `dashboard/components.json`
 - Modify: `package.json` (root)
 
-- [ ] **Step 1: Create dashboard/package.json**
+- [x] **Step 1: Create dashboard/package.json**
 
 ```json
 {
@@ -60,7 +60,7 @@
 }
 ```
 
-- [ ] **Step 2: Create dashboard/tsconfig.json**
+- [x] **Step 2: Create dashboard/tsconfig.json**
 
 ```json
 {
@@ -89,7 +89,7 @@
 }
 ```
 
-- [ ] **Step 3: Create dashboard/next.config.ts**
+- [x] **Step 3: Create dashboard/next.config.ts**
 
 ```ts
 import type { NextConfig } from "next";
@@ -102,7 +102,7 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-- [ ] **Step 4: Create dashboard/postcss.config.mjs**
+- [x] **Step 4: Create dashboard/postcss.config.mjs**
 
 ```js
 /** @type {import('postcss-load-config').Config} */
@@ -115,7 +115,7 @@ const config = {
 export default config;
 ```
 
-- [ ] **Step 5: Create dashboard/tailwind.config.ts**
+- [x] **Step 5: Create dashboard/tailwind.config.ts**
 
 ```ts
 import type { Config } from "tailwindcss";
@@ -140,7 +140,7 @@ const config: Config = {
 export default config;
 ```
 
-- [ ] **Step 6: Create dashboard/app/globals.css**
+- [x] **Step 6: Create dashboard/app/globals.css**
 
 ```css
 @tailwind base;
@@ -204,7 +204,7 @@ export default config;
 }
 ```
 
-- [ ] **Step 7: Create dashboard/lib/utils.ts**
+- [x] **Step 7: Create dashboard/lib/utils.ts**
 
 ```ts
 import { clsx, type ClassValue } from "clsx";
@@ -215,7 +215,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 ```
 
-- [ ] **Step 8: Create dashboard/components.json**
+- [x] **Step 8: Create dashboard/components.json**
 
 ```json
 {
@@ -238,7 +238,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 ```
 
-- [ ] **Step 9: Create dashboard/app/layout.tsx**
+- [x] **Step 9: Create dashboard/app/layout.tsx**
 
 ```tsx
 import type { Metadata } from "next";
@@ -266,7 +266,7 @@ export default function RootLayout({
 }
 ```
 
-- [ ] **Step 10: Create dashboard/app/page.tsx (placeholder)**
+- [x] **Step 10: Create dashboard/app/page.tsx (placeholder)**
 
 ```tsx
 export default function Home() {
@@ -281,7 +281,7 @@ export default function Home() {
 }
 ```
 
-- [ ] **Step 11: Add dashboard script to root package.json**
+- [x] **Step 11: Add dashboard script to root package.json**
 
 In the root `/Users/ismael.martinez/projects/github/wifisentinel/package.json`, add to the `"scripts"` section:
 
@@ -289,7 +289,7 @@ In the root `/Users/ismael.martinez/projects/github/wifisentinel/package.json`, 
 "dashboard": "cd dashboard && npx next dev"
 ```
 
-- [ ] **Step 12: Install dependencies**
+- [x] **Step 12: Install dependencies**
 
 ```bash
 cd /Users/ismael.martinez/projects/github/wifisentinel/dashboard && npm install
@@ -300,7 +300,7 @@ Install geist font:
 cd /Users/ismael.martinez/projects/github/wifisentinel/dashboard && npm install geist
 ```
 
-- [ ] **Step 13: Add dashboard/node_modules and .next to .gitignore**
+- [x] **Step 13: Add dashboard/node_modules and .next to .gitignore**
 
 Create `dashboard/.gitignore`:
 
@@ -309,7 +309,7 @@ node_modules
 .next
 ```
 
-- [ ] **Step 14: Verify the dev server starts**
+- [x] **Step 14: Verify the dev server starts**
 
 ```bash
 cd /Users/ismael.martinez/projects/github/wifisentinel/dashboard && npx next dev --port 3100 &
@@ -319,7 +319,7 @@ kill %1 2>/dev/null
 
 Expected: HTML response containing "WiFi Sentinel".
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 cd /Users/ismael.martinez/projects/github/wifisentinel
@@ -337,7 +337,7 @@ git commit -m "scaffold Next.js dashboard project with Tailwind and dark theme"
 - Create: `dashboard/app/api/scans/[id]/route.ts`
 - Create: `dashboard/app/api/scans/[id]/rf/route.ts`
 
-- [ ] **Step 1: Create the store wrapper**
+- [x] **Step 1: Create the store wrapper**
 
 ```ts
 // dashboard/lib/store.ts
@@ -363,7 +363,7 @@ export function getRFAnalysis(id: string): RFAnalysis {
 }
 ```
 
-- [ ] **Step 2: Create GET /api/scans**
+- [x] **Step 2: Create GET /api/scans**
 
 ```ts
 // dashboard/app/api/scans/route.ts
@@ -380,7 +380,7 @@ export async function GET(request: NextRequest) {
 }
 ```
 
-- [ ] **Step 3: Create GET /api/scans/[id]**
+- [x] **Step 3: Create GET /api/scans/[id]**
 
 ```ts
 // dashboard/app/api/scans/[id]/route.ts
@@ -401,7 +401,7 @@ export async function GET(
 }
 ```
 
-- [ ] **Step 4: Create GET /api/scans/[id]/rf**
+- [x] **Step 4: Create GET /api/scans/[id]/rf**
 
 ```ts
 // dashboard/app/api/scans/[id]/rf/route.ts
@@ -422,7 +422,7 @@ export async function GET(
 }
 ```
 
-- [ ] **Step 5: Test the API**
+- [x] **Step 5: Test the API**
 
 Start the dev server and test:
 ```bash
@@ -452,7 +452,7 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/ismael.martinez/projects/github/wifisentinel
