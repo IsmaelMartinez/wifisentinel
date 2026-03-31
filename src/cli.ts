@@ -11,6 +11,8 @@ import { registerDiffCommand } from "./commands/diff.js";
 import { registerTrendCommand } from "./commands/trend.js";
 import { registerScheduleCommand } from "./commands/schedule.js";
 import { registerRFCommand } from "./commands/rf.js";
+import { registerReconCommand } from "./commands/recon.js";
+import { registerReconHistoryCommand } from "./commands/recon-history.js";
 import { saveScan } from "./store/index.js";
 import { analyseRF } from "./analyser/rf/index.js";
 import { scoreAllStandards } from "./analyser/standards/index.js";
@@ -164,5 +166,7 @@ registerDiffCommand(program);
 registerTrendCommand(program);
 registerScheduleCommand(program);
 registerRFCommand(program);
+registerReconCommand(program);
+registerReconHistoryCommand(program);
 
 program.parse();
