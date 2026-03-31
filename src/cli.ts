@@ -12,6 +12,7 @@ import { registerTrendCommand } from "./commands/trend.js";
 import { registerScheduleCommand } from "./commands/schedule.js";
 import { registerRFCommand } from "./commands/rf.js";
 import { saveScan } from "./store/index.js";
+import { analyseRF } from "./analyser/rf/index.js";
 import { scoreAllStandards } from "./analyser/standards/index.js";
 import { analyseAllPersonas } from "./analyser/personas/index.js";
 
@@ -78,7 +79,8 @@ program
       if (opts.save) {
         const compliance = scoreAllStandards(result);
         const analysis = analyseAllPersonas(result);
-        saveScan(result, compliance, analysis);
+        const rfAnalysis = analyseRF(result);
+        saveScan(result, compliance, analysis, rfAnalysis);
         if (opts.verbose) {
           console.error("[wifisentinel] Scan saved to history.");
         }
@@ -142,7 +144,8 @@ program
       if (opts.save) {
         const compliance = scoreAllStandards(result);
         const analysis = analyseAllPersonas(result);
-        saveScan(result, compliance, analysis);
+        const rfAnalysis = analyseRF(result);
+        saveScan(result, compliance, analysis, rfAnalysis);
         if (opts.verbose) {
           console.error("[wifisentinel] Scan saved to history.");
         }

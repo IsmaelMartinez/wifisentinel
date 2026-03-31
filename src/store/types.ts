@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import type { ComplianceReport } from "../analyser/standards/types.js";
 import type { FullAnalysis } from "../analyser/personas/types.js";
+import type { RFAnalysis } from "../analyser/rf/types.js";
 
 export const IndexEntry = z.object({
   scanId: z.string(),
@@ -22,4 +23,5 @@ export interface StoredScan {
   scan: NetworkScanResult;
   compliance: ComplianceReport;
   analysis: FullAnalysis;
+  rfAnalysis?: RFAnalysis;
 }

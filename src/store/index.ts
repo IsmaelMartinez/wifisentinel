@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import type { ComplianceReport } from "../analyser/standards/types.js";
 import type { FullAnalysis } from "../analyser/personas/types.js";
+import type { RFAnalysis } from "../analyser/rf/types.js";
 import { ScanIndex, type IndexEntry, type StoredScan } from "./types.js";
 import { computeSecurityScore } from "../analyser/score.js";
 
@@ -54,11 +55,12 @@ export function saveScan(
   result: NetworkScanResult,
   compliance: ComplianceReport,
   analysis: FullAnalysis,
+  rfAnalysis?: RFAnalysis,
 ): void {
   ensureDirs();
 
   const filename = makeFilename(result.meta.timestamp, result.meta.scanId);
-  const stored: StoredScan = { scan: result, compliance, analysis };
+  const stored: StoredScan = { scan: result, compliance, analysis, rfAnalysis };
   writeFileSync(join(getScansDir(), filename), JSON.stringify(stored, null, 2), "utf-8");
 
   const entry: IndexEntry = {
