@@ -1,6 +1,9 @@
 import { run } from "../exec.js";
 import type { DnsRecon, DnsRecord } from "./schema.js";
 
+const DOMAIN_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9.-]{0,253}[a-zA-Z0-9])?$/;
+
 const RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "SOA", "CNAME"] as const;
 
 const SUBDOMAIN_PREFIXES = [
@@ -80,6 +83,7 @@ function attemptZoneTransfer(
   for (const ns of nameservers) {
     // Strip trailing dot from NS record value
     const server = ns.replace(/\.$/, "");
+    if (!HOSTNAME_REGEX.test(server)) continue;
     const result = run("dig", ["axfr", `@${server}`, domain], 15_000);
 
     // A successful zone transfer contains record lines (not just SOA or error)
@@ -98,6 +102,10 @@ function attemptZoneTransfer(
 }
 
 export function scanDns(domain: string): DnsRecon {
+  if (!DOMAIN_REGEX.test(domain)) {
+    return { domain, records: [], subdomains: [], zoneTransfer: { attempted: false, vulnerable: false }, nameservers: [] };
+  }
+
   const records: DnsRecord[] = [];
 
   for (const type of RECORD_TYPES) {
