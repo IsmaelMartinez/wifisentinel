@@ -129,7 +129,7 @@ function disableMacOS(): void {
 
 function disableLinux(): void {
   const marker = "# wifisentinel-scheduled-scan";
-  let existing = "";
+  let existing: string;
   try {
     existing = execFileSync("crontab", ["-l"], { encoding: "utf-8" });
   } catch {

@@ -208,7 +208,7 @@ export async function collectNetworkScan(
       ) {
         gatewayVendor = vendorResult.stdout;
       }
-    } catch {}
+    } catch (_e) { /* vendor lookup is optional */ }
 
     const duration = Date.now() - startTime;
     recordScanDuration("total", duration);
