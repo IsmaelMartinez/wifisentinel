@@ -10,7 +10,8 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "scan": "tsx src/cli.ts scan",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dashboard": "cd dashboard && npx next dev"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
