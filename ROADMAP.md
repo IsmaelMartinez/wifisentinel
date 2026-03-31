@@ -35,15 +35,15 @@
 - [ ] Historical trends and compliance tracking
 - [ ] PDF/HTML report generation
 
-## Phase 4: WiFi RF Intelligence (NOT STARTED)
+## Phase 4: WiFi RF Intelligence (COMPLETE)
 
-- [ ] Channel utilisation map: visualise 2.4 GHz (1-14) and 5 GHz channel occupancy from nearby networks
-- [ ] Channel saturation scoring: overlap calculation, co-channel interference count, adjacent-channel penalty
-- [ ] Optimal channel recommendation engine based on local RF environment
-- [ ] Signal strength heatmap over time (repeated scans from `wifisentinel watch`)
-- [ ] Rogue AP / evil twin detection: nearby APs matching your SSID with different BSSID or weaker security
-- [ ] Deauth flood detection via frame counters (requires monitor mode where available)
-- [ ] WiFi environment change detection: new APs appearing, signal anomalies, security downgrades between scans
+- [x] Channel utilisation map: 2.4 GHz and 5 GHz channel occupancy from nearby networks
+- [x] Channel saturation scoring: overlap calculation, co-channel interference count, signal-weighted penalty
+- [x] Optimal channel recommendation engine based on local RF environment
+- [x] Signal strength trends over time (rf --trend, reads from scan history)
+- [x] Rogue AP / evil twin detection: nearby APs matching SSID with different BSSID or weaker security
+- [ ] Deauth flood detection via frame counters (deferred — requires monitor mode)
+- [x] WiFi environment change detection: new APs, signal anomalies, security downgrades between scans
 
 ## Phase 5: External Reconnaissance (NOT STARTED)
 
