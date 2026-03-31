@@ -79,6 +79,7 @@ export interface ScanOptions {
   skipTraffic?: boolean;
   skipPortScan?: boolean;
   skipSpeed?: boolean;
+  skipVendorLookup?: boolean;
   verbose?: boolean;
 }
 
@@ -194,21 +195,23 @@ export async function collectNetworkScan(
 
     // Step 7: Look up gateway vendor
     let gatewayVendor: string | undefined;
-    try {
-      const prefix = bootstrap.gateway.mac.split(":").slice(0, 3).join(":");
-      const vendorResult = run("curl", [
-        "-s",
-        "--max-time",
-        "3",
-        `https://api.macvendors.com/${prefix}`,
-      ]);
-      if (
-        vendorResult.exitCode === 0 &&
-        !vendorResult.stdout.includes("errors")
-      ) {
-        gatewayVendor = vendorResult.stdout;
-      }
-    } catch (_e) { /* vendor lookup is optional */ }
+    if (!options.skipVendorLookup) {
+      try {
+        const prefix = bootstrap.gateway.mac.split(":").slice(0, 3).join(":");
+        const vendorResult = run("curl", [
+          "-s",
+          "--max-time",
+          "3",
+          `https://api.macvendors.com/${prefix}`,
+        ]);
+        if (
+          vendorResult.exitCode === 0 &&
+          !vendorResult.stdout.includes("errors")
+        ) {
+          gatewayVendor = vendorResult.stdout;
+        }
+      } catch (_e) { /* vendor lookup is optional */ }
+    }
 
     const duration = Date.now() - startTime;
     recordScanDuration("total", duration);
