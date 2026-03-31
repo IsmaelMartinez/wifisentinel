@@ -30,7 +30,7 @@ interface NetworkBootstrap {
   broadcastAddr: string;
 }
 
-function detectNetwork(): NetworkBootstrap {
+function detectNetworkDarwin(): NetworkBootstrap {
   const ifconfigResult = run("ifconfig", ["en0"]);
   const inetMatch = ifconfigResult.stdout.match(
     /inet (\d+\.\d+\.\d+\.\d+) netmask (0x[0-9a-f]+) broadcast (\d+\.\d+\.\d+\.\d+)/
@@ -72,6 +72,70 @@ function detectNetwork(): NetworkBootstrap {
     gateway: { ip: gatewayIp, mac: gatewayMac },
     broadcastAddr,
   };
+}
+
+function detectNetworkLinux(): NetworkBootstrap {
+  // Find default interface and gateway from ip route
+  const routeResult = run("ip", ["route", "show", "default"]);
+  let iface = "wlan0";
+  let gatewayIp = "unknown";
+
+  const routeMatch = routeResult.stdout.match(
+    /default via (\d+\.\d+\.\d+\.\d+) dev (\S+)/
+  );
+  if (routeMatch) {
+    gatewayIp = routeMatch[1];
+    iface = routeMatch[2];
+  } else {
+    // Fallback: find a wireless interface via iw dev
+    const iwResult = run("iw", ["dev"]);
+    const ifaceMatch = iwResult.stdout.match(/Interface\s+(\S+)/);
+    if (ifaceMatch) iface = ifaceMatch[1];
+  }
+
+  // Get IP and CIDR from ip addr
+  const addrResult = run("ip", ["-o", "-4", "addr", "show", iface]);
+  let ip = "unknown";
+  let cidrBits = 24;
+  const addrMatch = addrResult.stdout.match(/inet (\d+\.\d+\.\d+\.\d+)\/(\d+)/);
+  if (addrMatch) {
+    ip = addrMatch[1];
+    cidrBits = parseInt(addrMatch[2], 10);
+  }
+
+  const subnet = `${ip.split(".").slice(0, 3).join(".")}.0/${cidrBits}`;
+
+  // Compute broadcast from IP and CIDR
+  const ipParts = ip.split(".").map(Number);
+  const hostBits = 32 - cidrBits;
+  const ipNum =
+    ((ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3]) >>> 0;
+  const broadcastNum = (ipNum | ((1 << hostBits) - 1)) >>> 0;
+  const broadcastAddr = ip === "unknown"
+    ? "255.255.255.255"
+    : `${(broadcastNum >>> 24) & 0xff}.${(broadcastNum >>> 16) & 0xff}.${(broadcastNum >>> 8) & 0xff}.${broadcastNum & 0xff}`;
+
+  // Gateway MAC via arp
+  const arpResult = run("arp", ["-n", gatewayIp]);
+  const macMatch = arpResult.stdout.match(
+    /([0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2})/i
+  );
+  const gatewayMac = macMatch?.[1] ?? "unknown";
+
+  return {
+    interface: iface,
+    ip,
+    subnet,
+    gateway: { ip: gatewayIp, mac: gatewayMac },
+    broadcastAddr,
+  };
+}
+
+function detectNetwork(): NetworkBootstrap {
+  if (process.platform === "linux") {
+    return detectNetworkLinux();
+  }
+  return detectNetworkDarwin();
 }
 
 export interface ScanOptions {

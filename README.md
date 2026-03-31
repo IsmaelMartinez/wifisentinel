@@ -23,7 +23,7 @@ Multi-persona WiFi and network security analyser with compliance scoring, RF int
 ## Requirements
 
 - Node.js >= 20
-- macOS (primary — WiFi scanning uses `airport` and `en0`)
+- macOS or Linux (WiFi scanning uses platform-native tools)
 
 Optional system tools (used when available, gracefully degraded otherwise):
 
@@ -31,6 +31,8 @@ Optional system tools (used when available, gracefully degraded otherwise):
 - `dig` — DNS enumeration (recon command)
 - `openssl` — TLS/SSL grading (recon command)
 - `whois` — registrar lookup (recon command)
+- `iw` / `nmcli` — WiFi scanning on Linux
+- `ip` — network interface detection on Linux
 
 ## Installation
 

@@ -149,12 +149,115 @@ function scanClientIsolation(knownHostIp?: string): boolean | null {
 }
 
 // ---------------------------------------------------------------------------
+// Linux helpers
+// ---------------------------------------------------------------------------
+
+function scanFirewallLinux(): NetworkScanResult["security"]["firewall"] {
+  let enabled = false;
+  let stealthMode = false;
+
+  // Try ufw first
+  const ufwResult = run("ufw", ["status"]);
+  if (ufwResult.exitCode === 0 && /Status:\s*active/i.test(ufwResult.stdout)) {
+    enabled = true;
+    // Check for ICMP echo drop rule (stealth mode equivalent)
+    stealthMode = /DENY.*icmp/i.test(ufwResult.stdout);
+  } else {
+    // Fallback: iptables
+    const iptResult = run("iptables", ["-L", "-n"]);
+    if (iptResult.exitCode === 0) {
+      // If there are rules beyond the default ACCEPT policies, firewall is active
+      const lines = iptResult.stdout.split("\n").filter(
+        (l) => l.trim() && !l.startsWith("Chain") && !l.startsWith("target")
+      );
+      enabled = lines.length > 0;
+      stealthMode = /DROP.*icmp/i.test(iptResult.stdout);
+    }
+  }
+
+  return {
+    enabled,
+    stealthMode,
+    autoAllowSigned: false,
+    autoAllowDownloaded: false,
+  };
+}
+
+function scanVpnLinux(): NetworkScanResult["security"]["vpn"] {
+  // Check for tun0/wg0 interfaces
+  const linkResult = run("ip", ["link"]);
+  const hasTun = /tun\d+|wg\d+/i.test(linkResult.stdout);
+
+  // Check for running VPN processes
+  const pgrepResult = run("pgrep", ["-l", "openvpn|wireguard"]);
+  const hasProcess = pgrepResult.exitCode === 0 && pgrepResult.stdout.trim().length > 0;
+
+  if (hasTun || hasProcess) {
+    let provider: string | undefined;
+    if (/wireguard|wg\d+/i.test(linkResult.stdout + pgrepResult.stdout)) {
+      provider = "WireGuard";
+    } else if (/openvpn/i.test(pgrepResult.stdout)) {
+      provider = "OpenVPN";
+    }
+    return { installed: true, active: hasTun, ...(provider ? { provider } : {}) };
+  }
+
+  return { installed: false, active: false };
+}
+
+function scanProxyLinux(): NetworkScanResult["security"]["proxy"] {
+  const httpProxy = process.env["HTTP_PROXY"] || process.env["http_proxy"];
+  const httpsProxy = process.env["HTTPS_PROXY"] || process.env["https_proxy"];
+  const proxyUrl = httpsProxy || httpProxy;
+
+  if (proxyUrl) {
+    try {
+      const url = new URL(proxyUrl);
+      const port = url.port ? parseInt(url.port, 10) : undefined;
+      return {
+        enabled: true,
+        server: url.hostname,
+        ...(port !== undefined && !isNaN(port) ? { port } : {}),
+      };
+    } catch {
+      return { enabled: true };
+    }
+  }
+
+  return { enabled: false };
+}
+
+function scanKernelParamsLinux(): NetworkScanResult["security"]["kernelParams"] {
+  const forwarding = run("sysctl", ["net.ipv4.ip_forward"]).stdout;
+  const redirect = run("sysctl", ["net.ipv4.conf.all.accept_redirects"]).stdout;
+
+  return {
+    ipForwarding: parseSysctlBool(forwarding),
+    icmpRedirects: parseSysctlBool(redirect),
+  };
+}
+
+async function scanSecurityPostureLinux(): Promise<NetworkScanResult["security"]> {
+  const firewall = scanFirewallLinux();
+  const vpn = scanVpnLinux();
+  const proxy = scanProxyLinux();
+  const kernelParams = scanKernelParamsLinux();
+  const clientIsolation = null;
+
+  return { firewall, vpn, proxy, kernelParams, clientIsolation };
+}
+
+// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
 export async function scanSecurityPosture(
   knownHostIp?: string
 ): Promise<NetworkScanResult["security"]> {
+  if (process.platform === "linux") {
+    return scanSecurityPostureLinux();
+  }
+
   const firewall = scanFirewall();
   const vpn = scanVpn();
   const proxy = scanProxy();
