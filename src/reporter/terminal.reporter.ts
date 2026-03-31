@@ -14,6 +14,8 @@ import {
   severityColor,
   boolStatus,
 } from "./render-helpers.js";
+import { analyseRF } from "../analyser/rf/index.js";
+import { renderRFSummary } from "./rf.reporter.js";
 
 // ─── Section renderers ─────────────────────────────────────────────────────
 
@@ -418,6 +420,20 @@ function renderScorecard(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
+function renderRFIntelligence(result: NetworkScanResult): string {
+  const analysis = analyseRF(result);
+  const summary = renderRFSummary(analysis);
+  const lines: string[] = [
+    sectionHeader("RF INTELLIGENCE"),
+    row(""),
+  ];
+  for (const line of summary.split("\n")) {
+    lines.push(row("  " + line));
+  }
+  lines.push(row(""));
+  return lines.join("\n");
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────
 
 export function renderTerminalReport(result: NetworkScanResult): string {
@@ -425,6 +441,7 @@ export function renderTerminalReport(result: NetworkScanResult): string {
     renderHeader(result),
     renderNetworkMap(result),
     renderWifiDetails(result),
+    renderRFIntelligence(result),
     renderSecurityPosture(result),
     renderDnsAudit(result),
     renderHiddenDeviceAlerts(result),
