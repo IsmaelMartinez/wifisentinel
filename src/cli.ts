@@ -37,6 +37,7 @@ program
   .option("--skip-ports", "Skip port scanning on discovered hosts")
   .option("--skip-traffic", "Skip traffic analysis")
   .option("--skip-speed", "Skip speed test")
+  .option("--no-vendor-lookup", "Skip MAC vendor lookups (prevents sending OUI data to api.macvendors.com)")
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
   .option("-v, --verbose", "Verbose output to stderr")
   .option("--analyse", "Include multi-persona analysis in the output")
@@ -56,6 +57,7 @@ program
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic,
         skipSpeed: opts.skipSpeed,
+        skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
       });
 
@@ -107,6 +109,7 @@ program
   .option("--skip-ports", "Skip port scanning on discovered hosts")
   .option("--skip-traffic", "Skip traffic analysis")
   .option("--skip-speed", "Skip speed test")
+  .option("--no-vendor-lookup", "Skip MAC vendor lookups (prevents sending OUI data to api.macvendors.com)")
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
   .option("-v, --verbose", "Show detailed findings per standard/persona")
   .option("--no-save", "Skip saving scan to history")
@@ -125,6 +128,7 @@ program
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic,
         skipSpeed: opts.skipSpeed,
+        skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
       });
 

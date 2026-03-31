@@ -10,6 +10,7 @@ export type { ReconResult } from "./schema.js";
 
 export interface ReconOptions {
   verbose?: boolean;
+  zoneTransfer?: boolean;
 }
 
 export async function collectRecon(domain: string, options: ReconOptions = {}): Promise<ReconResult> {
@@ -21,7 +22,7 @@ export async function collectRecon(domain: string, options: ReconOptions = {}): 
 
   // Run all scanners in parallel
   const [dns, tls, headers, whois, crt] = await Promise.all([
-    Promise.resolve().then(() => { log("DNS enumeration..."); return scanDns(domain); }),
+    Promise.resolve().then(() => { log("DNS enumeration..."); return scanDns(domain, { zoneTransfer: options.zoneTransfer }); }),
     Promise.resolve().then(() => { log("TLS/SSL grading..."); return scanTls(domain); }),
     Promise.resolve().then(() => { log("HTTP headers analysis..."); return scanHeaders(domain); }),
     Promise.resolve().then(() => { log("WHOIS lookup..."); return scanWhois(domain); }),
