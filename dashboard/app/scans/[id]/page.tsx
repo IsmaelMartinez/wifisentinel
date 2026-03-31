@@ -31,9 +31,18 @@ export default async function ScanDetailPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">
-          Scan Report
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">
+            Scan Report
+          </h1>
+          <a
+            href={`/api/scans/${scan.meta.scanId}/export`}
+            download
+            className="text-sm text-primary hover:underline"
+          >
+            Export HTML
+          </a>
+        </div>
         <p className="text-sm text-muted-foreground">
           {scan.wifi.ssid ?? "(hidden)"} &middot; {new Date(scan.meta.timestamp).toLocaleString()} &middot;
           ID: <span className="font-mono">{scan.meta.scanId.slice(0, 8)}</span>
