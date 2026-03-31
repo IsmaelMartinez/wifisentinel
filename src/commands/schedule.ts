@@ -1,5 +1,5 @@
 // src/commands/schedule.ts
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -19,8 +19,7 @@ function getBinaryPath(): string {
   if (existsSync(distCli)) return distCli;
   // Fallback: try global install
   try {
-    // command -v is a shell builtin — hardcoded tool name, not user input
-    return execSync("command -v wifisentinel", {
+    return execFileSync("which", ["wifisentinel"], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
@@ -31,8 +30,7 @@ function getBinaryPath(): string {
 
 function getNodePath(): string {
   try {
-    // command -v is a shell builtin — hardcoded tool name, not user input
-    return execSync("command -v node", {
+    return execFileSync("which", ["node"], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();

@@ -20,6 +20,9 @@ export async function GET(
       headers: {
         "Content-Type": "text/html",
         "Content-Disposition": `attachment; filename="wifisentinel-report-${date}.html"`,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+        "Cache-Control": "no-store",
       },
     });
   } catch (err: any) {

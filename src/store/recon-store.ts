@@ -1,19 +1,26 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
 import { getStorePath } from "./index.js";
 import type { ReconResult } from "../collector/recon/schema.js";
 import type { FullReconAnalysis } from "../analyser/recon-personas.js";
 
-export interface ReconIndexEntry {
-  reconId: string;
-  timestamp: string;
-  domain: string;
-  tlsGrade: string;
-  headersGrade: string;
-  overallGrade: string;
-  subdomainCount: number;
-  filename: string;
-}
+const SAFE_FILENAME = /^[\w.-]+\.json$/;
+
+const ReconIndexEntrySchema = z.object({
+  reconId: z.string(),
+  timestamp: z.string(),
+  domain: z.string(),
+  tlsGrade: z.string(),
+  headersGrade: z.string(),
+  overallGrade: z.string(),
+  subdomainCount: z.number(),
+  filename: z.string(),
+});
+
+export type ReconIndexEntry = z.infer<typeof ReconIndexEntrySchema>;
+
+const ReconIndex = z.array(ReconIndexEntrySchema);
 
 export interface StoredRecon {
   recon: ReconResult;
@@ -36,7 +43,8 @@ function readIndex(): ReconIndexEntry[] {
   const indexPath = getIndexPath();
   if (!existsSync(indexPath)) return [];
   try {
-    return JSON.parse(readFileSync(indexPath, "utf-8")) as ReconIndexEntry[];
+    const raw = JSON.parse(readFileSync(indexPath, "utf-8"));
+    return ReconIndex.parse(raw);
   } catch {
     return [];
   }
@@ -105,6 +113,9 @@ export function loadRecon(reconId: string): StoredRecon {
     throw new Error(
       `Recon "${reconId}" not found. Run "wifisentinel recon-history" to list available scans.`,
     );
+  }
+  if (!SAFE_FILENAME.test(entry.filename)) {
+    throw new Error(`Invalid filename in index: ${entry.filename}`);
   }
   const filePath = join(getReconsDir(), entry.filename);
   if (!existsSync(filePath)) {
