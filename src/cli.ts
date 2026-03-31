@@ -5,7 +5,6 @@ import { renderTerminalReport } from "./reporter/terminal.reporter.js";
 import { renderAnalysisReport } from "./reporter/analysis.reporter.js";
 import { renderJsonReport } from "./reporter/json.reporter.js";
 import { initTelemetry, shutdownTelemetry } from "./telemetry/index.js";
-import { registerTVCommands } from "./tools/tv/tv-commands.js";
 import { registerHistoryCommand } from "./commands/history.js";
 import { registerDiffCommand } from "./commands/diff.js";
 import { registerTrendCommand } from "./commands/trend.js";
@@ -24,7 +23,7 @@ const program = new Command();
 program
   .name("wifisentinel")
   .description("Multi-persona WiFi/network security analyser")
-  .version("0.1.0");
+  .version("1.0.0");
 
 program
   .command("scan")
@@ -161,7 +160,6 @@ program
     }
   });
 
-registerTVCommands(program);
 registerHistoryCommand(program);
 registerDiffCommand(program);
 registerTrendCommand(program);
