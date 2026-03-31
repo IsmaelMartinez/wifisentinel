@@ -218,7 +218,206 @@ function parseNetworksetup(output: string): Partial<WifiResult> {
   return { ssid: match ? match[1].trim() : null };
 }
 
+// ---------------------------------------------------------------------------
+// Linux WiFi helpers
+// ---------------------------------------------------------------------------
+
+function findLinuxWifiInterface(): string {
+  const routeResult = run("ip", ["route", "show", "default"]);
+  const routeMatch = routeResult.stdout.match(/dev (\S+)/);
+  if (routeMatch) return routeMatch[1];
+
+  const iwResult = run("iw", ["dev"]);
+  const ifaceMatch = iwResult.stdout.match(/Interface\s+(\S+)/);
+  if (ifaceMatch) return ifaceMatch[1];
+
+  return "wlan0";
+}
+
+function bandFromFrequency(freqMhz: number): string {
+  if (freqMhz < 3000) return "2.4GHz";
+  if (freqMhz <= 6000) return "5GHz";
+  return "6GHz";
+}
+
+function channelFromFrequency(freqMhz: number): number {
+  if (freqMhz >= 2412 && freqMhz <= 2484) {
+    if (freqMhz === 2484) return 14;
+    return (freqMhz - 2407) / 5;
+  }
+  if (freqMhz >= 5170 && freqMhz <= 5825) {
+    return (freqMhz - 5000) / 5;
+  }
+  return 0;
+}
+
+function isLocallyAdministeredMac(mac: string): boolean {
+  const firstOctet = parseInt(mac.split(":")[0], 16);
+  return (firstOctet & 0x02) !== 0;
+}
+
+async function scanWifiLinux(): Promise<WifiResult> {
+  const defaults: WifiResult = {
+    ssid: null,
+    bssid: "",
+    protocol: "Unknown",
+    channel: 0,
+    band: "unknown",
+    width: "20MHz",
+    security: "Unknown",
+    signal: 0,
+    noise: 0,
+    snr: 0,
+    txRate: 0,
+    macRandomised: false,
+    countryCode: "",
+    nearbyNetworks: [],
+  };
+
+  const iface = findLinuxWifiInterface();
+
+  // Current connection info via iw dev <iface> link
+  let ssid: string | null = null;
+  let bssid = "";
+  let signal = 0;
+  let frequency = 0;
+  let txRate = 0;
+
+  const linkResult = run("iw", ["dev", iface, "link"]);
+  if (linkResult.exitCode === 0 && !linkResult.stdout.includes("Not connected")) {
+    const bssidMatch = linkResult.stdout.match(/Connected to ([0-9a-f:]+)/i);
+    if (bssidMatch) bssid = bssidMatch[1];
+
+    const ssidMatch = linkResult.stdout.match(/SSID:\s*(.+)/);
+    if (ssidMatch) ssid = ssidMatch[1].trim();
+
+    const freqMatch = linkResult.stdout.match(/freq:\s*(\d+)/);
+    if (freqMatch) frequency = parseInt(freqMatch[1], 10);
+
+    const signalMatch = linkResult.stdout.match(/signal:\s*(-?\d+)/);
+    if (signalMatch) signal = parseInt(signalMatch[1], 10);
+
+    const txMatch = linkResult.stdout.match(/tx bitrate:\s*([\d.]+)/);
+    if (txMatch) txRate = parseFloat(txMatch[1]);
+  }
+
+  const channel = frequency ? channelFromFrequency(frequency) : 0;
+  const band = frequency ? bandFromFrequency(frequency) : "unknown";
+
+  // MAC randomisation check
+  const linkShowResult = run("ip", ["link", "show", iface]);
+  let macRandomised = false;
+  const macShowMatch = linkShowResult.stdout.match(
+    /link\/ether\s+([0-9a-f:]+)/i
+  );
+  if (macShowMatch) {
+    macRandomised = isLocallyAdministeredMac(macShowMatch[1]);
+  }
+
+  // Nearby networks and security via nmcli
+  let security = "Unknown";
+  const nearbyNetworks: NearbyNetwork[] = [];
+
+  const nmcliResult = run("nmcli", [
+    "-t",
+    "-f",
+    "SSID,SECURITY,SIGNAL,CHAN,MODE,BSSID",
+    "device",
+    "wifi",
+    "list",
+  ]);
+
+  if (nmcliResult.exitCode === 0 && nmcliResult.stdout.length > 0) {
+    for (const line of nmcliResult.stdout.split("\n")) {
+      if (!line.trim()) continue;
+      // nmcli -t uses : as delimiter, but BSSID contains colons escaped as \:
+      const unescaped = line.replace(/\\:/g, "\uFFFF");
+      const parts = unescaped.split(":");
+      const netSsid = parts[0]?.replace(/\uFFFF/g, ":") || null;
+      const netSecurity = parts[1]?.replace(/\uFFFF/g, ":") || "Unknown";
+      const netSignal = parseInt(parts[2] ?? "0", 10);
+      const netChannel = parseInt(parts[3] ?? "0", 10);
+      const netBssid = parts[5]?.replace(/\uFFFF/g, ":").trim() || undefined;
+
+      if (netSsid === ssid && netBssid?.toLowerCase() === bssid.toLowerCase()) {
+        security = netSecurity;
+      } else if (netSsid) {
+        nearbyNetworks.push({
+          ssid: netSsid,
+          bssid: netBssid,
+          security: netSecurity,
+          protocol: "Unknown",
+          channel: netChannel,
+          signal: netSignal,
+          noise: 0,
+        });
+      }
+    }
+  } else {
+    // Fallback: try iw scan (may need sudo, fail gracefully)
+    const scanResult = run("iw", ["dev", iface, "scan"]);
+    if (scanResult.exitCode === 0) {
+      const blocks = scanResult.stdout.split(/^BSS /m);
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        const bssidScan = block.match(/^([0-9a-f:]+)/i)?.[1] || undefined;
+        const ssidScan = block.match(/SSID:\s*(.+)/)?.[1]?.trim() || null;
+        const freqScan = block.match(/freq:\s*(\d+)/);
+        const signalScan = block.match(/signal:\s*(-?[\d.]+)/);
+        const chanScan = freqScan
+          ? channelFromFrequency(parseInt(freqScan[1], 10))
+          : 0;
+
+        if (bssidScan?.toLowerCase() === bssid.toLowerCase()) {
+          // Current network — extract security
+          if (block.includes("RSN:")) security = "WPA2";
+          if (block.includes("WPA:")) security = security === "WPA2" ? "WPA/WPA2" : "WPA";
+          if (!block.includes("RSN:") && !block.includes("WPA:")) security = "Open";
+        } else if (ssidScan) {
+          let netSec = "Open";
+          if (block.includes("RSN:")) netSec = "WPA2";
+          if (block.includes("WPA:")) netSec = netSec === "WPA2" ? "WPA/WPA2" : "WPA";
+
+          nearbyNetworks.push({
+            ssid: ssidScan,
+            bssid: bssidScan,
+            security: netSec,
+            protocol: "Unknown",
+            channel: chanScan,
+            signal: signalScan ? parseFloat(signalScan[1]) : 0,
+            noise: 0,
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    ...defaults,
+    ssid,
+    bssid,
+    protocol: "Unknown",
+    channel,
+    band,
+    security,
+    signal,
+    noise: 0,
+    snr: 0,
+    txRate,
+    macRandomised,
+    nearbyNetworks,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
 export async function scanWifi(): Promise<WifiResult> {
+  if (process.platform === "linux") {
+    return scanWifiLinux();
+  }
+
   const defaults: WifiResult = {
     ssid: null,
     bssid: "",
