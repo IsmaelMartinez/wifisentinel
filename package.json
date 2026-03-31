@@ -1,8 +1,15 @@
 {
   "name": "wifisentinel",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Multi-persona WiFi/network security analyser with OTEL instrumentation",
   "type": "module",
+  "license": "MIT",
+  "author": "Ismael Martinez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IsmaelMartinez/wifisentinel.git"
+  },
+  "keywords": ["wifi", "network", "security", "scanner", "reconnaissance", "cli"],
   "bin": {
     "wifisentinel": "./dist/cli.js"
   },
@@ -23,12 +30,10 @@
     "@opentelemetry/semantic-conventions": "^1.30.0",
     "chalk": "^5.4.0",
     "commander": "^13.1.0",
-    "ws": "^8.20.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
-    "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
