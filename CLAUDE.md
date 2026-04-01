@@ -9,6 +9,8 @@ npm run dev             # Run CLI in development (via tsx): tsx src/cli.ts
 npm run scan            # Quick scan shortcut: tsx src/cli.ts scan
 npm run build           # Compile TypeScript to dist/
 npm run typecheck       # Type-check without emitting: tsc --noEmit
+npm test                # Run tests (Node built-in test runner via tsx)
+npm run lint            # Run ESLint on src/ and tests/
 ```
 
 Scan with options:
@@ -21,7 +23,7 @@ npm run dev -- analyse -v                                      # dedicated analy
 npm run dev -- tv                                              # LG webOS TV control (side quest)
 ```
 
-There are no tests yet. No linter is configured.
+Tests are in `tests/` and run with `npm test` (Node built-in test runner via tsx). ESLint is configured in `eslint.config.js` and run with `npm run lint`.
 
 ## Architecture
 
