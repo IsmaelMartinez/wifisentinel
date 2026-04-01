@@ -99,8 +99,9 @@ export function registerDiffCommand(program: Command): void {
         }
 
         console.log("");
-      } catch (err: any) {
-        console.error(chalk.red(err.message));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(chalk.red(message));
         process.exit(1);
       }
     });
