@@ -38,7 +38,7 @@ export function TrendChart({
           contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px" }}
           labelStyle={{ color: "#fafafa" }}
           labelFormatter={(v) => new Date(v).toLocaleString()}
-          formatter={(value: number) => [`${value}${unit}`, ""]}
+          formatter={(value) => [`${value}${unit}`, ""]}
         />
         <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={{ r: 3 }} />
       </LineChart>
