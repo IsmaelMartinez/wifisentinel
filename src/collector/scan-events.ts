@@ -9,7 +9,8 @@ export type ScanEvent =
   | { type: "host:enriched"; ip: string; vendor: string; timestamp: string }
   | { type: "port:found"; ip: string; port: number; service: string; timestamp: string }
   | { type: "scan:complete"; scanId: string; hostCount: number; timestamp: string }
-  | { type: "scan:score"; score: number; timestamp: string };
+  | { type: "scan:score"; score: number; timestamp: string }
+  | { type: "bootstrap:complete"; gateway: string; ip: string; subnet: string; timestamp: string };
 
 export class ScanEventEmitter extends EventEmitter {
   private ts(): string {
@@ -50,6 +51,10 @@ export class ScanEventEmitter extends EventEmitter {
 
   scanScore(score: number): void {
     this.emit("event", { type: "scan:score", score, timestamp: this.ts() } satisfies ScanEvent);
+  }
+
+  bootstrapComplete(gateway: string, ip: string, subnet: string): void {
+    this.emit("event", { type: "bootstrap:complete", gateway, ip, subnet, timestamp: this.ts() } satisfies ScanEvent);
   }
 
   toJSON(event: ScanEvent): string {

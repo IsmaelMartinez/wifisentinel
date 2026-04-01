@@ -1,8 +1,10 @@
 import { Listr } from "listr2";
+import logUpdate from "log-update";
 import type { ScanEvent } from "../collector/scan-events.js";
 import { ScanEventEmitter } from "../collector/scan-events.js";
 import { collectNetworkScan, type ScanOptions } from "../collector/index.js";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
+import { NetworkTreeRenderer } from "./network-tree.js";
 
 interface TaskDef {
   title: string;
@@ -39,10 +41,22 @@ export async function runScanWithProgress(scanOptions: ScanOptions): Promise<Net
     skipTraffic: scanOptions.skipTraffic,
   });
   const completed = new Map<string, string>();
+  const tree = new NetworkTreeRenderer();
 
   emitter.on("event", (event: ScanEvent) => {
     if (event.type === "scanner:complete") {
       completed.set(event.scanner, event.summary);
+    } else if (event.type === "bootstrap:complete") {
+      tree.setGateway(event.gateway);
+    } else if (event.type === "host:found") {
+      tree.addHost(event.ip, event.mac);
+      logUpdate(tree.render());
+    } else if (event.type === "host:enriched") {
+      tree.enrichHost(event.ip, event.vendor);
+      logUpdate(tree.render());
+    } else if (event.type === "port:found") {
+      tree.addPort(event.ip, event.port, event.service);
+      logUpdate(tree.render());
     }
   });
 
@@ -75,5 +89,6 @@ export async function runScanWithProgress(scanOptions: ScanOptions): Promise<Net
     listrTasks.run(),
   ]);
 
+  logUpdate.done();
   return scanResult;
 }

@@ -174,6 +174,8 @@ export async function collectNetworkScan(
       return detectNetwork();
     });
 
+    emitter?.bootstrapComplete(bootstrap.gateway.ip, bootstrap.ip, bootstrap.subnet);
+
     if (options.verbose) {
       console.error(
         `[bootstrap] IP: ${bootstrap.ip}, Gateway: ${bootstrap.gateway.ip}, Subnet: ${bootstrap.subnet}`
