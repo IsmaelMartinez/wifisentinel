@@ -24,7 +24,7 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "scan": "tsx src/cli.ts scan",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json",
     "dashboard": "cd dashboard && npx next dev --hostname 127.0.0.1",
     "test": "find tests -name '*.test.ts' | xargs node --import tsx --test",
     "lint": "eslint src/ tests/"
