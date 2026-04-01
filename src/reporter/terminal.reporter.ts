@@ -3,6 +3,7 @@ import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import { computeSecurityScore } from "../analyser/score.js";
 import {
   W,
+  refreshWidth,
   hRule,
   boxLine,
   sectionHeader,
@@ -14,6 +15,10 @@ import {
   severityColor,
   boolStatus,
 } from "./render-helpers.js";
+
+const TEAL = chalk.hex("#4ec9b0");
+const AMBER = chalk.hex("#cca700");
+const RED = chalk.hex("#f44747");
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFSummary } from "./rf.reporter.js";
 
@@ -170,8 +175,8 @@ function renderDnsAudit(result: NetworkScanResult): string {
     sectionHeader("DNS AUDIT"),
     row(""),
     row(`  Servers      ${dns.servers.join("  ")}`),
-    row(`  DNSSEC       ${dns.dnssecSupported ? chalk.green("supported") : chalk.yellow("not supported")}`),
-    row(`  DoH / DoT    ${dns.dohDotEnabled ? chalk.green("enabled") : chalk.dim("not detected")}`),
+    row(`  DNSSEC       ${dns.dnssecSupported ? TEAL("supported") : AMBER("not supported")}`),
+    row(`  DoH / DoT    ${dns.dohDotEnabled ? TEAL("enabled") : chalk.dim("not detected")}`),
     row(`  Hijack test  ${hijackColor(dns.hijackTestResult.toUpperCase())}`),
     row(""),
   ];
@@ -348,11 +353,11 @@ function renderSpeedTest(result: NetworkScanResult): string {
 
   // Rating badge
   const ratingColors: Record<string, (s: string) => string> = {
-    excellent: chalk.green,
-    good: chalk.green,
-    fair: chalk.yellow,
-    poor: chalk.red,
-    unusable: chalk.red,
+    excellent: TEAL,
+    good: TEAL,
+    fair: AMBER,
+    poor: RED,
+    unusable: RED,
   };
   const colorFn = ratingColors[s.rating] ?? chalk.white;
   lines.push(row(`  Rating:  ${colorFn(s.rating.toUpperCase())}`));
@@ -362,15 +367,15 @@ function renderSpeedTest(result: NetworkScanResult): string {
   const maxBar = 40;
   const dlBar = Math.min(maxBar, Math.round(s.download.speedMbps / 5));
   const ulBar = Math.min(maxBar, Math.round(s.upload.speedMbps / 5));
-  const dlColor = s.download.speedMbps >= 50 ? chalk.green : s.download.speedMbps >= 10 ? chalk.yellow : chalk.red;
-  const ulColor = s.upload.speedMbps >= 20 ? chalk.green : s.upload.speedMbps >= 5 ? chalk.yellow : chalk.red;
+  const dlColor = s.download.speedMbps >= 50 ? TEAL : s.download.speedMbps >= 10 ? AMBER : RED;
+  const ulColor = s.upload.speedMbps >= 20 ? TEAL : s.upload.speedMbps >= 5 ? AMBER : RED;
 
   lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(Math.max(0, 10 - dlBar)))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
   lines.push(row(`  Upload    ${ulColor("█".repeat(ulBar) + "░".repeat(Math.max(0, 10 - ulBar)))}  ${chalk.bold(s.upload.speedMbps.toFixed(1) + " Mbps")}`));
   lines.push(row(""));
 
   // Latency
-  const latColor = (ms: number) => ms < 20 ? chalk.green : ms < 50 ? chalk.yellow : chalk.red;
+  const latColor = (ms: number) => ms < 20 ? TEAL : ms < 50 ? AMBER : RED;
   lines.push(row(`  Latency`));
   lines.push(row(`    Gateway:     ${latColor(s.latency.gatewayMs)(s.latency.gatewayMs.toFixed(1) + " ms")}   jitter: ${s.jitter.gatewayMs.toFixed(1)} ms`));
   lines.push(row(`    Internet:    ${latColor(s.latency.internetMs)(s.latency.internetMs.toFixed(1) + " ms")}   jitter: ${s.jitter.internetMs.toFixed(1)} ms`));
@@ -378,14 +383,14 @@ function renderSpeedTest(result: NetworkScanResult): string {
   lines.push(row(""));
 
   // Packet loss
-  const plColor = (pct: number) => pct === 0 ? chalk.green : pct < 5 ? chalk.yellow : chalk.red;
+  const plColor = (pct: number) => pct === 0 ? TEAL : pct < 5 ? AMBER : RED;
   lines.push(row(`  Packet Loss`));
   lines.push(row(`    Gateway:   ${plColor(s.packetLoss.gatewayPercent)(s.packetLoss.gatewayPercent.toFixed(0) + "%")}    Internet: ${plColor(s.packetLoss.internetPercent)(s.packetLoss.internetPercent.toFixed(0) + "%")}`));
   lines.push(row(""));
 
   // WiFi utilisation
   if (s.wifiLinkRate > 0) {
-    const utilColor = s.effectiveUtilisation > 50 ? chalk.green : s.effectiveUtilisation > 20 ? chalk.yellow : chalk.red;
+    const utilColor = s.effectiveUtilisation > 50 ? TEAL : s.effectiveUtilisation > 20 ? AMBER : RED;
     lines.push(row(`  WiFi Link Rate: ${s.wifiLinkRate} Mbps → actual throughput: ${s.download.speedMbps.toFixed(1)} Mbps (${utilColor(s.effectiveUtilisation.toFixed(1) + "% utilisation")})`));
     lines.push(row(""));
   }
@@ -397,12 +402,12 @@ function renderScorecard(result: NetworkScanResult): string {
   const score = computeSecurityScore(result);
   const label =
     score >= 8
-      ? chalk.green("SECURE")
+      ? TEAL("SECURE")
       : score >= 6
-      ? chalk.yellow("MODERATE RISK")
+      ? AMBER("MODERATE RISK")
       : score >= 4
-      ? chalk.yellow("ELEVATED RISK")
-      : chalk.red("HIGH RISK");
+      ? AMBER("ELEVATED RISK")
+      : RED("HIGH RISK");
 
   const bar = scoreBar(Math.round(score));
   const scoreStr = `${score.toFixed(1)} / 10`;
@@ -437,6 +442,7 @@ function renderRFIntelligence(result: NetworkScanResult): string {
 // ─── Main export ──────────────────────────────────────────────────────────
 
 export function renderTerminalReport(result: NetworkScanResult): string {
+  refreshWidth();
   const sections: string[] = [
     renderHeader(result),
     renderNetworkMap(result),
