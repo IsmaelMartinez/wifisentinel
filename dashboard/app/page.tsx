@@ -15,7 +15,7 @@ const personaNames: Record<string, string> = {
   "privacy": "Privacy",
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default function OverviewPage() {
   const entries = getScans({ limit: 10 });
