@@ -39,9 +39,9 @@ export function ChannelChart({
         <Tooltip
           contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px" }}
           labelStyle={{ color: "#fafafa" }}
-          formatter={(value: number, _name: string, props: any) => {
+          formatter={(value: number | undefined, _name: string, props: any) => {
             const item = props.payload;
-            return [`${value}% (${item.networks} direct, ${item.overlap} overlap)`, "Saturation"];
+            return [`${value ?? 0}% (${item.networks} direct, ${item.overlap} overlap)`, "Saturation"];
           }}
         />
         <Bar dataKey="saturation" radius={[4, 4, 0, 0]}>
