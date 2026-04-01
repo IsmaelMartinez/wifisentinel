@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { NetworkTopology } from "./network-topology";
@@ -109,7 +109,7 @@ export function ScanRunner() {
 
   const hosts = events.filter((e) => e.type === "host:found");
 
-  const enrichedHosts = hosts.map((h) => {
+  const enrichedHosts = useMemo(() => hosts.map((h) => {
     const enrichment = events.find((e) => e.type === "host:enriched" && e.ip === h.ip);
     const hostPorts = events
       .filter((e) => e.type === "port:found" && e.ip === h.ip)
@@ -121,9 +121,12 @@ export function ScanRunner() {
       isCamera: false,
       ports: hostPorts,
     };
-  });
+  }), [hosts, events]);
 
-  const gatewayEvent = events.find((e) => e.type === "bootstrap:complete");
+  const gatewayEvent = useMemo(
+    () => events.find((e) => e.type === "bootstrap:complete"),
+    [events],
+  );
 
   return (
     <>

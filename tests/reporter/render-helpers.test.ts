@@ -39,7 +39,7 @@ describe("statusIcon", () => {
 
   it("info: contains info icon and 'Info' label", () => {
     const plain = stripAnsi(statusIcon("info"));
-    assert.ok(plain.includes("ℹ") || plain.includes("i") || plain.includes("·"), `expected info symbol in: ${plain}`);
+    assert.ok(plain.includes("ℹ") || plain.includes("ⓘ") || plain.includes("·"), `expected info symbol in: ${plain}`);
     assert.ok(plain.toLowerCase().includes("info"), `expected 'info' in: ${plain}`);
   });
 
@@ -113,7 +113,8 @@ describe("signalBar", () => {
 
   it("contains filled and empty bar characters", () => {
     const plain = stripAnsi(signalBar(-60));
-    assert.ok(plain.includes("█") || plain.includes("░"), `expected bar chars in: ${plain}`);
+    assert.ok(plain.includes("█"), `expected filled bar chars in: ${plain}`);
+    assert.ok(plain.includes("░"), `expected empty bar chars in: ${plain}`);
   });
 });
 

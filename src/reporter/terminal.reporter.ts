@@ -14,11 +14,11 @@ import {
   scoreBar,
   severityColor,
   boolStatus,
+  TEAL,
+  AMBER,
+  RED,
 } from "./render-helpers.js";
 
-const TEAL = chalk.hex("#4ec9b0");
-const AMBER = chalk.hex("#cca700");
-const RED = chalk.hex("#f44747");
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFSummary } from "./rf.reporter.js";
 import { renderScoreTrend, renderSignalTrend } from "./sparklines.js";

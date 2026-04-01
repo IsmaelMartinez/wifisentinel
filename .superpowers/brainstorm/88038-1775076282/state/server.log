@@ -1,0 +1,2 @@
+{"type":"server-started","port":55344,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:55344","screen_dir":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/88038-1775076282/content","state_dir":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/88038-1775076282/state"}
+{"type":"server-stopped","reason":"idle timeout"}

@@ -44,9 +44,13 @@ export async function runScanWithProgress(scanOptions: ScanOptions): Promise<Net
   const completed = new Map<string, string>();
   const tree = new NetworkTreeRenderer();
 
+  const failed = new Map<string, string>();
+
   emitter.on("event", (event: ScanEvent) => {
     if (event.type === "scanner:complete") {
       completed.set(event.scanner, event.summary);
+    } else if (event.type === "scanner:error") {
+      failed.set(event.scanner, event.error);
     } else if (event.type === "bootstrap:complete") {
       tree.setGateway(event.gateway);
     } else if (event.type === "host:found") {
@@ -65,10 +69,15 @@ export async function runScanWithProgress(scanOptions: ScanOptions): Promise<Net
     taskDefs.map((def) => ({
       title: def.title,
       task: async (_ctx: unknown, task: { title: string }) => {
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve, reject) => {
           if (completed.has(def.scanner)) {
             task.title = `${def.title} — ${completed.get(def.scanner)}`;
             resolve();
+            return;
+          }
+          if (failed.has(def.scanner)) {
+            task.title = `${def.title} — FAILED: ${failed.get(def.scanner)}`;
+            reject(new Error(failed.get(def.scanner)));
             return;
           }
           const handler = (event: ScanEvent) => {
@@ -76,13 +85,17 @@ export async function runScanWithProgress(scanOptions: ScanOptions): Promise<Net
               task.title = `${def.title} — ${event.summary}`;
               emitter.off("event", handler);
               resolve();
+            } else if (event.type === "scanner:error" && event.scanner === def.scanner) {
+              task.title = `${def.title} — FAILED: ${event.error}`;
+              emitter.off("event", handler);
+              reject(new Error(event.error));
             }
           };
           emitter.on("event", handler);
         });
       },
     })),
-    { concurrent: true, rendererOptions: { collapseSubtasks: false } }
+    { concurrent: true, exitOnError: false, rendererOptions: { collapseSubtasks: false } }
   );
 
   const [scanResult] = await Promise.all([

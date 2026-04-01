@@ -3,10 +3,10 @@ import figures from "figures";
 import terminalLink from "terminal-link";
 
 // Accessible colour constants — distinguishable under all common CVD types
-const TEAL = chalk.hex("#4ec9b0");
-const RED = chalk.hex("#f44747");
-const AMBER = chalk.hex("#cca700");
-const BLUE = chalk.hex("#569cd6");
+export const TEAL = chalk.hex("#4ec9b0");
+export const RED = chalk.hex("#f44747");
+export const AMBER = chalk.hex("#cca700");
+export const BLUE = chalk.hex("#569cd6");
 
 export let W = 72; // inner width of report boxes
 

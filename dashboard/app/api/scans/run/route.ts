@@ -6,13 +6,16 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
+  const skipPorts = body.skipPorts === true;
+  const skipSpeed = body.skipSpeed === true;
+  const skipTraffic = body.skipTraffic === true;
   const args = ["src/cli.ts", "scan", "--events", "--no-save"];
 
-  if (body.skipPorts) args.push("--skip-ports");
-  if (body.skipSpeed) args.push("--skip-speed");
-  if (body.skipTraffic) args.push("--skip-traffic");
+  if (skipPorts) args.push("--skip-ports");
+  if (skipSpeed) args.push("--skip-speed");
+  if (skipTraffic) args.push("--skip-traffic");
 
-  const cliDir = resolve(process.cwd(), "..");
+  const cliDir = process.env.CLI_ROOT_DIR ?? resolve(process.cwd(), "..");
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -22,10 +25,15 @@ export async function POST(request: NextRequest) {
         stdio: ["ignore", "pipe", "pipe"],
       });
 
+      let buffer = "";
       child.stdout.on("data", (chunk: Buffer) => {
-        const lines = chunk.toString().split("\n").filter(Boolean);
+        buffer += chunk.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
         for (const line of lines) {
-          controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+          if (line.trim()) {
+            controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+          }
         }
       });
 
@@ -34,12 +42,14 @@ export async function POST(request: NextRequest) {
       });
 
       child.on("close", (code) => {
-        controller.enqueue(encoder.encode(`data: {"type":"stream:end","exitCode":${code ?? 0}}\n\n`));
+        const payload = JSON.stringify({ type: "stream:end", exitCode: code ?? 0 });
+        controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
         controller.close();
       });
 
       child.on("error", (err) => {
-        controller.enqueue(encoder.encode(`data: {"type":"stream:error","error":"${err.message}"}\n\n`));
+        const payload = JSON.stringify({ type: "stream:error", error: err.message });
+        controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
         controller.close();
       });
     },

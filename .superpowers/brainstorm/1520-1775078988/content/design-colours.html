@@ -1,0 +1,89 @@
+<h2>Design Section 1: Accessible Colour System + Scan Progress</h2>
+<p class="subtitle">The foundation — these decisions affect every other section</p>
+
+<div class="section">
+  <h3>Accessible-by-Default Colour Palette</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    The current reporter uses red/green as the primary pass/fail signal, which is indistinguishable for ~8% of men with colour vision deficiency. The new palette uses <strong>shape + colour + label</strong> together so no single channel carries meaning alone.
+  </p>
+
+  <div class="mockup" style="margin-top:16px">
+    <div class="mockup-header">Proposed Semantic Palette</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:14px;line-height:2">
+      <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:4px 24px;align-items:center">
+        <span style="color:#4ec9b0">&#x2714; PASS</span>
+        <span style="color:#888">Teal/cyan — distinguishable from red in all CVD types</span>
+        <span style="color:#555">Was: green</span>
+
+        <span style="color:#f44747">&#x2718; FAIL</span>
+        <span style="color:#888">Red stays — icon + label disambiguate from teal</span>
+        <span style="color:#555">Unchanged</span>
+
+        <span style="color:#cca700">&#x25B2; WARN</span>
+        <span style="color:#888">Amber/gold — triangle icon, distinct from both teal and red</span>
+        <span style="color:#555">Was: yellow (similar)</span>
+
+        <span style="color:#569cd6">&#x25CF; INFO</span>
+        <span style="color:#888">Blue — circle icon for neutral information</span>
+        <span style="color:#555">Was: white/default</span>
+
+        <span style="color:#888">&#x2014; N/A</span>
+        <span style="color:#888">Dim grey — dash, clearly inactive</span>
+        <span style="color:#555">Unchanged</span>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:14px;color:#ccc;line-height:1.7;margin-top:16px">
+    Key principle: every status is communicated through <strong>three redundant channels</strong> — colour, icon shape, and text label. Someone seeing only greyscale can still tell pass from fail via the checkmark vs cross. The <code>figures</code> library provides these symbols with automatic ASCII fallbacks for limited terminals.
+  </p>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>Scan Progress with listr2</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    Instead of a blank terminal during scanning, listr2 renders a live task tree that maps to the scan pipeline stages.
+  </p>
+
+  <div class="mockup" style="margin-top:16px">
+    <div class="mockup-header">Terminal During Scan</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:1.8;color:#ccc">
+      <div>
+        <span style="color:#4ec9b0">&#x2714;</span> WiFi environment <span style="color:#555">802.11ax · 5GHz · ch48 · WPA3</span><br>
+        <span style="color:#4ec9b0">&#x2714;</span> DNS audit <span style="color:#555">2 servers · DNSSEC enabled</span><br>
+        <span style="color:#4ec9b0">&#x2714;</span> Security posture <span style="color:#555">firewall on · VPN active</span><br>
+        <span style="color:#4ec9b0">&#x2714;</span> Active connections <span style="color:#555">14 established · 6 listening</span><br>
+        <span style="color:#569cd6">&#x25E4;</span> Host discovery <span style="color:#888">found 7 hosts...</span><br>
+        <span style="color:#555">&#x25CB;</span> <span style="color:#555">Port scanning</span><br>
+        <span style="color:#555">&#x25CB;</span> <span style="color:#555">Deep analysis (hidden devices, intrusion)</span><br>
+        <span style="color:#555">&#x25CB;</span> <span style="color:#555">Speed test</span>
+      </div>
+      <div style="margin-top:16px;border-top:1px solid #333;padding-top:12px">
+        <span style="color:#888">Network Map</span><br>
+        <span style="color:#555">&#x250C;&#x2500;</span> <span style="color:#cca700">192.168.1.1</span> <span style="color:#555">Cisco Systems (gateway)</span><br>
+        <span style="color:#555">&#x251C;&#x2500;</span> 192.168.1.100 <span style="color:#555">Apple Inc</span><br>
+        <span style="color:#555">&#x251C;&#x2500;</span> 192.168.1.105 <span style="color:#555">Samsung Electronics</span><br>
+        <span style="color:#555">&#x251C;&#x2500;</span> <span style="color:#569cd6">scanning...</span><br>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:14px;color:#ccc;line-height:1.7;margin-top:16px">
+    The task tree lives above the growing network map. Completed tasks show a one-line summary of what was found. The network tree grows in place below — new hosts appear as they're discovered, then ports and vendor info fill in when deeper scans complete. When everything finishes, the full report renders below (or replaces the progress view if <code>--clean</code> is passed).
+  </p>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>Event Design (for future C)</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    Even in Approach A, the scanners will emit structured events internally rather than just returning final results. This doesn't change the scanner interfaces dramatically — each scanner still returns its typed result, but the collector wraps them to emit progress events that listr2 and the network tree consume. When we move to C, these same events get exposed externally as NDJSON.
+  </p>
+  <div style="margin-top:12px;padding:12px;background:#111;border:1px solid #333;border-radius:6px;font-family:monospace;font-size:12px;color:#888;line-height:1.8">
+    { "type": "scanner:start", "scanner": "host-discovery" }<br>
+    { "type": "host:found", "ip": "192.168.1.100", "mac": "aa:bb:cc:dd:ee:ff" }<br>
+    { "type": "host:enriched", "ip": "192.168.1.100", "vendor": "Apple Inc" }<br>
+    { "type": "scanner:complete", "scanner": "host-discovery", "summary": "7 hosts" }<br>
+    { "type": "port:found", "ip": "192.168.1.100", "port": 22, "service": "ssh" }<br>
+    { "type": "scan:score", "score": 8.2 }
+  </div>
+</div>

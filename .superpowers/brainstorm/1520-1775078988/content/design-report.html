@@ -1,0 +1,137 @@
+<h2>Design Section 2: Report Output + Dashboard Integration</h2>
+<p class="subtitle">How the final report looks in the terminal and how scans get triggered from the UI</p>
+
+<div class="section">
+  <h3>Responsive Tables with cli-table3</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    Replace hand-rolled <code>pad()</code> alignment with proper table rendering. Tables adapt to <code>process.stdout.columns</code> instead of the fixed 72-char box.
+  </p>
+
+  <div class="split" style="margin-top:16px">
+    <div class="mockup">
+      <div class="mockup-header">Before (fixed width, manual padding)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:11px;line-height:1.6;color:#999">
+        <pre style="margin:0;color:inherit">
+║                                                                        ║
+║  192.168.1.1    aa:bb:cc:dd:ee  Cisco Syste…  gateway                ║
+║  192.168.1.100  11:22:33:44:55  Apple Inc     22/ssh 445/smb         ║
+║  192.168.1.105  ff:ee:dd:cc:bb  Samsung Ele…                         ║
+║                                                                        ║</pre>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">After (responsive, proper table)</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:11px;line-height:1.6;color:#ccc">
+        <pre style="margin:0;color:inherit">
+┌─────────────────┬───────────────────┬──────────────────┬─────────────┐
+│ IP              │ MAC               │ Vendor           │ Services    │
+├─────────────────┼───────────────────┼──────────────────┼─────────────┤
+│ <span style="color:#cca700">192.168.1.1</span>     │ aa:bb:cc:dd:ee:ff │ Cisco Systems    │ gateway     │
+│ 192.168.1.100   │ 11:22:33:44:55:66 │ Apple Inc        │ ssh, smb    │
+│ 192.168.1.105   │ ff:ee:dd:cc:bb:aa │ Samsung          │             │
+│ <span style="color:#f44747">192.168.1.50</span>    │ 99:88:77:66:55:44 │ Wyze Inc <span style="color:#f44747">&#x2718; CAM</span> │ rtsp        │
+└─────────────────┴───────────────────┴──────────────────┴─────────────┘</pre>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:14px;color:#ccc;line-height:1.7;margin-top:16px">
+    The same approach applies to the compliance findings matrix, DNS records, nearby networks list, and connections summary. Each gets a proper table that wraps and resizes.
+  </p>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>Inline Data Visualisation</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    Sparklines and mini-charts add information density without taking up report real estate.
+  </p>
+
+  <div class="mockup" style="margin-top:16px">
+    <div class="mockup-header">Compact Visualisations</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:2.2;color:#ccc">
+      <div>
+        <span style="color:#888">Channel Saturation (2.4 GHz)</span><br>
+        <span style="color:#555">Ch  1</span> <span style="color:#4ec9b0">▂▃</span><span style="color:#cca700">▅▇</span><span style="color:#f44747">█</span> <span style="color:#888">78%</span>
+        <span style="color:#555"> Ch  6</span> <span style="color:#4ec9b0">▁▂▃</span> <span style="color:#888">32%</span>
+        <span style="color:#555"> Ch 11</span> <span style="color:#4ec9b0">▂▃▄</span><span style="color:#cca700">▅</span> <span style="color:#888">55%</span>
+        <span style="color:#555"> &#x2190; you</span>
+      </div>
+      <div style="margin-top:8px">
+        <span style="color:#888">Signal Strength Trend (last 5 scans)</span><br>
+        <span style="color:#569cd6">▃▅▇▅▃</span> <span style="color:#888">-45 dBm avg</span>
+      </div>
+      <div style="margin-top:8px">
+        <span style="color:#888">Security Score History</span><br>
+        <span style="color:#4ec9b0">▅▅▆▇▇</span> <span style="color:#888">7.5 → 8.2 (improving)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>Dashboard: Run Scan + Stream Results</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    The dashboard gets a "Run Scan" action. The Next.js API route spawns the CLI as a child process and streams scanner events back via Server-Sent Events. The dashboard renders results progressively — the topology map, host table, and score gauge all update as events arrive.
+  </p>
+
+  <div class="mockup" style="margin-top:16px">
+    <div class="mockup-header">Dashboard — Live Scan Flow</div>
+    <div class="mockup-body" style="font-size:13px;color:#ccc;line-height:1.7">
+      <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#1a1a2a;border-radius:6px;margin-bottom:16px">
+        <button style="background:#4ec9b0;color:#000;border:none;padding:8px 16px;border-radius:4px;font-weight:bold;cursor:pointer">Run Scan</button>
+        <span style="color:#888">Options:</span>
+        <label style="color:#999;font-size:12px"><input type="checkbox" style="margin-right:4px" checked>Ports</label>
+        <label style="color:#999;font-size:12px"><input type="checkbox" style="margin-right:4px" checked>Speed</label>
+        <label style="color:#999;font-size:12px"><input type="checkbox" style="margin-right:4px">Traffic</label>
+        <label style="color:#999;font-size:12px"><input type="checkbox" style="margin-right:4px" checked>Analysis</label>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="background:#111;border:1px solid #333;border-radius:6px;padding:16px">
+          <div style="font-size:11px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Network Topology</div>
+          <div style="text-align:center;padding:24px;color:#555">
+            <div style="font-size:32px">&#x25CE;</div>
+            <div style="margin-top:8px;font-size:12px">
+              Gateway<br>
+              <span style="color:#cca700">192.168.1.1</span>
+            </div>
+            <div style="display:flex;justify-content:center;gap:24px;margin-top:16px">
+              <div style="font-size:11px;color:#888">
+                <div style="font-size:18px;color:#ccc">&#x25CB;</div>
+                .100<br><span style="color:#555">Apple</span>
+              </div>
+              <div style="font-size:11px;color:#888">
+                <div style="font-size:18px;color:#ccc">&#x25CB;</div>
+                .105<br><span style="color:#555">Samsung</span>
+              </div>
+              <div style="font-size:11px;color:#569cd6">
+                <div style="font-size:18px">&#x25CF;</div>
+                scanning...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#111;border:1px solid #333;border-radius:6px;padding:16px">
+          <div style="font-size:11px;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Scan Progress</div>
+          <div style="font-size:13px;line-height:2">
+            <span style="color:#4ec9b0">&#x2714;</span> WiFi environment<br>
+            <span style="color:#4ec9b0">&#x2714;</span> DNS audit<br>
+            <span style="color:#4ec9b0">&#x2714;</span> Security posture<br>
+            <span style="color:#569cd6">&#x25E4;</span> Host discovery<br>
+            <span style="color:#555">&#x25CB;</span> <span style="color:#555">Port scanning</span><br>
+            <span style="color:#555">&#x25CB;</span> <span style="color:#555">Speed test</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;font-size:12px;color:#555;text-align:center">
+        Results save to ~/.wifisentinel/scans/ automatically — same as running from the CLI
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:14px;color:#ccc;line-height:1.7;margin-top:16px">
+    Implementation is straightforward: a new API route <code>POST /api/scans/run</code> spawns <code>tsx src/cli.ts scan --events</code> as a child process, piping the NDJSON event stream back as SSE. The dashboard subscribes with <code>EventSource</code> and updates its React state as events arrive. When the scan completes, the result is saved to the store and the page transitions to the normal scan detail view.
+  </p>
+</div>

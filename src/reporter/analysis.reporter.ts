@@ -106,7 +106,7 @@ export function renderComplianceDetails(report: ComplianceReport): string {
         lines.push(row(chalk.dim(`     ${finding.description}`)));
         if (finding.status !== "pass" && finding.status !== "not-applicable") {
           const rec = finding.recommendation.replace(
-            /(https?:\/\/\S+)/g,
+            /(https?:\/\/[^\s.,;:!?)\]]+)/g,
             (url) => link(url, url),
           );
           lines.push(row(chalk.dim(`     → ${rec}`)));

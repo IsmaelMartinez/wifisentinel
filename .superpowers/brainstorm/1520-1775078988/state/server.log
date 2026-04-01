@@ -1,0 +1,6 @@
+{"type":"server-started","port":59371,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:59371","screen_dir":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/1520-1775078988/content","state_dir":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/1520-1775078988/state"}
+{"type":"screen-added","file":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/1520-1775078988/content/design-colours.html"}
+{"type":"screen-added","file":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/1520-1775078988/content/design-report.html"}
+{"type":"screen-added","file":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/1520-1775078988/content/design-architecture.html"}
+{"type":"screen-added","file":"/Users/ismael.martinez/projects/github/wifisentinel/.superpowers/brainstorm/1520-1775078988/content/waiting.html"}
+{"type":"server-stopped","reason":"idle timeout"}
