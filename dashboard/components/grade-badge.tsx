@@ -2,8 +2,8 @@
 import { cn } from "@/lib/utils";
 
 function gradeColor(grade: string): string {
-  if (grade === "A" || grade === "B") return "text-green-400 border-green-400/30";
-  if (grade === "C" || grade === "D") return "text-yellow-400 border-yellow-400/30";
+  if (grade === "A" || grade === "B") return "text-teal-400 border-teal-400/30";
+  if (grade === "C" || grade === "D") return "text-amber-400 border-amber-400/30";
   return "text-red-400 border-red-400/30";
 }
 

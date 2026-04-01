@@ -161,12 +161,12 @@ export default async function ScanDetailPage({
                 <CardHeader><CardTitle className="text-base">Rogue AP Detection</CardTitle></CardHeader>
                 <CardContent>
                   {rfAnalysis.rogueAPs.findings.length === 0 ? (
-                    <p className="text-green-400">No rogue APs detected.</p>
+                    <p className="text-teal-400">No rogue APs detected.</p>
                   ) : (
                     <div className="space-y-2">
                       {rfAnalysis.rogueAPs.findings.map((f, i) => (
                         <div key={i} className="text-sm">
-                          <span className={f.severity === "high" ? "text-red-400" : "text-yellow-400"}>
+                          <span className={f.severity === "high" ? "text-red-400" : "text-amber-400"}>
                             [{f.severity.toUpperCase()}]
                           </span>{" "}
                           {f.description}
