@@ -1,5 +1,6 @@
 import chalk, { type ChalkInstance } from "chalk";
 import figures from "figures";
+import terminalLink from "terminal-link";
 
 // Accessible colour constants — distinguishable under all common CVD types
 const TEAL = chalk.hex("#4ec9b0");
@@ -93,4 +94,8 @@ export function snrLabel(snr: number): string {
   if (snr >= 15) return TEAL("Good");
   if (snr >= 10) return AMBER("Fair");
   return RED("Poor");
+}
+
+export function link(text: string, url: string): string {
+  return terminalLink(text, url, { fallback: (text, url) => `${text} (${url})` });
 }
