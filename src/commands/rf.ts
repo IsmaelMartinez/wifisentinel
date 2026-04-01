@@ -99,8 +99,6 @@ export function registerRFCommand(program: Command): void {
 
         // Live RF scan
         const wifi = await scanWifi();
-        // Build a minimal result object for analyseRF
-        const minimalResult = { wifi } as any;
 
         let baseline: { wifi: typeof wifi; meta: { scanId: string; timestamp: string } } | undefined;
         if (opts.compare) {
@@ -111,7 +109,7 @@ export function registerRFCommand(program: Command): void {
           };
         }
 
-        const analysis = analyseRF(minimalResult, baseline);
+        const analysis = analyseRF({ wifi }, baseline);
 
         if (opts.json) {
           console.log(JSON.stringify(analysis, null, 2));
