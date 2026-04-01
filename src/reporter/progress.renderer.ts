@@ -21,13 +21,14 @@ export function createScanTasks(opts: { skipPorts?: boolean; skipSpeed?: boolean
   ];
 
   if (!opts.skipPorts) {
-    tasks.push({ title: "Port scanning", scanner: "ports" });
+    tasks.push({ title: "Port scanning", scanner: "port-scan" });
   }
 
-  tasks.push({ title: "Deep analysis", scanner: "deep-analysis" });
+  tasks.push({ title: "Hidden device scan", scanner: "hidden-device-scan" });
+  tasks.push({ title: "Intrusion detection", scanner: "intrusion-detection" });
 
   if (!opts.skipSpeed) {
-    tasks.push({ title: "Speed test", scanner: "speed" });
+    tasks.push({ title: "Speed test", scanner: "speed-test" });
   }
 
   return tasks;
