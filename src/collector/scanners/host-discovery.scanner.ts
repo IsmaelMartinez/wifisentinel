@@ -1,5 +1,6 @@
 import { run } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
+import { lookupVendor } from "../oui-lookup.js";
 
 interface ArpEntry {
   ip: string;
@@ -32,25 +33,8 @@ function deduplicateByIp(entries: ArpEntry[]): ArpEntry[] {
   return Array.from(map.values());
 }
 
-async function lookupMacVendor(mac: string): Promise<string | undefined> {
-  // Use only the first 3 octets (OUI prefix)
-  const prefix = mac.split(":").slice(0, 3).join(":");
-  try {
-    const res = await fetch(`https://api.macvendors.com/${encodeURIComponent(prefix)}`, {
-      signal: AbortSignal.timeout(3_000),
-    });
-    if (res.status === 200) {
-      const text = await res.text();
-      return text.trim() || undefined;
-    }
-  } catch {
-    // Network error or timeout — skip silently
-  }
-  return undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function lookupMacVendor(mac: string): string | undefined {
+  return lookupVendor(mac);
 }
 
 interface TopologyHop {
@@ -108,16 +92,15 @@ export async function scanHosts(
   const refreshedArp = run("/usr/sbin/arp", ["-a"]);
   arpEntries = deduplicateByIp([...arpEntries, ...parseArpOutput(refreshedArp.stdout)]);
 
-  // 4. Vendor lookups with 1-per-second rate limiting
+  // 4. Vendor lookups from local OUI database
   const hosts: NetworkScanResult["network"]["hosts"] = [];
   for (const entry of arpEntries) {
-    const vendor = await lookupMacVendor(entry.mac);
+    const vendor = lookupMacVendor(entry.mac);
     hosts.push({
       ip: entry.ip,
       mac: entry.mac,
       vendor,
     });
-    if (vendor) await sleep(500);
   }
 
   // 5. Topology: traceroute to 8.8.8.8 with max 5 hops
