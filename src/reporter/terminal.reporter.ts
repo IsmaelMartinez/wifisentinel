@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import Table from "cli-table3";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import { computeSecurityScore } from "../analyser/score.js";
 import {
@@ -62,24 +63,30 @@ function renderNetworkMap(result: NetworkScanResult): string {
   if (network.hosts.length === 0) {
     lines.push(row("  └─ (no hosts discovered)"));
   } else {
-    network.hosts.forEach((host, idx) => {
-      const isLast = idx === network.hosts.length - 1;
-      const connector = isLast ? "└─" : "├─";
-      const cameraFlag = host.isCamera ? chalk.red(" ⚠ CAMERA") : "";
-      const deviceType = host.deviceType ? chalk.dim(` [${host.deviceType}]`) : "";
-      const vendor = host.vendor ? chalk.cyan(` ${host.vendor}`) : "";
-      const hostname = host.hostname ? chalk.dim(` (${host.hostname})`) : "";
-      lines.push(row(`  ${connector} ${chalk.green(host.ip)}  ${chalk.dim(host.mac)}${vendor}${deviceType}${hostname}${cameraFlag}`));
-      const openPorts = (host.ports ?? []).filter(p => p.state === "open");
-      if (openPorts.length > 0) {
-        const portList = openPorts
-          .slice(0, 5)
-          .map(p => `${p.port}/${p.service}`)
-          .join("  ");
-        const more = openPorts.length > 5 ? chalk.dim(` +${openPorts.length - 5} more`) : "";
-        lines.push(row(`  ${isLast ? " " : "│"}     ${chalk.dim("ports:")} ${chalk.dim(portList)}${more}`));
-      }
+    const table = new Table({
+      chars: {
+        top: "─", "top-mid": "┬", "top-left": "┌", "top-right": "┐",
+        bottom: "─", "bottom-mid": "┴", "bottom-left": "└", "bottom-right": "┘",
+        left: "│", "left-mid": "├", mid: "─", "mid-mid": "┼",
+        right: "│", "right-mid": "┤", middle: "│",
+      },
+      head: ["IP", "MAC", "Vendor", "Services"],
+      style: { head: ["cyan"], border: ["dim"] },
+      wordWrap: true,
     });
+
+    for (const host of network.hosts) {
+      const cameraFlag = host.isCamera ? RED(" ✘ CAM") : "";
+      const vendor = (host.vendor ?? "") + cameraFlag;
+      const openPorts = (host.ports ?? []).filter(p => p.state === "open");
+      const portStr = openPorts.slice(0, 5).map(p => `${p.port}/${p.service}`).join(", ");
+      const more = openPorts.length > 5 ? ` +${openPorts.length - 5}` : "";
+      table.push([host.ip, chalk.dim(host.mac), vendor, chalk.dim(portStr + more)]);
+    }
+
+    for (const line of table.toString().split("\n")) {
+      lines.push(row("  " + line));
+    }
   }
 
   lines.push(row(""));
