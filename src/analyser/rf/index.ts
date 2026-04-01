@@ -19,7 +19,7 @@ export type {
 } from "./types.js";
 
 export function analyseRF(
-  result: NetworkScanResult,
+  result: { wifi: NetworkScanResult["wifi"] },
   baseline?: { wifi: NetworkScanResult["wifi"]; meta: { scanId: string; timestamp: string } },
 ): RFAnalysis {
   const channelMap = buildChannelMap(result.wifi);

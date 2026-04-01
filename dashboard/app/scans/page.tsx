@@ -4,7 +4,7 @@ import { ScanTable } from "@/components/scan-table";
 import { EmptyState } from "@/components/empty-state";
 import { getScans } from "@/lib/store";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default function HistoryPage() {
   const entries = getScans({ limit: 100 });

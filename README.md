@@ -105,11 +105,24 @@ wifisentinel recon example.com
 --no-save               Skip saving scan to history
 ```
 
+### `recon` options
+
+```text
+-o, --output <format>   Output format: terminal, json  (default: terminal)
+-f, --file <path>       Write output to file instead of stdout
+--analyse               Include multi-persona analysis
+--zone-transfer         Attempt DNS zone transfers (may trigger security alerts)
+--no-save               Skip saving to history
+-v, --verbose           Verbose output
+```
+
 ## Dashboard
 
 Start the Next.js dashboard from the repo root:
 
 ```bash
+cd dashboard && npm install  # required before first use
+cd ..
 npm run dashboard
 # Opens on http://localhost:3000
 ```

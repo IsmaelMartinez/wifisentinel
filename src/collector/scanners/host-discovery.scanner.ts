@@ -36,7 +36,9 @@ async function lookupMacVendor(mac: string): Promise<string | undefined> {
   // Use only the first 3 octets (OUI prefix)
   const prefix = mac.split(":").slice(0, 3).join(":");
   try {
-    const res = await fetch(`https://api.macvendors.com/${encodeURIComponent(prefix)}`);
+    const res = await fetch(`https://api.macvendors.com/${encodeURIComponent(prefix)}`, {
+      signal: AbortSignal.timeout(3_000),
+    });
     if (res.status === 200) {
       const text = await res.text();
       return text.trim() || undefined;
@@ -115,7 +117,7 @@ export async function scanHosts(
       mac: entry.mac,
       vendor,
     });
-    await sleep(1_000);
+    if (vendor) await sleep(500);
   }
 
   // 5. Topology: traceroute to 8.8.8.8 with max 5 hops

@@ -4,10 +4,10 @@ import { TrendChart } from "@/components/trend-chart";
 import { EmptyState } from "@/components/empty-state";
 import { getScans, getScan } from "@/lib/store";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default function TrendsPage() {
-  const entries = getScans({ limit: 50 });
+  const entries = getScans({ limit: 20 });
 
   if (entries.length < 2) {
     return (

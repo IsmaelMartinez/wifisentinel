@@ -28,8 +28,9 @@ export function registerExportCommand(program: Command): void {
         const outputPath = opts.output ?? `wifisentinel-report-${date}.html`;
         writeFileSync(outputPath, html, "utf-8");
         console.log(chalk.green(`Report written to ${outputPath}`));
-      } catch (err: any) {
-        console.error(chalk.red(err.message));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(chalk.red(message));
         process.exit(1);
       }
     });
