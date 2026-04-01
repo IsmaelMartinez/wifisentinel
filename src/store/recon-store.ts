@@ -36,7 +36,7 @@ function getIndexPath(): string {
 }
 
 function ensureDirs(): void {
-  mkdirSync(getReconsDir(), { recursive: true });
+  mkdirSync(getReconsDir(), { recursive: true, mode: 0o700 });
 }
 
 function readIndex(): ReconIndexEntry[] {
