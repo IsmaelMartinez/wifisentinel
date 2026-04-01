@@ -95,7 +95,7 @@ function scoreToGrade(score: number): "A" | "B" | "C" | "D" | "F" {
 
 export function scanHeaders(domain: string): HeadersRecon {
   const url = `https://${domain}`;
-  const result = run("curl", ["-sI", "-L", "--max-time", "10", url], 15_000);
+  const result = run("curl", ["-sI", "-L", "--proto", "=https", "--max-redirs", "3", "--max-time", "10", url], 15_000);
 
   if (result.exitCode !== 0 && !result.stdout) {
     return {
