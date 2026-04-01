@@ -8,7 +8,6 @@ import {
   hRule,
   boxLine,
   sectionHeader,
-  pad,
   row,
   signalBar,
   snrLabel,
