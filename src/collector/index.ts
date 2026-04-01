@@ -22,6 +22,7 @@ import {
   recordToolResolution,
 } from "../telemetry/metrics.js";
 import { lookupVendor } from "./oui-lookup.js";
+import { ScanEventEmitter } from "./scan-events.js";
 
 interface NetworkBootstrap {
   interface: string;
@@ -146,6 +147,7 @@ export interface ScanOptions {
   skipSpeed?: boolean;
   skipVendorLookup?: boolean;
   verbose?: boolean;
+  emitter?: ScanEventEmitter;
 }
 
 export async function collectNetworkScan(
@@ -153,8 +155,11 @@ export async function collectNetworkScan(
 ): Promise<NetworkScanResult> {
   const scanId = randomUUID();
   const startTime = Date.now();
+  const emitter = options.emitter;
 
   return withSpan("network-scan", { "scan.id": scanId }, async () => {
+    emitter?.scanStart(scanId);
+
     // Step 1: Resolve tools
     const tools = await withSpan("tool-resolution", {}, async () => {
       const resolved = resolveAllTools();
@@ -176,6 +181,11 @@ export async function collectNetworkScan(
     }
 
     // Step 3: Parallel scans (independent of each other)
+    emitter?.scannerStart("wifi");
+    emitter?.scannerStart("dns");
+    emitter?.scannerStart("security");
+    emitter?.scannerStart("connections");
+
     const [wifi, dns, security, connections] = await withSpan(
       "parallel-scans",
       {},
@@ -185,23 +195,36 @@ export async function collectNetworkScan(
             "wifi-scan",
             { "tool.resolved": tools.get("wifiAnalysis")?.name ?? "none" },
             () => scanWifi()
-          ),
+          ).then((r) => {
+            emitter?.scannerComplete("wifi", `${r.protocol}, ${r.band}, ch${r.channel}, ${r.security}`);
+            return r;
+          }),
           withSpan(
             "dns-audit",
             { "tool.resolved": tools.get("dnsAudit")?.name ?? "none" },
             () => scanDns(bootstrap.gateway.ip)
-          ),
-          withSpan("security-posture", {}, () => scanSecurityPosture()),
+          ).then((r) => {
+            emitter?.scannerComplete("dns", `${r.servers.length} servers, DNSSEC ${r.dnssecSupported ? "on" : "off"}`);
+            return r;
+          }),
+          withSpan("security-posture", {}, () => scanSecurityPosture()).then((r) => {
+            emitter?.scannerComplete("security", `firewall ${r.firewall.enabled ? "on" : "off"}, VPN ${r.vpn.active ? "active" : "inactive"}`);
+            return r;
+          }),
           withSpan(
             "connections",
             { "tool.resolved": "netstat" },
             () => scanConnections()
-          ),
+          ).then((r) => {
+            emitter?.scannerComplete("connections", `${r.established} established, ${r.listening} listening`);
+            return r;
+          }),
         ]);
       }
     );
 
     // Step 4: Host discovery (needs bootstrap)
+    emitter?.scannerStart("host-discovery");
     const { hosts, topology } = await withSpan(
       "host-discovery",
       { "tool.resolved": tools.get("hostDiscovery")?.name ?? "none" },
@@ -212,12 +235,20 @@ export async function collectNetworkScan(
           bootstrap.broadcastAddr
         )
     );
+    for (const host of hosts) {
+      emitter?.hostFound(host.ip, host.mac);
+      if (host.vendor) {
+        emitter?.hostEnriched(host.ip, host.vendor);
+      }
+    }
+    emitter?.scannerComplete("host-discovery", `${hosts.length} hosts discovered`);
 
     // Step 5: Port scan + hidden device + intrusion detection (needs hosts)
     const [portResults, hiddenDevices, intrusionIndicators] = await withSpan(
       "deep-analysis",
       {},
       async () => {
+        emitter?.scannerStart("port-scan");
         const portResult = options.skipPortScan
           ? {
               hostPorts: new Map<
@@ -240,11 +271,27 @@ export async function collectNetworkScan(
           }
         }
 
+        // Emit port:found for each open port
+        for (const host of hosts) {
+          for (const port of host.ports ?? []) {
+            emitter?.portFound(host.ip, port.port, port.service);
+          }
+        }
+        emitter?.scannerComplete("port-scan", `${hosts.reduce((acc, h) => acc + (h.ports?.length ?? 0), 0)} open ports`);
+
+        emitter?.scannerStart("hidden-device-scan");
+        emitter?.scannerStart("intrusion-detection");
         const [hidden, intrusion] = await Promise.all([
-          withSpan("hidden-device-scan", {}, () => scanHiddenDevices(hosts)),
+          withSpan("hidden-device-scan", {}, () => scanHiddenDevices(hosts)).then((r) => {
+            emitter?.scannerComplete("hidden-device-scan", `${(r?.unknownDevices?.length ?? 0) + (r?.suspectedCameras?.length ?? 0)} hidden devices`);
+            return r;
+          }),
           withSpan("intrusion-detection", {}, () =>
             scanForIntrusions(bootstrap.gateway.ip, bootstrap.gateway.mac)
-          ),
+          ).then((r) => {
+            emitter?.scannerComplete("intrusion-detection", `${r?.arpAnomalies?.length ?? 0} ARP anomalies`);
+            return r;
+          }),
         ]);
 
         return [portResult, hidden, intrusion] as const;
@@ -252,11 +299,13 @@ export async function collectNetworkScan(
     );
 
     // Step 6: Speed test (runs after other scans to avoid skewing results)
+    emitter?.scannerStart("speed-test");
     const speed = options.skipSpeed
       ? undefined
       : await withSpan("speed-test", {}, () =>
           scanSpeed(bootstrap.gateway.ip, wifi.txRate)
         );
+    emitter?.scannerComplete("speed-test", speed ? `${speed.download.speedMbps} Mbps down, ${speed.upload.speedMbps} Mbps up` : "skipped");
 
     // Step 7: Look up gateway vendor
     const gatewayVendor = options.skipVendorLookup
@@ -296,6 +345,8 @@ export async function collectNetworkScan(
       intrusionIndicators,
       speed,
     };
+
+    emitter?.scanComplete(scanId, hosts.length);
 
     return result;
   });
