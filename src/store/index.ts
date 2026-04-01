@@ -27,7 +27,7 @@ function getIndexPath(): string {
 
 function ensureDirs(): void {
   const scansDir = getScansDir();
-  mkdirSync(scansDir, { recursive: true });
+  mkdirSync(scansDir, { recursive: true, mode: 0o700 });
 }
 
 function readIndex(): IndexEntry[] {

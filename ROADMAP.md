@@ -86,7 +86,7 @@
 - [x] Add `npm audit` step to CI pipeline
 - [x] Add domain validation regex for `recon` command input
 - [x] Add SECURITY.md with responsible disclosure policy
-- [ ] Restrict file permissions on `~/.wifisentinel/` (mode 0700)
+- [x] Restrict file permissions on `~/.wifisentinel/` (mode 0700)
 
 ## Phase 6: Continuous Monitoring (NOT STARTED)
 
