@@ -1,5 +1,5 @@
 import { MeterProvider, ConsoleMetricExporter, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_VERSION,
@@ -16,7 +16,7 @@ let scanDurationHistogram: Histogram;
 let toolResolutionCounter: Counter;
 
 export function initMetrics(exportType: "console" | "none"): void {
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: SERVICE_NAME,
     [ATTR_SERVICE_VERSION]: SERVICE_VERSION,
   });
