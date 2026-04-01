@@ -72,7 +72,7 @@
 ### Medium
 
 - [x] Add `--no-vendor-lookup` flag — MAC OUI lookups are sent to api.macvendors.com and can now be skipped
-- [ ] Bundle a local OUI database to avoid external MAC vendor lookups entirely (nice-to-have)
+- [x] Bundle a local OUI database to avoid external MAC vendor lookups entirely (nice-to-have)
 - [x] Bind dashboard to localhost only — add `--hostname 127.0.0.1` to `next dev` invocation
 - [x] Bounds-check `limit` query param in dashboard API (clamp to max 200, treat NaN as default)
 
