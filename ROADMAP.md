@@ -88,6 +88,14 @@
 - [x] Add SECURITY.md with responsible disclosure policy
 - [x] Restrict file permissions on `~/.wifisentinel/` (mode 0700)
 
+## Dependency Updates (COMPLETE)
+
+- [x] Upgrade OpenTelemetry packages to v2/v0.214 (`@opentelemetry/resources`, `sdk-metrics`, `sdk-trace-base` → 2.x; `sdk-node`, `exporter-trace-otlp-http` → 0.214.x) — replaced `new Resource()` with `resourceFromAttributes()`
+- [x] Upgrade Zod from 3.x to 4.x — no code changes required (existing patterns compatible)
+- [x] Upgrade Commander from 13.x to 14.x — drop-in replacement, no code changes
+- [x] Upgrade TypeScript from 5.x to 6.x — added `"types": ["node"]` to tsconfig.json
+- [x] Upgrade `@types/node` from 22.x to 25.x
+
 ## Phase 6: Continuous Monitoring (NOT STARTED)
 
 - [ ] `wifisentinel watch` mode: continuous scanning at configurable intervals
