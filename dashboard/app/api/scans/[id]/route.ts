@@ -9,7 +9,7 @@ export async function GET(
     const { id } = await params;
     const scan = getScan(id);
     return NextResponse.json(scan);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 404 });
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 }

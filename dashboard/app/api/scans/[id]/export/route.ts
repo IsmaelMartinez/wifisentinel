@@ -25,7 +25,7 @@ export async function GET(
         "Cache-Control": "no-store",
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 404 });
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 }
