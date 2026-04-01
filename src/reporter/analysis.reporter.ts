@@ -5,7 +5,7 @@ import type { ComplianceReport, FindingStatus, Finding } from "../analyser/stand
 import { analyseAllPersonas } from "../analyser/personas/index.js";
 import type { FullAnalysis, PersonaId, Insight } from "../analyser/personas/types.js";
 import type { RiskRating } from "../analyser/personas/types.js";
-import { W, hRule, sectionHeader, row, scoreBar } from "./render-helpers.js";
+import { W, hRule, sectionHeader, row, scoreBar, link } from "./render-helpers.js";
 import { renderTerminalReport } from "./terminal.reporter.js";
 
 const TEAL = chalk.hex("#4ec9b0");
@@ -105,7 +105,11 @@ export function renderComplianceDetails(report: ComplianceReport): string {
         lines.push(row(`  ${statusIcon(finding.status)}  ${sev(`[${finding.severity.toUpperCase()}]`)} ${finding.title}`));
         lines.push(row(chalk.dim(`     ${finding.description}`)));
         if (finding.status !== "pass" && finding.status !== "not-applicable") {
-          lines.push(row(chalk.dim(`     → ${finding.recommendation}`)));
+          const rec = finding.recommendation.replace(
+            /(https?:\/\/\S+)/g,
+            (url) => link(url, url),
+          );
+          lines.push(row(chalk.dim(`     → ${rec}`)));
         }
         if (finding.evidence) {
           lines.push(row(chalk.dim(`     Evidence: ${finding.evidence}`)));

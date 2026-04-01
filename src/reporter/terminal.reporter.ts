@@ -21,6 +21,7 @@ const AMBER = chalk.hex("#cca700");
 const RED = chalk.hex("#f44747");
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFSummary } from "./rf.reporter.js";
+import { renderScoreTrend, renderSignalTrend } from "./sparklines.js";
 
 // ─── Section renderers ─────────────────────────────────────────────────────
 
@@ -99,8 +100,9 @@ function renderNetworkMap(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
-function renderWifiDetails(result: NetworkScanResult): string {
+function renderWifiDetails(result: NetworkScanResult, options?: { signalHistory?: number[] }): string {
   const w = result.wifi;
+  const { signalHistory } = options ?? {};
   const lines: string[] = [
     sectionHeader("WI-FI DETAILS"),
     row(""),
@@ -108,12 +110,17 @@ function renderWifiDetails(result: NetworkScanResult): string {
     row(`  Protocol     ${chalk.cyan(w.protocol)}   Band: ${chalk.cyan(w.band)}   Channel: ${chalk.cyan(String(w.channel))}   Width: ${chalk.cyan(w.width)}`),
     row(`  Security     ${chalk.bold(w.security)}`),
     row(`  Signal       ${signalBar(w.signal)}`),
+  ];
+  if (signalHistory && signalHistory.length >= 2) {
+    lines.push(row(`  Trend      ${renderSignalTrend(signalHistory)}`));
+  }
+  lines.push(
     row(`  Noise        ${chalk.dim(`${w.noise} dBm`)}   SNR: ${chalk.bold(String(w.snr))} dB  →  ${snrLabel(w.snr)}`),
     row(`  TX Rate      ${chalk.dim(`${w.txRate} Mbps`)}`),
     row(`  MAC Random   ${w.macRandomised ? chalk.green("enabled") : chalk.yellow("disabled")}`),
     row(`  Country      ${chalk.dim(w.countryCode)}`),
     row(""),
-  ];
+  );
 
   if (w.nearbyNetworks.length > 0) {
     lines.push(row(chalk.dim("  Nearby networks:")));
@@ -398,8 +405,9 @@ function renderSpeedTest(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
-function renderScorecard(result: NetworkScanResult): string {
+function renderScorecard(result: NetworkScanResult, options?: { scoreHistory?: number[] }): string {
   const score = computeSecurityScore(result);
+  const { scoreHistory } = options ?? {};
   const label =
     score >= 8
       ? TEAL("SECURE")
@@ -418,9 +426,14 @@ function renderScorecard(result: NetworkScanResult): string {
     row(`  Overall posture:  ${label}`),
     row(""),
     row(`  Score  ${bar}  ${chalk.bold(scoreStr)}`),
-    row(""),
-    chalk.cyan(hRule("╚", "═", "╝")),
   ];
+
+  if (scoreHistory && scoreHistory.length >= 2) {
+    lines.push(row(`  Trend  ${renderScoreTrend(scoreHistory)}`));
+  }
+
+  lines.push(row(""));
+  lines.push(chalk.cyan(hRule("╚", "═", "╝")));
 
   return lines.join("\n");
 }
@@ -441,12 +454,15 @@ function renderRFIntelligence(result: NetworkScanResult): string {
 
 // ─── Main export ──────────────────────────────────────────────────────────
 
-export function renderTerminalReport(result: NetworkScanResult): string {
+export function renderTerminalReport(
+  result: NetworkScanResult,
+  options?: { scoreHistory?: number[]; signalHistory?: number[] },
+): string {
   refreshWidth();
   const sections: string[] = [
     renderHeader(result),
     renderNetworkMap(result),
-    renderWifiDetails(result),
+    renderWifiDetails(result, options),
     renderRFIntelligence(result),
     renderSecurityPosture(result),
     renderDnsAudit(result),
@@ -455,7 +471,7 @@ export function renderTerminalReport(result: NetworkScanResult): string {
     renderExposedServices(result),
     renderConnectionsSummary(result),
     renderSpeedTest(result),
-    renderScorecard(result),
+    renderScorecard(result, options),
   ].filter(Boolean);
 
   return sections.join("\n");
