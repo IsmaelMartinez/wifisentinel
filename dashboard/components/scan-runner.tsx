@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
+import { NetworkTopology } from "./network-topology";
 
 type ScanEvent = {
   type: string;
@@ -108,56 +109,88 @@ export function ScanRunner() {
 
   const hosts = events.filter((e) => e.type === "host:found");
 
+  const enrichedHosts = hosts.map((h) => {
+    const enrichment = events.find((e) => e.type === "host:enriched" && e.ip === h.ip);
+    const hostPorts = events
+      .filter((e) => e.type === "port:found" && e.ip === h.ip)
+      .map((e) => ({ port: e.port!, service: e.service! }));
+    return {
+      ip: h.ip!,
+      mac: h.mac!,
+      vendor: enrichment?.vendor,
+      isCamera: false,
+      ports: hostPorts,
+    };
+  });
+
+  const gatewayEvent = events.find((e) => e.type === "bootstrap:complete");
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Run Scan</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={startScan}
-            disabled={running}
-            className="px-4 py-2 bg-teal-400 text-black rounded font-semibold text-sm disabled:opacity-50"
-          >
-            {running ? "Scanning..." : "Start Scan"}
-          </button>
-          <label className="text-sm text-muted-foreground flex items-center gap-1">
-            <input type="checkbox" checked={!options.skipPorts} onChange={() => toggle("skipPorts")} disabled={running} />
-            Ports
-          </label>
-          <label className="text-sm text-muted-foreground flex items-center gap-1">
-            <input type="checkbox" checked={!options.skipSpeed} onChange={() => toggle("skipSpeed")} disabled={running} />
-            Speed
-          </label>
-          <label className="text-sm text-muted-foreground flex items-center gap-1">
-            <input type="checkbox" checked={!options.skipTraffic} onChange={() => toggle("skipTraffic")} disabled={running} />
-            Traffic
-          </label>
-        </div>
-
-        {error && <p className="text-sm text-red-400">{error}</p>}
-
-        {events.length > 0 && (
-          <div className="text-sm space-y-1 font-mono">
-            {completedScanners.map((s) => (
-              <div key={s.scanner} className="text-teal-400">
-                ✔ {s.scanner} — {s.summary}
-              </div>
-            ))}
-            {activeScanners.map((s) => (
-              <div key={s} className="text-blue-400 animate-pulse">
-                ◐ {s}...
-              </div>
-            ))}
-            {hosts.length > 0 && (
-              <div className="mt-2 text-muted-foreground">
-                {hosts.length} host{hosts.length !== 1 ? "s" : ""} discovered
-              </div>
-            )}
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Run Scan</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={startScan}
+              disabled={running}
+              className="px-4 py-2 bg-teal-400 text-black rounded font-semibold text-sm disabled:opacity-50"
+            >
+              {running ? "Scanning..." : "Start Scan"}
+            </button>
+            <label className="text-sm text-muted-foreground flex items-center gap-1">
+              <input type="checkbox" checked={!options.skipPorts} onChange={() => toggle("skipPorts")} disabled={running} />
+              Ports
+            </label>
+            <label className="text-sm text-muted-foreground flex items-center gap-1">
+              <input type="checkbox" checked={!options.skipSpeed} onChange={() => toggle("skipSpeed")} disabled={running} />
+              Speed
+            </label>
+            <label className="text-sm text-muted-foreground flex items-center gap-1">
+              <input type="checkbox" checked={!options.skipTraffic} onChange={() => toggle("skipTraffic")} disabled={running} />
+              Traffic
+            </label>
           </div>
-        )}
-      </CardContent>
-    </Card>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          {events.length > 0 && (
+            <div className="text-sm space-y-1 font-mono">
+              {completedScanners.map((s) => (
+                <div key={s.scanner} className="text-teal-400">
+                  ✔ {s.scanner} — {s.summary}
+                </div>
+              ))}
+              {activeScanners.map((s) => (
+                <div key={s} className="text-blue-400 animate-pulse">
+                  ◐ {s}...
+                </div>
+              ))}
+              {hosts.length > 0 && (
+                <div className="mt-2 text-muted-foreground">
+                  {hosts.length} host{hosts.length !== 1 ? "s" : ""} discovered
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {gatewayEvent && enrichedHosts.length > 0 && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">Network Topology</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NetworkTopology
+              gateway={(gatewayEvent as any).gateway}
+              hosts={enrichedHosts}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </>
   );
 }
