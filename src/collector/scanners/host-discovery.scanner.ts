@@ -75,6 +75,7 @@ function parseTraceroute(output: string): TopologyHop[] {
 
 export interface HostScanOptions {
   stealth?: boolean;
+  gatewayIp?: string;
 }
 
 export async function scanHosts(
@@ -121,14 +122,9 @@ export async function scanHosts(
     // 6. Double NAT detection: hop 2 (index 1) is also a private IP
     doubleNat = hops.length >= 2 && isPrivateIp(hops[1].ip);
   } else {
-    // Stealth: read routing table instead of traceroute (passive)
-    const routeResult = run("/usr/sbin/netstat", ["-rn"]);
-    const defaultRoute = routeResult.stdout.split("\n").find(l => l.startsWith("default"));
-    if (defaultRoute) {
-      const parts = defaultRoute.trim().split(/\s+/);
-      if (parts[1]) {
-        hops = [{ ip: parts[1], latencyMs: 0 }];
-      }
+    // Stealth: use gateway IP from bootstrap (already known, no network traffic)
+    if (options.gatewayIp) {
+      hops = [{ ip: options.gatewayIp, latencyMs: 0 }];
     }
   }
 

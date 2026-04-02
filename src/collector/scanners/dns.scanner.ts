@@ -6,7 +6,7 @@ type DnsResult = NetworkScanResult["network"]["dns"];
 const HIJACK_TEST_DOMAIN = "this-domain-should-not-exist-7xk2.com";
 
 /** Generate a random NXDOMAIN test domain that won't appear in DNS logs as a fingerprint */
-function randomHijackDomain(): string {
+export function randomHijackDomain(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let sub = "";
   for (let i = 0; i < 12; i++) sub += chars[Math.floor(Math.random() * chars.length)];

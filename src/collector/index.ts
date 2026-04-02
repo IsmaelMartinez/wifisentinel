@@ -238,7 +238,7 @@ export async function collectNetworkScan(
           bootstrap.interface,
           bootstrap.subnet,
           bootstrap.broadcastAddr,
-          { stealth: options.stealth },
+          { stealth: options.stealth, gatewayIp: bootstrap.gateway.ip },
         )
     );
     for (const host of hosts) {
