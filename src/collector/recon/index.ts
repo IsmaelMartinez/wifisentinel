@@ -30,10 +30,10 @@ export async function collectRecon(domain: string, options: ReconOptions = {}): 
   const censysSecret = options.censysSecret ?? process.env["CENSYS_API_SECRET"];
 
   if (!shodanKey) {
-    process.stderr.write("Shodan: skipped (SHODAN_API_KEY not set)\n");
+    log("Shodan: skipped (SHODAN_API_KEY not set)");
   }
   if (!censysId || !censysSecret) {
-    process.stderr.write("Censys: skipped (CENSYS_API_ID/CENSYS_API_SECRET not set)\n");
+    log("Censys: skipped (CENSYS_API_ID/CENSYS_API_SECRET not set)");
   }
 
   // Run all scanners in parallel

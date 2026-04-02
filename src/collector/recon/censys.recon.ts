@@ -1,15 +1,4 @@
-export interface CensysService {
-  port: number;
-  transportProtocol: string;
-  serviceName: string;
-}
-
-export interface CensysResult {
-  services: CensysService[];
-  certificates: string[];
-  autonomousSystem: string | null;
-  location: string | null;
-}
+import type { CensysRecon, CensysService } from "./schema.js";
 
 interface CensysHit {
   services?: Array<{
@@ -30,7 +19,7 @@ interface CensysSearchResponse {
   };
 }
 
-export async function reconCensys(domain: string, apiId: string, apiSecret: string): Promise<CensysResult> {
+export async function reconCensys(domain: string, apiId: string, apiSecret: string): Promise<CensysRecon> {
   const credentials = Buffer.from(`${apiId}:${apiSecret}`).toString("base64");
   const url = `https://search.censys.io/api/v2/hosts/search?q=${encodeURIComponent(domain)}`;
 

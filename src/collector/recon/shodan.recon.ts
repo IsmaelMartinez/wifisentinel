@@ -1,12 +1,4 @@
-export interface ShodanResult {
-  ip: string;
-  openPorts: number[];
-  services: Array<{ port: number; transport: string; product: string; version: string }>;
-  vulns: string[];
-  lastScanDate: string | null;
-  isp: string | null;
-  os: string | null;
-}
+import type { ShodanRecon } from "./schema.js";
 
 interface ShodanHostResponse {
   ip_str?: string;
@@ -23,7 +15,7 @@ interface ShodanHostResponse {
   os?: string | null;
 }
 
-export async function reconShodan(domain: string, apiKey: string): Promise<ShodanResult> {
+export async function reconShodan(domain: string, apiKey: string): Promise<ShodanRecon> {
   // Step 1: resolve domain to IP
   const resolveUrl = `https://api.shodan.io/dns/resolve?hostnames=${encodeURIComponent(domain)}&key=${apiKey}`;
   const resolveRes = await fetch(resolveUrl);
