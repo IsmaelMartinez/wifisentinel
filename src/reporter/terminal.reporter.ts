@@ -446,7 +446,7 @@ function renderScorecard(result: NetworkScanResult, options?: { scoreHistory?: n
 
 function renderRFIntelligence(result: NetworkScanResult): string {
   const analysis = analyseRF(result);
-  const summary = renderRFSummary(analysis);
+  const summary = renderRFSummary(analysis, result.deauthDetection);
   const lines: string[] = [
     sectionHeader("RF INTELLIGENCE"),
     row(""),

@@ -15,6 +15,7 @@ import { scanSecurityPosture } from "./scanners/security-posture.scanner.js";
 import { scanConnections } from "./scanners/connection.scanner.js";
 import { scanHiddenDevices } from "./scanners/hidden-device.scanner.js";
 import { scanForIntrusions } from "./scanners/intrusion-detection.scanner.js";
+import { scanDeauth } from "./scanners/deauth.scanner.js";
 import { scanSpeed } from "./scanners/speed.scanner.js";
 import { withSpan } from "../telemetry/tracing.js";
 import {
@@ -148,6 +149,7 @@ export interface ScanOptions {
   skipVendorLookup?: boolean;
   verbose?: boolean;
   emitter?: ScanEventEmitter;
+  monitorInterface?: string;
 }
 
 export async function collectNetworkScan(
@@ -245,8 +247,8 @@ export async function collectNetworkScan(
     }
     emitter?.scannerComplete("host-discovery", `${hosts.length} hosts discovered`);
 
-    // Step 5: Port scan + hidden device + intrusion detection (needs hosts)
-    const [portResults, hiddenDevices, intrusionIndicators] = await withSpan(
+    // Step 5: Port scan + hidden device + intrusion detection + deauth detection (needs hosts)
+    const [portResults, hiddenDevices, intrusionIndicators, deauthDetection] = await withSpan(
       "deep-analysis",
       {},
       async () => {
@@ -283,7 +285,8 @@ export async function collectNetworkScan(
 
         emitter?.scannerStart("hidden-device-scan");
         emitter?.scannerStart("intrusion-detection");
-        const [hidden, intrusion] = await Promise.all([
+        emitter?.scannerStart("deauth-detection");
+        const [hidden, intrusion, deauthDetection] = await Promise.all([
           withSpan("hidden-device-scan", {}, () => scanHiddenDevices(hosts)).then((r) => {
             emitter?.scannerComplete("hidden-device-scan", `${(r?.unknownDevices?.length ?? 0) + (r?.suspectedCameras?.length ?? 0)} hidden devices`);
             return r;
@@ -294,6 +297,20 @@ export async function collectNetworkScan(
             emitter?.scannerComplete("intrusion-detection", `${r?.arpAnomalies?.length ?? 0} ARP anomalies`);
             return r;
           }),
+          withSpan("deauth-detection", {}, () =>
+            scanDeauth({
+              monitorMode: !!options.monitorInterface,
+              interface: options.monitorInterface,
+            })
+          ).then((r) => {
+            emitter?.scannerComplete(
+              "deauth-detection",
+              r.detected
+                ? `${r.frameCount} deauth frame(s) via ${r.method}`
+                : `no deauth events via ${r.method}`
+            );
+            return r;
+          }),
         ]);
 
         if (hidden?.suspectedCameras) {
@@ -302,7 +319,7 @@ export async function collectNetworkScan(
           }
         }
 
-        return [portResult, hidden, intrusion] as const;
+        return [portResult, hidden, intrusion, deauthDetection] as const;
       }
     );
 
@@ -351,6 +368,7 @@ export async function collectNetworkScan(
       connections,
       hiddenDevices,
       intrusionIndicators,
+      deauthDetection,
       speed,
     };
 
