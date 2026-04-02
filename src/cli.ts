@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { collectNetworkScan } from "./collector/index.js";
+import type { ScanOptions } from "./collector/index.js";
+import { runScanWithProgress } from "./reporter/progress.renderer.js";
 import { renderTerminalReport } from "./reporter/terminal.reporter.js";
 import { renderAnalysisReport } from "./reporter/analysis.reporter.js";
 import { renderJsonReport } from "./reporter/json.reporter.js";
@@ -42,6 +44,7 @@ program
   .option("-v, --verbose", "Verbose output to stderr")
   .option("--analyse", "Include multi-persona analysis in the output")
   .option("--no-save", "Skip saving scan to history")
+  .option("--events", "Output scan events as NDJSON instead of report")
   .action(async (opts) => {
     initTelemetry({
       tracing: opts.otel as "console" | "otlp" | "none",
@@ -53,13 +56,36 @@ program
         console.error("[wifisentinel] Starting network scan...");
       }
 
-      const result = await collectNetworkScan({
+      const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic,
         skipSpeed: opts.skipSpeed,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
-      });
+      };
+
+      if (opts.events) {
+        const { ScanEventEmitter } = await import("./collector/scan-events.js");
+        const emitter = new ScanEventEmitter();
+        emitter.on("event", (e) => {
+          process.stdout.write(emitter.toJSON(e) + "\n");
+        });
+        const result = await collectNetworkScan({ ...scanOpts, emitter });
+
+        if (opts.save) {
+          const compliance = scoreAllStandards(result);
+          const analysis = analyseAllPersonas(result);
+          const rfAnalysis = analyseRF(result);
+          saveScan(result, compliance, analysis, rfAnalysis);
+        }
+        await shutdownTelemetry();
+        return;
+      }
+
+      const useProgress = opts.output !== "json" && process.stdout.isTTY;
+      const result = useProgress
+        ? await runScanWithProgress(scanOpts)
+        : await collectNetworkScan(scanOpts);
 
       let output: string;
       if (opts.output === "json") {
@@ -124,13 +150,18 @@ program
         console.error("[wifisentinel] Starting network scan + analysis...");
       }
 
-      const result = await collectNetworkScan({
+      const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic,
         skipSpeed: opts.skipSpeed,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
-      });
+      };
+
+      const useProgress = opts.output !== "json" && process.stdout.isTTY;
+      const result = useProgress
+        ? await runScanWithProgress(scanOpts)
+        : await collectNetworkScan(scanOpts);
 
       let output: string;
       if (opts.output === "json") {

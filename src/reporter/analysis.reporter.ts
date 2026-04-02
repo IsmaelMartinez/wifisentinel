@@ -5,48 +5,53 @@ import type { ComplianceReport, FindingStatus, Finding } from "../analyser/stand
 import { analyseAllPersonas } from "../analyser/personas/index.js";
 import type { FullAnalysis, PersonaId, Insight } from "../analyser/personas/types.js";
 import type { RiskRating } from "../analyser/personas/types.js";
-import { W, hRule, sectionHeader, row, scoreBar } from "./render-helpers.js";
+import { W, hRule, sectionHeader, row, scoreBar, link } from "./render-helpers.js";
 import { renderTerminalReport } from "./terminal.reporter.js";
+
+const TEAL = chalk.hex("#4ec9b0");
+const RED = chalk.hex("#f44747");
+const AMBER = chalk.hex("#cca700");
+const BLUE = chalk.hex("#569cd6");
 
 // ─── Colour helpers ───────────────────────────────────────────────────────
 
 function gradeColor(grade: string): (s: string) => string {
-  if (grade === "A" || grade === "B") return chalk.green;
-  if (grade === "C" || grade === "D") return chalk.yellow;
-  return chalk.red;
+  if (grade === "A" || grade === "B") return TEAL;
+  if (grade === "C" || grade === "D") return AMBER;
+  return RED;
 }
 
 function findingSeverityColor(severity: string): (s: string) => string {
-  if (severity === "critical") return chalk.red.bold;
-  if (severity === "high") return chalk.red;
-  if (severity === "medium") return chalk.yellow;
+  if (severity === "critical") return RED.bold as (s: string) => string;
+  if (severity === "high") return RED;
+  if (severity === "medium") return AMBER;
   if (severity === "low") return chalk.dim;
   return chalk.dim;
 }
 
 function riskColor(rating: string): (s: string) => string {
-  if (rating === "critical") return chalk.red.bold;
-  if (rating === "high") return chalk.red;
-  if (rating === "medium") return chalk.yellow;
-  if (rating === "low") return chalk.green;
-  return chalk.dim; // minimal
+  if (rating === "critical") return RED.bold as (s: string) => string;
+  if (rating === "high") return RED;
+  if (rating === "medium") return AMBER;
+  if (rating === "low") return TEAL;
+  return chalk.dim;
 }
 
 function personaAccent(persona: PersonaId): (s: string) => string {
   const map: Record<PersonaId, (s: string) => string> = {
-    "red-team": chalk.red,
-    "blue-team": chalk.blue,
-    "compliance": chalk.cyan,
-    "net-engineer": chalk.yellow,
+    "red-team": RED,
+    "blue-team": BLUE,
+    "compliance": TEAL,
+    "net-engineer": AMBER,
     "privacy": chalk.magenta,
   };
   return map[persona] ?? chalk.white;
 }
 
 function statusIcon(status: FindingStatus): string {
-  if (status === "pass") return chalk.green("✔");
-  if (status === "fail") return chalk.red("✘");
-  if (status === "partial") return chalk.yellow("◐");
+  if (status === "pass") return TEAL("✔");
+  if (status === "fail") return RED("✘");
+  if (status === "partial") return AMBER("◐");
   return chalk.dim("—"); // not-applicable
 }
 
@@ -71,7 +76,7 @@ export function renderComplianceSummary(report: ComplianceReport): string {
     const na = std.findings.filter(f => f.status === "not-applicable").length;
 
     lines.push(row(`  ${sc(std.grade)}  ${stdBar}  ${chalk.bold(std.name)} ${chalk.dim(`v${std.version}`)}`));
-    lines.push(row(chalk.dim(`     ${std.score}%  │  ${chalk.red(String(fails) + " fail")}  ${chalk.yellow(String(partials) + " partial")}  ${chalk.green(String(passes) + " pass")}  ${chalk.dim(String(na) + " n/a")}`)));
+    lines.push(row(chalk.dim(`     ${std.score}%  │  ${RED(String(fails) + " fail")}  ${AMBER(String(partials) + " partial")}  ${TEAL(String(passes) + " pass")}  ${chalk.dim(String(na) + " n/a")}`)));
   }
 
   lines.push(row(""));
@@ -100,7 +105,11 @@ export function renderComplianceDetails(report: ComplianceReport): string {
         lines.push(row(`  ${statusIcon(finding.status)}  ${sev(`[${finding.severity.toUpperCase()}]`)} ${finding.title}`));
         lines.push(row(chalk.dim(`     ${finding.description}`)));
         if (finding.status !== "pass" && finding.status !== "not-applicable") {
-          lines.push(row(chalk.dim(`     → ${finding.recommendation}`)));
+          const rec = finding.recommendation.replace(
+            /(https?:\/\/[^\s.,;:!?)\]]+)/g,
+            (url) => link(url, url),
+          );
+          lines.push(row(chalk.dim(`     → ${rec}`)));
         }
         if (finding.evidence) {
           lines.push(row(chalk.dim(`     Evidence: ${finding.evidence}`)));

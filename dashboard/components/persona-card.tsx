@@ -27,9 +27,9 @@ interface PersonaAnalysis {
 const severityColor: Record<string, string> = {
   critical: "text-red-500",
   high: "text-red-400",
-  medium: "text-yellow-400",
+  medium: "text-amber-400",
   low: "text-muted-foreground",
-  info: "text-muted-foreground",
+  info: "text-blue-400",
 };
 
 export function PersonaCard({ analysis }: { analysis: PersonaAnalysis }) {

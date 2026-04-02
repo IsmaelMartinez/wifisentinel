@@ -2,21 +2,21 @@
 import { cn } from "@/lib/utils";
 
 function scoreColor(score: number): string {
-  if (score >= 8) return "text-green-500";
-  if (score >= 5) return "text-yellow-500";
-  return "text-red-500";
+  if (score >= 8) return "text-teal-400";
+  if (score >= 5) return "text-amber-400";
+  return "text-red-400";
 }
 
 function scoreBgRing(score: number): string {
-  if (score >= 8) return "stroke-green-500/20";
-  if (score >= 5) return "stroke-yellow-500/20";
-  return "stroke-red-500/20";
+  if (score >= 8) return "stroke-teal-400/20";
+  if (score >= 5) return "stroke-amber-400/20";
+  return "stroke-red-400/20";
 }
 
 function scoreRing(score: number): string {
-  if (score >= 8) return "stroke-green-500";
-  if (score >= 5) return "stroke-yellow-500";
-  return "stroke-red-500";
+  if (score >= 8) return "stroke-teal-400";
+  if (score >= 5) return "stroke-amber-400";
+  return "stroke-red-400";
 }
 
 export function ScoreGauge({ score, size = 120 }: { score: number; size?: number }) {

@@ -1,0 +1,209 @@
+<h2>Design Section 3: Progressive Network Tree + Architecture</h2>
+<p class="subtitle">How the live tree works and how all the pieces connect</p>
+
+<div class="section">
+  <h3>Progressive Network Tree (Terminal)</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    The network tree evolves through three phases as scanners complete. It renders in-place below the listr2 progress list, updating via log-update to avoid scrolling.
+  </p>
+
+  <div style="display:flex;gap:16px;margin-top:16px">
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">Phase 1: Discovery</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.7;color:#ccc">
+<span style="color:#888">NETWORK MAP</span>
+<span style="color:#555">┌─</span> <span style="color:#cca700">192.168.1.1</span> <span style="color:#555">gateway</span>
+<span style="color:#555">│</span>
+<span style="color:#555">├─</span> 192.168.1.100
+<span style="color:#555">├─</span> 192.168.1.105
+<span style="color:#555">├─</span> 192.168.1.50
+<span style="color:#555">├─</span> 192.168.1.112
+<span style="color:#555">└─</span> <span style="color:#569cd6">scanning...</span>
+      </div>
+    </div>
+
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">Phase 2: Enrichment</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.7;color:#ccc">
+<span style="color:#888">NETWORK MAP (7 hosts)</span>
+<span style="color:#555">┌─</span> <span style="color:#cca700">192.168.1.1</span> <span style="color:#555">Cisco Systems</span>
+<span style="color:#555">│</span>  <span style="color:#555">gateway · aa:bb:cc:dd:ee:ff</span>
+<span style="color:#555">│</span>
+<span style="color:#555">├─</span> 192.168.1.100 <span style="color:#555">Apple Inc</span>
+<span style="color:#555">├─</span> 192.168.1.105 <span style="color:#555">Samsung</span>
+<span style="color:#555">├─</span> 192.168.1.50  <span style="color:#f44747">Wyze Inc &#x2718; CAM</span>
+<span style="color:#555">├─</span> 192.168.1.112 <span style="color:#555">Sonos Inc</span>
+<span style="color:#555">├─</span> 192.168.1.88  <span style="color:#555">Amazon Tech</span>
+<span style="color:#555">└─</span> 192.168.1.201 <span style="color:#555">Intel Corp</span>
+      </div>
+    </div>
+
+    <div class="mockup" style="flex:1">
+      <div class="mockup-header">Phase 3: Deep Analysis</div>
+      <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.7;color:#ccc">
+<span style="color:#888">NETWORK MAP (7 hosts · 12 services)</span>
+<span style="color:#555">┌─</span> <span style="color:#cca700">192.168.1.1</span> <span style="color:#555">Cisco Systems</span>
+<span style="color:#555">│</span>  <span style="color:#555">gateway · 80/http 443/https</span>
+<span style="color:#555">│</span>
+<span style="color:#555">├─</span> 192.168.1.100 <span style="color:#555">Apple Inc</span>
+<span style="color:#555">│</span>  <span style="color:#555">22/ssh 445/smb 5353/mdns</span>
+<span style="color:#555">├─</span> 192.168.1.105 <span style="color:#555">Samsung</span>
+<span style="color:#555">│</span>  <span style="color:#555">8080/http-alt</span>
+<span style="color:#555">├─</span> 192.168.1.50  <span style="color:#f44747">Wyze Inc &#x2718; CAM</span>
+<span style="color:#555">│</span>  <span style="color:#f44747">554/rtsp 80/http</span>
+<span style="color:#555">├─</span> 192.168.1.112 <span style="color:#555">Sonos Inc</span>
+<span style="color:#555">│</span>  <span style="color:#555">1400/http 1443/https</span>
+<span style="color:#555">├─</span> 192.168.1.88  <span style="color:#555">Amazon Tech</span>
+<span style="color:#555">└─</span> 192.168.1.201 <span style="color:#555">Intel Corp</span>
+   <span style="color:#555">3389/rdp</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>Dashboard Topology (D3 Force Graph)</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    The dashboard equivalent uses a D3 force-directed graph. Nodes animate into existence as host:found events arrive. Colour and size encode device type and risk level. Clicking a node shows its detail panel.
+  </p>
+
+  <div class="mockup" style="margin-top:16px">
+    <div class="mockup-header">Topology Graph — Scan Complete</div>
+    <div class="mockup-body" style="text-align:center;padding:32px">
+      <svg viewBox="0 0 500 300" style="max-width:100%;height:auto">
+        <!-- Gateway -->
+        <circle cx="250" cy="150" r="24" fill="#1a1a2a" stroke="#cca700" stroke-width="2"/>
+        <text x="250" y="153" text-anchor="middle" fill="#cca700" font-size="10" font-family="monospace">.1</text>
+        <text x="250" y="190" text-anchor="middle" fill="#555" font-size="9" font-family="monospace">Cisco · gateway</text>
+
+        <!-- Apple -->
+        <line x1="250" y1="150" x2="120" y2="70" stroke="#333" stroke-width="1"/>
+        <circle cx="120" cy="70" r="16" fill="#1a1a2a" stroke="#4ec9b0" stroke-width="1.5"/>
+        <text x="120" y="73" text-anchor="middle" fill="#ccc" font-size="9" font-family="monospace">.100</text>
+        <text x="120" y="50" text-anchor="middle" fill="#555" font-size="8" font-family="monospace">Apple</text>
+
+        <!-- Samsung -->
+        <line x1="250" y1="150" x2="380" y2="60" stroke="#333" stroke-width="1"/>
+        <circle cx="380" cy="60" r="16" fill="#1a1a2a" stroke="#4ec9b0" stroke-width="1.5"/>
+        <text x="380" y="63" text-anchor="middle" fill="#ccc" font-size="9" font-family="monospace">.105</text>
+        <text x="380" y="40" text-anchor="middle" fill="#555" font-size="8" font-family="monospace">Samsung</text>
+
+        <!-- Wyze Camera (red) -->
+        <line x1="250" y1="150" x2="100" y2="230" stroke="#333" stroke-width="1"/>
+        <circle cx="100" cy="230" r="16" fill="#2a1a1a" stroke="#f44747" stroke-width="2"/>
+        <text x="100" y="233" text-anchor="middle" fill="#f44747" font-size="9" font-family="monospace">.50</text>
+        <text x="100" y="255" text-anchor="middle" fill="#f44747" font-size="8" font-family="monospace">Wyze &#x2718; CAM</text>
+
+        <!-- Sonos -->
+        <line x1="250" y1="150" x2="400" y2="200" stroke="#333" stroke-width="1"/>
+        <circle cx="400" cy="200" r="16" fill="#1a1a2a" stroke="#4ec9b0" stroke-width="1.5"/>
+        <text x="400" y="203" text-anchor="middle" fill="#ccc" font-size="9" font-family="monospace">.112</text>
+        <text x="400" y="223" text-anchor="middle" fill="#555" font-size="8" font-family="monospace">Sonos</text>
+
+        <!-- Amazon -->
+        <line x1="250" y1="150" x2="180" y2="260" stroke="#333" stroke-width="1"/>
+        <circle cx="180" cy="260" r="14" fill="#1a1a2a" stroke="#569cd6" stroke-width="1"/>
+        <text x="180" y="263" text-anchor="middle" fill="#ccc" font-size="9" font-family="monospace">.88</text>
+        <text x="180" y="280" text-anchor="middle" fill="#555" font-size="8" font-family="monospace">Amazon</text>
+
+        <!-- Intel -->
+        <line x1="250" y1="150" x2="340" y2="270" stroke="#333" stroke-width="1"/>
+        <circle cx="340" cy="270" r="14" fill="#1a1a2a" stroke="#cca700" stroke-width="1.5"/>
+        <text x="340" y="273" text-anchor="middle" fill="#ccc" font-size="9" font-family="monospace">.201</text>
+        <text x="340" y="290" text-anchor="middle" fill="#cca700" font-size="8" font-family="monospace">Intel · rdp</text>
+      </svg>
+      <div style="margin-top:12px;display:flex;justify-content:center;gap:24px;font-size:11px;color:#555">
+        <span><span style="color:#4ec9b0">&#x25CF;</span> Safe</span>
+        <span><span style="color:#cca700">&#x25CF;</span> Attention</span>
+        <span><span style="color:#f44747">&#x25CF;</span> Risk</span>
+        <span><span style="color:#569cd6">&#x25CF;</span> Info only</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>Component Architecture</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7;margin-bottom:16px">
+    How the pieces connect. The key change is the EventEmitter in the collector — everything else is a consumer.
+  </p>
+
+  <div class="mockup">
+    <div class="mockup-header">Data Flow</div>
+    <div class="mockup-body" style="font-family:monospace;font-size:12px;line-height:1.6;color:#ccc">
+<pre style="margin:0;color:inherit">
+                    ┌──────────────────────┐
+                    │     CLI / Dashboard   │
+                    │   (triggers a scan)   │
+                    └──────────┬───────────┘
+                               │
+                    ┌──────────▼───────────┐
+                    │      Collector        │
+                    │  (orchestrates scan)  │
+                    │                       │
+                    │  EventEmitter mixin   │◄── NEW: emits scan events
+                    └──────────┬───────────┘
+                               │ events
+              ┌────────────────┼────────────────┐
+              │                │                 │
+   ┌──────────▼─────┐  ┌──────▼───────┐  ┌─────▼──────────┐
+   │  Terminal UI    │  │  Dashboard   │  │  NDJSON stdout  │
+   │                 │  │  (via SSE)   │  │  (future C)     │
+   │  listr2 tasks   │  │              │  │                 │
+   │  network tree   │  │  topology    │  │  pipe to jq,    │
+   │  tables         │  │  progress    │  │  SIEM, etc.     │
+   │  sparklines     │  │  gauges      │  │                 │
+   └─────────────────┘  └──────────────┘  └─────────────────┘
+              │                │
+              │         ┌──────▼───────┐
+              └────────►│    Store     │
+                        │ ~/.wifi…/    │
+                        │ scans/*.json │
+                        └──────────────┘
+</pre>
+    </div>
+  </div>
+
+  <p style="font-size:14px;color:#ccc;line-height:1.7;margin-top:16px">
+    The collector gains an EventEmitter mixin. Each scanner still returns its typed result as before, but the collector wraps each call to emit <code>scanner:start</code>, <code>scanner:complete</code>, and domain-specific events like <code>host:found</code>. The three consumers (terminal, dashboard, future NDJSON) subscribe independently. This is the "design for C" part — in Approach A we only build the terminal and dashboard consumers, but the event interface is ready for Phase 6.
+  </p>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>New Dependencies</h3>
+  <div style="font-size:14px;color:#ccc;line-height:1.7">
+    <div style="display:grid;grid-template-columns:auto 1fr auto;gap:4px 20px;font-family:monospace;font-size:13px;margin-top:8px">
+      <span style="color:#4ec9b0">listr2</span>
+      <span style="color:#888">Scan progress with spinners and nested tasks</span>
+      <span style="color:#555">~28M weekly</span>
+
+      <span style="color:#4ec9b0">cli-table3</span>
+      <span style="color:#888">Responsive Unicode tables with colour support</span>
+      <span style="color:#555">~19M weekly</span>
+
+      <span style="color:#4ec9b0">figures</span>
+      <span style="color:#888">Unicode symbols with ASCII fallbacks</span>
+      <span style="color:#555">~30M weekly</span>
+
+      <span style="color:#4ec9b0">log-update</span>
+      <span style="color:#888">Overwrite previous output for live network tree</span>
+      <span style="color:#555">~17M weekly</span>
+
+      <span style="color:#4ec9b0">sparkly</span>
+      <span style="color:#888">Inline sparkline charts</span>
+      <span style="color:#555">~200K weekly</span>
+
+      <span style="color:#4ec9b0">terminal-link</span>
+      <span style="color:#888">Clickable hyperlinks in supported terminals</span>
+      <span style="color:#555">~14M weekly</span>
+    </div>
+    <p style="margin-top:16px;color:#888">All are pure ESM, well-maintained, and have no native dependencies. Total addition is lightweight.</p>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px">
+  <h3>What Does NOT Change</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.7">
+    Scanner implementations stay the same — they still return typed results. The Zod schemas are unchanged. The JSON reporter is unchanged. The analyser and persona modules are unchanged. The store format is unchanged. The existing <code>--skip-*</code> flags and output options all work as before. OTEL instrumentation is unchanged. The TV controller is unaffected.
+  </p>
+</div>

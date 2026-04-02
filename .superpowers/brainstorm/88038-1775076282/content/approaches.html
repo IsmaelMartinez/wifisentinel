@@ -1,0 +1,71 @@
+<h2>Terminal Revamp — Three Approaches</h2>
+<p class="subtitle">Each builds on the previous. Pick the approach that matches the ambition level.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Progressive Enhancement</h3>
+      <p><strong>Keep the print-and-scroll model</strong>, but make it live and accessible.</p>
+      <ul style="margin-top:8px;font-size:14px;color:#999;line-height:1.8">
+        <li><strong>listr2</strong> task list shows scan progress with spinners</li>
+        <li><strong>cli-table3</strong> replaces hand-rolled padding for host/port/compliance tables</li>
+        <li>Network tree grows live as hosts are discovered</li>
+        <li>Dynamic terminal width (goodbye fixed 72 chars)</li>
+        <li>Accessible-by-default colour palette (no red/green only distinctions)</li>
+        <li>Dashboard gets a "Run Scan" button → spawns CLI, streams output via SSE</li>
+      </ul>
+      <div style="margin-top:12px;padding:8px 12px;background:#1a2a1a;border-radius:6px;font-size:13px;color:#7c7">
+        Effort: Small — incremental changes to existing reporter<br>
+        Risk: Low — no architectural change, each piece ships independently
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Ink TUI Mode</h3>
+      <p><strong>React-based terminal UI</strong> alongside the existing static report.</p>
+      <ul style="margin-top:8px;font-size:14px;color:#999;line-height:1.8">
+        <li>Everything in A, plus:</li>
+        <li><strong>Ink</strong> (React for CLI) renders a multi-pane live view</li>
+        <li>Real-time network tree with device counts, status indicators</li>
+        <li>Inline sparklines for signal, channel saturation, traffic</li>
+        <li>Scanner progress, host table, and scorecard update simultaneously</li>
+        <li><code>--tui</code> flag for interactive mode, default remains static report</li>
+      </ul>
+      <div style="margin-top:12px;padding:8px 12px;background:#1a1a2a;border-radius:6px;font-size:13px;color:#77c">
+        Effort: Medium — new rendering layer, existing scanners unchanged<br>
+        Risk: Medium — Ink dependency, React paradigm shift for CLI
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Unified Streaming Architecture</h3>
+      <p><strong>Event-driven scan pipeline</strong> feeding both terminal and dashboard in real time.</p>
+      <ul style="margin-top:8px;font-size:14px;color:#999;line-height:1.8">
+        <li>Everything in A + B, plus:</li>
+        <li>Scanners emit events (host-found, port-scanned, analysis-complete)</li>
+        <li>Terminal and dashboard are both consumers of the same event stream</li>
+        <li>Dashboard gets a live topology graph (D3/force-directed) updating as events arrive</li>
+        <li>NDJSON event output for piping into external tools (aligns with Phase 6)</li>
+        <li>Foundation for the <code>watch</code> mode in Phase 6</li>
+      </ul>
+      <div style="margin-top:12px;padding:8px 12px;background:#2a1a1a;border-radius:6px;font-size:13px;color:#c77">
+        Effort: Large — refactors the scan pipeline into event emitters<br>
+        Risk: Higher — touches core architecture, but sets up Phase 6 cleanly
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;background:#111;border:1px solid #333;border-radius:8px">
+  <h3 style="margin-top:0">Recommendation</h3>
+  <p style="font-size:14px;color:#ccc;line-height:1.6">
+    <strong>Start with A, design for C.</strong> Build the progressive enhancements now — they ship fast and improve the experience immediately. But structure the work so the scanner output can become event-based later. This means the listr2 integration and the live network tree naturally evolve into event consumers when you're ready for Phase 6. Approach B (Ink TUI) becomes an optional add-on at any point.
+  </p>
+</div>

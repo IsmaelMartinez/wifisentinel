@@ -1,21 +1,27 @@
 import chalk from "chalk";
+import Table from "cli-table3";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import { computeSecurityScore } from "../analyser/score.js";
 import {
   W,
+  refreshWidth,
   hRule,
   boxLine,
   sectionHeader,
-  pad,
   row,
   signalBar,
   snrLabel,
   scoreBar,
   severityColor,
   boolStatus,
+  TEAL,
+  AMBER,
+  RED,
 } from "./render-helpers.js";
+
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFSummary } from "./rf.reporter.js";
+import { renderScoreTrend, renderSignalTrend } from "./sparklines.js";
 
 // ─── Section renderers ─────────────────────────────────────────────────────
 
@@ -56,24 +62,30 @@ function renderNetworkMap(result: NetworkScanResult): string {
   if (network.hosts.length === 0) {
     lines.push(row("  └─ (no hosts discovered)"));
   } else {
-    network.hosts.forEach((host, idx) => {
-      const isLast = idx === network.hosts.length - 1;
-      const connector = isLast ? "└─" : "├─";
-      const cameraFlag = host.isCamera ? chalk.red(" ⚠ CAMERA") : "";
-      const deviceType = host.deviceType ? chalk.dim(` [${host.deviceType}]`) : "";
-      const vendor = host.vendor ? chalk.cyan(` ${host.vendor}`) : "";
-      const hostname = host.hostname ? chalk.dim(` (${host.hostname})`) : "";
-      lines.push(row(`  ${connector} ${chalk.green(host.ip)}  ${chalk.dim(host.mac)}${vendor}${deviceType}${hostname}${cameraFlag}`));
-      const openPorts = (host.ports ?? []).filter(p => p.state === "open");
-      if (openPorts.length > 0) {
-        const portList = openPorts
-          .slice(0, 5)
-          .map(p => `${p.port}/${p.service}`)
-          .join("  ");
-        const more = openPorts.length > 5 ? chalk.dim(` +${openPorts.length - 5} more`) : "";
-        lines.push(row(`  ${isLast ? " " : "│"}     ${chalk.dim("ports:")} ${chalk.dim(portList)}${more}`));
-      }
+    const table = new Table({
+      chars: {
+        top: "─", "top-mid": "┬", "top-left": "┌", "top-right": "┐",
+        bottom: "─", "bottom-mid": "┴", "bottom-left": "└", "bottom-right": "┘",
+        left: "│", "left-mid": "├", mid: "─", "mid-mid": "┼",
+        right: "│", "right-mid": "┤", middle: "│",
+      },
+      head: ["IP", "MAC", "Vendor", "Services"],
+      style: { head: ["cyan"], border: ["dim"] },
+      wordWrap: true,
     });
+
+    for (const host of network.hosts) {
+      const cameraFlag = host.isCamera ? RED(" ✘ CAM") : "";
+      const vendor = (host.vendor ?? "") + cameraFlag;
+      const openPorts = (host.ports ?? []).filter(p => p.state === "open");
+      const portStr = openPorts.slice(0, 5).map(p => `${p.port}/${p.service}`).join(", ");
+      const more = openPorts.length > 5 ? ` +${openPorts.length - 5}` : "";
+      table.push([host.ip, chalk.dim(host.mac), vendor, chalk.dim(portStr + more)]);
+    }
+
+    for (const line of table.toString().split("\n")) {
+      lines.push(row("  " + line));
+    }
   }
 
   lines.push(row(""));
@@ -94,8 +106,9 @@ function renderNetworkMap(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
-function renderWifiDetails(result: NetworkScanResult): string {
+function renderWifiDetails(result: NetworkScanResult, options?: { signalHistory?: number[] }): string {
   const w = result.wifi;
+  const { signalHistory } = options ?? {};
   const lines: string[] = [
     sectionHeader("WI-FI DETAILS"),
     row(""),
@@ -103,12 +116,17 @@ function renderWifiDetails(result: NetworkScanResult): string {
     row(`  Protocol     ${chalk.cyan(w.protocol)}   Band: ${chalk.cyan(w.band)}   Channel: ${chalk.cyan(String(w.channel))}   Width: ${chalk.cyan(w.width)}`),
     row(`  Security     ${chalk.bold(w.security)}`),
     row(`  Signal       ${signalBar(w.signal)}`),
+  ];
+  if (signalHistory && signalHistory.length >= 2) {
+    lines.push(row(`  Trend      ${renderSignalTrend(signalHistory)}`));
+  }
+  lines.push(
     row(`  Noise        ${chalk.dim(`${w.noise} dBm`)}   SNR: ${chalk.bold(String(w.snr))} dB  →  ${snrLabel(w.snr)}`),
     row(`  TX Rate      ${chalk.dim(`${w.txRate} Mbps`)}`),
     row(`  MAC Random   ${w.macRandomised ? chalk.green("enabled") : chalk.yellow("disabled")}`),
     row(`  Country      ${chalk.dim(w.countryCode)}`),
     row(""),
-  ];
+  );
 
   if (w.nearbyNetworks.length > 0) {
     lines.push(row(chalk.dim("  Nearby networks:")));
@@ -170,8 +188,8 @@ function renderDnsAudit(result: NetworkScanResult): string {
     sectionHeader("DNS AUDIT"),
     row(""),
     row(`  Servers      ${dns.servers.join("  ")}`),
-    row(`  DNSSEC       ${dns.dnssecSupported ? chalk.green("supported") : chalk.yellow("not supported")}`),
-    row(`  DoH / DoT    ${dns.dohDotEnabled ? chalk.green("enabled") : chalk.dim("not detected")}`),
+    row(`  DNSSEC       ${dns.dnssecSupported ? TEAL("supported") : AMBER("not supported")}`),
+    row(`  DoH / DoT    ${dns.dohDotEnabled ? TEAL("enabled") : chalk.dim("not detected")}`),
     row(`  Hijack test  ${hijackColor(dns.hijackTestResult.toUpperCase())}`),
     row(""),
   ];
@@ -348,11 +366,11 @@ function renderSpeedTest(result: NetworkScanResult): string {
 
   // Rating badge
   const ratingColors: Record<string, (s: string) => string> = {
-    excellent: chalk.green,
-    good: chalk.green,
-    fair: chalk.yellow,
-    poor: chalk.red,
-    unusable: chalk.red,
+    excellent: TEAL,
+    good: TEAL,
+    fair: AMBER,
+    poor: RED,
+    unusable: RED,
   };
   const colorFn = ratingColors[s.rating] ?? chalk.white;
   lines.push(row(`  Rating:  ${colorFn(s.rating.toUpperCase())}`));
@@ -362,15 +380,15 @@ function renderSpeedTest(result: NetworkScanResult): string {
   const maxBar = 40;
   const dlBar = Math.min(maxBar, Math.round(s.download.speedMbps / 5));
   const ulBar = Math.min(maxBar, Math.round(s.upload.speedMbps / 5));
-  const dlColor = s.download.speedMbps >= 50 ? chalk.green : s.download.speedMbps >= 10 ? chalk.yellow : chalk.red;
-  const ulColor = s.upload.speedMbps >= 20 ? chalk.green : s.upload.speedMbps >= 5 ? chalk.yellow : chalk.red;
+  const dlColor = s.download.speedMbps >= 50 ? TEAL : s.download.speedMbps >= 10 ? AMBER : RED;
+  const ulColor = s.upload.speedMbps >= 20 ? TEAL : s.upload.speedMbps >= 5 ? AMBER : RED;
 
   lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(Math.max(0, 10 - dlBar)))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
   lines.push(row(`  Upload    ${ulColor("█".repeat(ulBar) + "░".repeat(Math.max(0, 10 - ulBar)))}  ${chalk.bold(s.upload.speedMbps.toFixed(1) + " Mbps")}`));
   lines.push(row(""));
 
   // Latency
-  const latColor = (ms: number) => ms < 20 ? chalk.green : ms < 50 ? chalk.yellow : chalk.red;
+  const latColor = (ms: number) => ms < 20 ? TEAL : ms < 50 ? AMBER : RED;
   lines.push(row(`  Latency`));
   lines.push(row(`    Gateway:     ${latColor(s.latency.gatewayMs)(s.latency.gatewayMs.toFixed(1) + " ms")}   jitter: ${s.jitter.gatewayMs.toFixed(1)} ms`));
   lines.push(row(`    Internet:    ${latColor(s.latency.internetMs)(s.latency.internetMs.toFixed(1) + " ms")}   jitter: ${s.jitter.internetMs.toFixed(1)} ms`));
@@ -378,14 +396,14 @@ function renderSpeedTest(result: NetworkScanResult): string {
   lines.push(row(""));
 
   // Packet loss
-  const plColor = (pct: number) => pct === 0 ? chalk.green : pct < 5 ? chalk.yellow : chalk.red;
+  const plColor = (pct: number) => pct === 0 ? TEAL : pct < 5 ? AMBER : RED;
   lines.push(row(`  Packet Loss`));
   lines.push(row(`    Gateway:   ${plColor(s.packetLoss.gatewayPercent)(s.packetLoss.gatewayPercent.toFixed(0) + "%")}    Internet: ${plColor(s.packetLoss.internetPercent)(s.packetLoss.internetPercent.toFixed(0) + "%")}`));
   lines.push(row(""));
 
   // WiFi utilisation
   if (s.wifiLinkRate > 0) {
-    const utilColor = s.effectiveUtilisation > 50 ? chalk.green : s.effectiveUtilisation > 20 ? chalk.yellow : chalk.red;
+    const utilColor = s.effectiveUtilisation > 50 ? TEAL : s.effectiveUtilisation > 20 ? AMBER : RED;
     lines.push(row(`  WiFi Link Rate: ${s.wifiLinkRate} Mbps → actual throughput: ${s.download.speedMbps.toFixed(1)} Mbps (${utilColor(s.effectiveUtilisation.toFixed(1) + "% utilisation")})`));
     lines.push(row(""));
   }
@@ -393,16 +411,17 @@ function renderSpeedTest(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
-function renderScorecard(result: NetworkScanResult): string {
+function renderScorecard(result: NetworkScanResult, options?: { scoreHistory?: number[] }): string {
   const score = computeSecurityScore(result);
+  const { scoreHistory } = options ?? {};
   const label =
     score >= 8
-      ? chalk.green("SECURE")
+      ? TEAL("SECURE")
       : score >= 6
-      ? chalk.yellow("MODERATE RISK")
+      ? AMBER("MODERATE RISK")
       : score >= 4
-      ? chalk.yellow("ELEVATED RISK")
-      : chalk.red("HIGH RISK");
+      ? AMBER("ELEVATED RISK")
+      : RED("HIGH RISK");
 
   const bar = scoreBar(Math.round(score));
   const scoreStr = `${score.toFixed(1)} / 10`;
@@ -413,9 +432,14 @@ function renderScorecard(result: NetworkScanResult): string {
     row(`  Overall posture:  ${label}`),
     row(""),
     row(`  Score  ${bar}  ${chalk.bold(scoreStr)}`),
-    row(""),
-    chalk.cyan(hRule("╚", "═", "╝")),
   ];
+
+  if (scoreHistory && scoreHistory.length >= 2) {
+    lines.push(row(`  Trend  ${renderScoreTrend(scoreHistory)}`));
+  }
+
+  lines.push(row(""));
+  lines.push(chalk.cyan(hRule("╚", "═", "╝")));
 
   return lines.join("\n");
 }
@@ -436,11 +460,15 @@ function renderRFIntelligence(result: NetworkScanResult): string {
 
 // ─── Main export ──────────────────────────────────────────────────────────
 
-export function renderTerminalReport(result: NetworkScanResult): string {
+export function renderTerminalReport(
+  result: NetworkScanResult,
+  options?: { scoreHistory?: number[]; signalHistory?: number[] },
+): string {
+  refreshWidth();
   const sections: string[] = [
     renderHeader(result),
     renderNetworkMap(result),
-    renderWifiDetails(result),
+    renderWifiDetails(result, options),
     renderRFIntelligence(result),
     renderSecurityPosture(result),
     renderDnsAudit(result),
@@ -449,7 +477,7 @@ export function renderTerminalReport(result: NetworkScanResult): string {
     renderExposedServices(result),
     renderConnectionsSummary(result),
     renderSpeedTest(result),
-    renderScorecard(result),
+    renderScorecard(result, options),
   ].filter(Boolean);
 
   return sections.join("\n");
