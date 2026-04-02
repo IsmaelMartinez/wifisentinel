@@ -73,26 +73,33 @@ function parseTraceroute(output: string): TopologyHop[] {
   return hops;
 }
 
+export interface HostScanOptions {
+  stealth?: boolean;
+}
+
 export async function scanHosts(
   iface: string,
   subnet: string,
-  broadcastAddr: string
+  broadcastAddr: string,
+  options: HostScanOptions = {},
 ): Promise<{
   hosts: NetworkScanResult["network"]["hosts"];
   topology: NetworkScanResult["network"]["topology"];
 }> {
-  // 1. Initial ARP table read
+  // 1. Initial ARP table read (passive — no network traffic)
   const initialArp = run("/usr/sbin/arp", ["-a"]);
   let arpEntries = parseArpOutput(initialArp.stdout);
 
-  // 2. Broadcast ping to stimulate ARP responses
-  run("/sbin/ping", ["-c", "2", "-t", "1", broadcastAddr], 10_000);
+  if (!options.stealth) {
+    // 2. Broadcast ping to stimulate ARP responses (active — visible on network)
+    run("/sbin/ping", ["-c", "2", "-t", "1", broadcastAddr], 10_000);
 
-  // 3. Re-read ARP after broadcast ping
-  const refreshedArp = run("/usr/sbin/arp", ["-a"]);
-  arpEntries = deduplicateByIp([...arpEntries, ...parseArpOutput(refreshedArp.stdout)]);
+    // 3. Re-read ARP after broadcast ping
+    const refreshedArp = run("/usr/sbin/arp", ["-a"]);
+    arpEntries = deduplicateByIp([...arpEntries, ...parseArpOutput(refreshedArp.stdout)]);
+  }
 
-  // 4. Vendor lookups from local OUI database
+  // 4. Vendor lookups from local OUI database (no network traffic)
   const hosts: NetworkScanResult["network"]["hosts"] = [];
   for (const entry of arpEntries) {
     const vendor = lookupMacVendor(entry.mac);
@@ -103,12 +110,27 @@ export async function scanHosts(
     });
   }
 
-  // 5. Topology: traceroute to 8.8.8.8 with max 5 hops
-  const traceResult = run("/usr/sbin/traceroute", ["-m", "5", "-q", "1", "8.8.8.8"], 30_000);
-  const hops = parseTraceroute(traceResult.stdout);
+  let hops: TopologyHop[] = [];
+  let doubleNat = false;
 
-  // 6. Double NAT detection: hop 2 (index 1) is also a private IP
-  const doubleNat = hops.length >= 2 && isPrivateIp(hops[1].ip);
+  if (!options.stealth) {
+    // 5. Topology: traceroute to 8.8.8.8 with max 5 hops (active — UDP probes)
+    const traceResult = run("/usr/sbin/traceroute", ["-m", "5", "-q", "1", "8.8.8.8"], 30_000);
+    hops = parseTraceroute(traceResult.stdout);
+
+    // 6. Double NAT detection: hop 2 (index 1) is also a private IP
+    doubleNat = hops.length >= 2 && isPrivateIp(hops[1].ip);
+  } else {
+    // Stealth: read routing table instead of traceroute (passive)
+    const routeResult = run("/usr/sbin/netstat", ["-rn"]);
+    const defaultRoute = routeResult.stdout.split("\n").find(l => l.startsWith("default"));
+    if (defaultRoute) {
+      const parts = defaultRoute.trim().split(/\s+/);
+      if (parts[1]) {
+        hops = [{ ip: parts[1], latencyMs: 0 }];
+      }
+    }
+  }
 
   return {
     hosts,
