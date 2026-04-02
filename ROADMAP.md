@@ -96,12 +96,12 @@
 - [x] Upgrade TypeScript from 5.x to 6.x — added `"types": ["node"]` to tsconfig.json
 - [x] Upgrade `@types/node` from 22.x to 25.x
 
-## Phase 6: Continuous Monitoring (NOT STARTED)
+## Phase 6: Continuous Monitoring (IN PROGRESS)
 
-- [ ] `wifisentinel watch` mode: continuous scanning at configurable intervals
-- [ ] Real-time alerting on network changes (new hosts, dropped hosts, security changes)
+- [x] `wifisentinel watch` mode: continuous scanning at configurable intervals
+- [x] Real-time alerting on network changes (new hosts, dropped hosts, security changes)
+- [x] Event stream output (NDJSON) for piping into external SIEM/monitoring tools
 - [ ] Anomaly detection: baseline normal network behaviour, flag deviations
 - [ ] Device tracking: log when devices join/leave, build presence timeline
 - [ ] Signal quality trending: track WiFi SNR, latency, packet loss over time
 - [ ] Threat correlation: cross-reference nearby network changes with intrusion indicators
-- [ ] Event stream output (NDJSON) for piping into external SIEM/monitoring tools

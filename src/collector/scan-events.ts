@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { NetworkChange } from "../analyser/diff.js";
 
 export type ScanEvent =
   | { type: "scan:start"; scanId: string; timestamp: string }
@@ -11,7 +12,10 @@ export type ScanEvent =
   | { type: "scan:complete"; scanId: string; hostCount: number; timestamp: string }
   | { type: "scan:score"; score: number; timestamp: string }
   | { type: "bootstrap:complete"; gateway: string; ip: string; subnet: string; timestamp: string }
-  | { type: "host:camera-detected"; ip: string; indicators: string[]; timestamp: string };
+  | { type: "host:camera-detected"; ip: string; indicators: string[]; timestamp: string }
+  | { type: "watch:cycle-start"; cycle: number; timestamp: string }
+  | { type: "watch:cycle-complete"; cycle: number; changes: number; timestamp: string }
+  | { type: "watch:alert"; change: NetworkChange; timestamp: string };
 
 export class ScanEventEmitter extends EventEmitter {
   private ts(): string {
@@ -60,6 +64,18 @@ export class ScanEventEmitter extends EventEmitter {
 
   hostCameraDetected(ip: string, indicators: string[]): void {
     this.emit("event", { type: "host:camera-detected", ip, indicators, timestamp: this.ts() } satisfies ScanEvent);
+  }
+
+  watchCycleStart(cycle: number): void {
+    this.emit("event", { type: "watch:cycle-start", cycle, timestamp: this.ts() } satisfies ScanEvent);
+  }
+
+  watchCycleComplete(cycle: number, changes: number): void {
+    this.emit("event", { type: "watch:cycle-complete", cycle, changes, timestamp: this.ts() } satisfies ScanEvent);
+  }
+
+  watchAlert(change: NetworkChange): void {
+    this.emit("event", { type: "watch:alert", change, timestamp: this.ts() } satisfies ScanEvent);
   }
 
   toJSON(event: ScanEvent): string {
