@@ -16,9 +16,18 @@ export function registerReconCommand(program: Command): void {
     .option("--no-save", "Skip saving to history")
     .option("-v, --verbose", "Verbose output")
     .option("--zone-transfer", "Attempt DNS zone transfers (may trigger security alerts)")
+    .option("--shodan-key <key>", "Shodan API key (or set SHODAN_API_KEY env var)")
+    .option("--censys-id <id>", "Censys API ID (or set CENSYS_API_ID env var)")
+    .option("--censys-secret <secret>", "Censys API secret (or set CENSYS_API_SECRET env var)")
     .action(async (domain: string, opts) => {
       try {
-        const result = await collectRecon(domain, { verbose: opts.verbose, zoneTransfer: opts.zoneTransfer });
+        const result = await collectRecon(domain, {
+          verbose: opts.verbose,
+          zoneTransfer: opts.zoneTransfer,
+          shodanKey: opts.shodanKey,
+          censysId: opts.censysId,
+          censysSecret: opts.censysSecret,
+        });
 
         let output: string;
         if (opts.output === "json") {

@@ -81,6 +81,44 @@ export const WhoisRecon = z.object({
 });
 export type WhoisRecon = z.infer<typeof WhoisRecon>;
 
+// --- Shodan ---
+
+export const ShodanService = z.object({
+  port: z.number(),
+  transport: z.string(),
+  product: z.string(),
+  version: z.string(),
+});
+export type ShodanService = z.infer<typeof ShodanService>;
+
+export const ShodanRecon = z.object({
+  ip: z.string(),
+  openPorts: z.array(z.number()),
+  services: z.array(ShodanService),
+  vulns: z.array(z.string()),
+  lastScanDate: z.union([z.string(), z.null()]),
+  isp: z.union([z.string(), z.null()]),
+  os: z.union([z.string(), z.null()]),
+});
+export type ShodanRecon = z.infer<typeof ShodanRecon>;
+
+// --- Censys ---
+
+export const CensysService = z.object({
+  port: z.number(),
+  transportProtocol: z.string(),
+  serviceName: z.string(),
+});
+export type CensysService = z.infer<typeof CensysService>;
+
+export const CensysRecon = z.object({
+  services: z.array(CensysService),
+  certificates: z.array(z.string()),
+  autonomousSystem: z.union([z.string(), z.null()]),
+  location: z.union([z.string(), z.null()]),
+});
+export type CensysRecon = z.infer<typeof CensysRecon>;
+
 // --- Certificate Transparency ---
 
 export const CrtEntry = z.object({
@@ -112,5 +150,7 @@ export const ReconResult = z.object({
   headers: HeadersRecon,
   whois: WhoisRecon,
   crt: CrtRecon,
+  shodan: ShodanRecon.optional(),
+  censys: CensysRecon.optional(),
 });
 export type ReconResult = z.infer<typeof ReconResult>;

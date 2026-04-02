@@ -54,7 +54,7 @@
 - [x] TLS/SSL grading (protocol versions, cipher suites, cert chain via openssl s_client)
 - [x] HTTP security headers analysis (HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
 - [x] External risk scoring with persona analysis (reuses Phase 1b persona types)
-- [ ] Shodan/Censys integration (deferred — requires API keys)
+- [x] Shodan/Censys integration (configurable via API keys / env vars)
 
 ## Security Hardening (COMPLETE)
 
