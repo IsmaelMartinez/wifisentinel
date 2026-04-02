@@ -1,8 +1,8 @@
 import chalk from "chalk";
 import type { ReconResult } from "../collector/recon/schema.js";
 import type { FullReconAnalysis } from "../analyser/recon-personas.js";
-import type { PersonaAnalysis, PersonaId } from "../analyser/personas/types.js";
-import { W, hRule, boxLine, sectionHeader, pad, row, scoreBar } from "./render-helpers.js";
+import type { PersonaId } from "../analyser/personas/types.js";
+import { W, TEAL, AMBER, RED, hRule, boxLine, sectionHeader, pad, row, scoreBar } from "./render-helpers.js";
 
 // ─── Colour helpers ───────────────────────────────────────────────────────
 
@@ -222,6 +222,89 @@ function renderCrt(result: ReconResult): string {
   return lines.join("\n");
 }
 
+function renderShodan(result: ReconResult): string {
+  const { shodan } = result;
+  if (!shodan) return "";
+
+  const lines: string[] = [
+    sectionHeader("SHODAN"),
+    row(""),
+    row(`  IP           ${TEAL(shodan.ip || chalk.dim("unknown"))}`),
+    row(`  ISP          ${shodan.isp ?? chalk.dim("unknown")}`),
+    row(`  OS           ${shodan.os ?? chalk.dim("unknown")}`),
+    row(`  Last Scan    ${shodan.lastScanDate ?? chalk.dim("unknown")}`),
+    row(""),
+  ];
+
+  if (shodan.openPorts.length > 0) {
+    lines.push(row(chalk.bold("  Open Ports")));
+    lines.push(row(`    ${shodan.openPorts.join("  ")}`));
+    lines.push(row(""));
+  }
+
+  if (shodan.services.length > 0) {
+    lines.push(row(chalk.bold("  Services")));
+    for (const svc of shodan.services.slice(0, 15)) {
+      const label = [svc.product, svc.version].filter(Boolean).join(" ") || chalk.dim("unknown");
+      lines.push(row(`    ${pad(String(svc.port) + "/" + svc.transport, 12)} ${label}`));
+    }
+    if (shodan.services.length > 15) {
+      lines.push(row(chalk.dim(`    ... and ${shodan.services.length - 15} more`)));
+    }
+    lines.push(row(""));
+  }
+
+  if (shodan.vulns.length > 0) {
+    lines.push(row(RED.bold("  Vulnerabilities")));
+    for (const vuln of shodan.vulns.slice(0, 10)) {
+      lines.push(row(`    ${RED("⚠")} ${vuln}`));
+    }
+    if (shodan.vulns.length > 10) {
+      lines.push(row(chalk.dim(`    ... and ${shodan.vulns.length - 10} more`)));
+    }
+    lines.push(row(""));
+  }
+
+  return lines.join("\n");
+}
+
+function renderCensys(result: ReconResult): string {
+  const { censys } = result;
+  if (!censys) return "";
+
+  const lines: string[] = [
+    sectionHeader("CENSYS"),
+    row(""),
+    row(`  Autonomous System  ${censys.autonomousSystem ?? chalk.dim("unknown")}`),
+    row(`  Location           ${censys.location ?? chalk.dim("unknown")}`),
+    row(""),
+  ];
+
+  if (censys.services.length > 0) {
+    lines.push(row(chalk.bold("  Services")));
+    for (const svc of censys.services.slice(0, 15)) {
+      lines.push(row(`    ${pad(String(svc.port) + "/" + svc.transportProtocol, 12)} ${TEAL(svc.serviceName || chalk.dim("unknown"))}`));
+    }
+    if (censys.services.length > 15) {
+      lines.push(row(chalk.dim(`    ... and ${censys.services.length - 15} more`)));
+    }
+    lines.push(row(""));
+  }
+
+  if (censys.certificates.length > 0) {
+    lines.push(row(chalk.bold("  Certificates")));
+    for (const cert of censys.certificates.slice(0, 5)) {
+      lines.push(row(`    ${AMBER(cert.length > 60 ? cert.slice(0, 60) + "..." : cert)}`));
+    }
+    if (censys.certificates.length > 5) {
+      lines.push(row(chalk.dim(`    ... and ${censys.certificates.length - 5} more`)));
+    }
+    lines.push(row(""));
+  }
+
+  return lines.join("\n");
+}
+
 function renderScorecard(result: ReconResult): string {
   const tlsGrade = result.tls.grade;
   const headersGrade = result.headers.grade;
@@ -332,8 +415,10 @@ export function renderReconReport(result: ReconResult): string {
     renderHeaders(result),
     renderWhois(result),
     renderCrt(result),
+    renderShodan(result),
+    renderCensys(result),
     renderScorecard(result),
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function renderReconAnalysisReport(
@@ -348,8 +433,10 @@ export function renderReconAnalysisReport(
     renderHeaders(result),
     renderWhois(result),
     renderCrt(result),
+    renderShodan(result),
+    renderCensys(result),
     renderPersonaSummary(analysis),
-  ];
+  ].filter(Boolean);
 
   if (verbose) {
     sections.push(renderPersonaDetails(analysis));
