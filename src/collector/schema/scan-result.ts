@@ -197,6 +197,21 @@ export const NetworkScanResult = z.object({
     })
     .optional(),
 
+  deauthDetection: z
+    .object({
+      detected: z.boolean(),
+      frameCount: z.number(),
+      sources: z.array(
+        z.object({
+          mac: z.string(),
+          count: z.number(),
+        })
+      ),
+      method: z.enum(["system-logs", "monitor-mode"]),
+      duration: z.number(),
+    })
+    .optional(),
+
   speed: z
     .object({
       latency: z.object({

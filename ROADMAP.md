@@ -42,7 +42,7 @@
 - [x] Optimal channel recommendation engine based on local RF environment
 - [x] Signal strength trends over time (rf --trend, reads from scan history)
 - [x] Rogue AP / evil twin detection: nearby APs matching SSID with different BSSID or weaker security
-- [ ] Deauth flood detection via frame counters (deferred — requires monitor mode)
+- [x] Deauth flood detection: system log analysis (default) + monitor mode capture (opt-in via --monitor-interface)
 - [x] WiFi environment change detection: new APs, signal anomalies, security downgrades between scans
 
 ## Phase 5: External Reconnaissance (COMPLETE)

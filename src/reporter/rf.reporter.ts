@@ -1,6 +1,7 @@
 // src/reporter/rf.reporter.ts
 import chalk from "chalk";
 import type { RFAnalysis, ChannelInfo, RogueAPFinding, EnvironmentChange } from "../analyser/rf/index.js";
+import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import { pad } from "./render-helpers.js";
 
 function saturationBar(score: number): string {
@@ -112,18 +113,44 @@ function renderEnvironment(analysis: RFAnalysis): string {
   return lines.join("\n");
 }
 
-export function renderRFReport(analysis: RFAnalysis): string {
+function renderDeauthDetection(deauth: NonNullable<NetworkScanResult["deauthDetection"]>): string {
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(chalk.bold("  Deauth Flood Detection"));
+  lines.push(chalk.dim(`  Method: ${deauth.method}`));
+  lines.push("");
+
+  if (!deauth.detected) {
+    lines.push(chalk.green("  No deauthentication events detected."));
+    return lines.join("\n");
+  }
+
+  lines.push(chalk.yellow(`  ${deauth.frameCount} deauth/disassoc event(s) detected`));
+  lines.push("");
+
+  if (deauth.sources.length > 0) {
+    lines.push(chalk.dim("  Sources:"));
+    for (const src of deauth.sources.slice(0, 10)) {
+      lines.push(`    ${chalk.cyan(src.mac.padEnd(18))} ${chalk.yellow(String(src.count))} event(s)`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function renderRFReport(analysis: RFAnalysis, deauth?: NetworkScanResult["deauthDetection"]): string {
   const sections = [
     renderChannelMap(analysis),
     renderRogueAPs(analysis),
     renderEnvironment(analysis),
+    deauth ? renderDeauthDetection(deauth) : "",
   ].filter(Boolean);
 
   return sections.join("\n");
 }
 
 /** Condensed one-line summary for embedding in main scan output. */
-export function renderRFSummary(analysis: RFAnalysis): string {
+export function renderRFSummary(analysis: RFAnalysis, deauth?: NetworkScanResult["deauthDetection"]): string {
   const { channelMap, rogueAPs } = analysis;
   const lines: string[] = [];
 
@@ -141,6 +168,14 @@ export function renderRFSummary(analysis: RFAnalysis): string {
   } else {
     const riskColor = rogueAPs.riskLevel === "danger" ? chalk.red : chalk.yellow;
     lines.push(`Rogue APs: ${riskColor(rogueAPs.riskLevel.toUpperCase())} (${rogueAPs.findings.length} finding${rogueAPs.findings.length > 1 ? "s" : ""})`);
+  }
+
+  if (deauth) {
+    if (deauth.detected) {
+      lines.push(`Deauth events: ${chalk.yellow(String(deauth.frameCount) + " detected")} via ${chalk.dim(deauth.method)}`);
+    } else {
+      lines.push(`Deauth events: ${chalk.green("none")} via ${chalk.dim(deauth.method)}`);
+    }
   }
 
   return lines.join("\n");

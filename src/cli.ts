@@ -45,6 +45,7 @@ program
   .option("--analyse", "Include multi-persona analysis in the output")
   .option("--no-save", "Skip saving scan to history")
   .option("--events", "Output scan events as NDJSON instead of report")
+  .option("--monitor-interface <iface>", "Enable deauth detection via monitor mode on this interface")
   .action(async (opts) => {
     initTelemetry({
       tracing: opts.otel as "console" | "otlp" | "none",
@@ -62,6 +63,7 @@ program
         skipSpeed: opts.skipSpeed,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
+        monitorInterface: opts.monitorInterface,
       };
 
       if (opts.events) {
