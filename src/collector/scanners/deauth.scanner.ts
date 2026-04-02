@@ -31,7 +31,7 @@ const LINUX_DEAUTH_PATTERNS = [
   /deauthenticated/i,
   /disassociated/i,
   /deauth from/i,
-  /reason:\s*\d+/i,
+  /(?:deauth|disassoc).*reason:\s*\d+/i,
 ];
 
 // MAC address regex
@@ -153,7 +153,7 @@ async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
   // Linux: try journalctl first, fall back to dmesg
   const journalResult = run(
     "journalctl",
-    ["-k", "--no-pager", "--since", "5 minutes ago", "-g", "deauth\\|disassoc"],
+    ["-k", "--no-pager", "--since", "5 minutes ago", "-g", "deauth|disassoc"],
     30_000
   );
 
