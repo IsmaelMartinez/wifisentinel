@@ -47,6 +47,7 @@ program
   .option("--no-save", "Skip saving scan to history")
   .option("--events", "Output scan events as NDJSON instead of report")
   .option("--monitor-interface <iface>", "Enable deauth detection via monitor mode on this interface")
+  .option("--stealth", "Reduce network footprint: passive host discovery, randomised port timing, random DNS test domains, skip speed test")
   .action(async (opts) => {
     initTelemetry({
       tracing: opts.otel as "console" | "otlp" | "none",
@@ -60,12 +61,17 @@ program
 
       const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
-        skipTraffic: opts.skipTraffic,
-        skipSpeed: opts.skipSpeed,
+        skipTraffic: opts.skipTraffic || opts.stealth,
+        skipSpeed: opts.skipSpeed || opts.stealth,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
+        stealth: opts.stealth,
         monitorInterface: opts.monitorInterface,
       };
+
+      if (opts.stealth && opts.verbose) {
+        console.error("[wifisentinel] Stealth mode: passive discovery, randomised port timing, no speed test, no traffic capture");
+      }
 
       if (opts.events) {
         const { ScanEventEmitter } = await import("./collector/scan-events.js");
@@ -142,6 +148,7 @@ program
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
   .option("-v, --verbose", "Show detailed findings per standard/persona")
   .option("--no-save", "Skip saving scan to history")
+  .option("--stealth", "Reduce network footprint: passive host discovery, randomised port timing, random DNS test domains, skip speed test")
   .action(async (opts) => {
     initTelemetry({
       tracing: opts.otel as "console" | "otlp" | "none",
@@ -155,10 +162,11 @@ program
 
       const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
-        skipTraffic: opts.skipTraffic,
-        skipSpeed: opts.skipSpeed,
+        skipTraffic: opts.skipTraffic || opts.stealth,
+        skipSpeed: opts.skipSpeed || opts.stealth,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
+        stealth: opts.stealth,
       };
 
       const useProgress = opts.output !== "json" && process.stdout.isTTY;

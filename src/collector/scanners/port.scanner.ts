@@ -81,8 +81,26 @@ function isExposedToNetwork(bindAddress: string): boolean {
   return bindAddress === "*" || bindAddress === "0.0.0.0" || bindAddress === "::";
 }
 
+export function shuffle<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export interface PortScanOptions {
+  stealth?: boolean;
+}
+
 export async function scanPorts(
-  hosts: Array<{ ip: string; mac: string }>
+  hosts: Array<{ ip: string; mac: string }>,
+  options: PortScanOptions = {},
 ): Promise<{
   hostPorts: Map<string, Array<PortResult>>;
   localServices: NetworkScanResult["localServices"];
@@ -90,9 +108,15 @@ export async function scanPorts(
   const hostPorts = new Map<string, Array<PortResult>>();
 
   // 1. Scan each host across all common ports
-  for (const host of hosts) {
+  const hostOrder = options.stealth ? shuffle(hosts) : hosts;
+  for (const host of hostOrder) {
     const results: PortResult[] = [];
-    for (const port of COMMON_PORTS) {
+    const portOrder = options.stealth ? shuffle([...COMMON_PORTS]) : COMMON_PORTS;
+    for (const port of portOrder) {
+      if (options.stealth) {
+        // Random jitter 200-500ms between probes to avoid portscan detection
+        await sleep(200 + Math.random() * 300);
+      }
       results.push(scanHostPort(host.ip, port));
     }
     hostPorts.set(host.ip, results);

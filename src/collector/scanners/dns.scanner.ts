@@ -4,6 +4,14 @@ import type { NetworkScanResult } from "../schema/scan-result.js";
 type DnsResult = NetworkScanResult["network"]["dns"];
 
 const HIJACK_TEST_DOMAIN = "this-domain-should-not-exist-7xk2.com";
+
+/** Generate a random NXDOMAIN test domain that won't appear in DNS logs as a fingerprint */
+export function randomHijackDomain(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let sub = "";
+  for (let i = 0; i < 12; i++) sub += chars[Math.floor(Math.random() * chars.length)];
+  return `${sub}.nxdomain.invalid`;
+}
 const CLOUDFLARE_DNS = "1.1.1.1";
 const TEST_DOMAIN = "google.com";
 
@@ -56,8 +64,9 @@ function testDnssec(server: string): boolean {
  * Hijack test: resolve a domain that should never exist.
  * If we get back an IP, the DNS resolver is intercepting/hijacking queries.
  */
-function testHijack(server: string): "clean" | "intercepted" | "unknown" {
-  const result = run("dig", ["@" + server, HIJACK_TEST_DOMAIN, "A", "+short"]);
+function testHijack(server: string, stealth = false): "clean" | "intercepted" | "unknown" {
+  const domain = stealth ? randomHijackDomain() : HIJACK_TEST_DOMAIN;
+  const result = run("dig", ["@" + server, domain, "A", "+short"]);
   if (result.exitCode !== 0) return "unknown";
   const out = result.stdout.trim();
   if (!out) return "clean";
@@ -145,7 +154,11 @@ function parseNslookupServer(output: string): string[] {
   return servers;
 }
 
-export async function scanDns(gateway: string): Promise<DnsResult> {
+export interface DnsScanOptions {
+  stealth?: boolean;
+}
+
+export async function scanDns(gateway: string, options: DnsScanOptions = {}): Promise<DnsResult> {
   const defaults: DnsResult = {
     servers: [],
     anomalies: [],
@@ -213,9 +226,10 @@ export async function scanDns(gateway: string): Promise<DnsResult> {
     }
 
     try {
-      hijackTestResult = testHijack(primaryServer);
+      hijackTestResult = testHijack(primaryServer, options.stealth);
       if (hijackTestResult === "intercepted") {
-        anomalies.push(`DNS hijacking detected: ${HIJACK_TEST_DOMAIN} resolved to an IP via ${primaryServer}`);
+        const domain = options.stealth ? "random NXDOMAIN test" : HIJACK_TEST_DOMAIN;
+        anomalies.push(`DNS hijacking detected: ${domain} resolved to an IP via ${primaryServer}`);
       }
     } catch {
       hijackTestResult = "unknown";

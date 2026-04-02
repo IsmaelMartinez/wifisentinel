@@ -36,6 +36,7 @@ export function registerWatchCommand(program: Command): void {
     .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
     .option("--no-save", "Skip saving scan results to history")
     .option("-v, --verbose", "Verbose output")
+    .option("--stealth", "Reduce network footprint: passive host discovery, randomised port timing, random DNS test domains, skip speed test")
     .action(async (opts) => {
       const parsed = parseFloat(opts.interval);
       const intervalMs = (Number.isNaN(parsed) ? 5 : Math.max(1, parsed)) * 60 * 1000;
@@ -48,10 +49,11 @@ export function registerWatchCommand(program: Command): void {
 
       const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
-        skipTraffic: opts.skipTraffic,
-        skipSpeed: opts.skipSpeed,
+        skipTraffic: opts.skipTraffic || opts.stealth,
+        skipSpeed: opts.skipSpeed || opts.stealth,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
+        stealth: opts.stealth,
       };
 
       let running = true;

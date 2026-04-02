@@ -148,6 +148,7 @@ export interface ScanOptions {
   skipSpeed?: boolean;
   skipVendorLookup?: boolean;
   verbose?: boolean;
+  stealth?: boolean;
   emitter?: ScanEventEmitter;
   monitorInterface?: string;
 }
@@ -206,7 +207,7 @@ export async function collectNetworkScan(
           withSpan(
             "dns-audit",
             { "tool.resolved": tools.get("dnsAudit")?.name ?? "none" },
-            () => scanDns(bootstrap.gateway.ip)
+            () => scanDns(bootstrap.gateway.ip, { stealth: options.stealth })
           ).then((r) => {
             emitter?.scannerComplete("dns", `${r.servers.length} servers, DNSSEC ${r.dnssecSupported ? "on" : "off"}`);
             return r;
@@ -236,7 +237,8 @@ export async function collectNetworkScan(
         scanHosts(
           bootstrap.interface,
           bootstrap.subnet,
-          bootstrap.broadcastAddr
+          bootstrap.broadcastAddr,
+          { stealth: options.stealth, gatewayIp: bootstrap.gateway.ip },
         )
     );
     for (const host of hosts) {
@@ -264,7 +266,7 @@ export async function collectNetworkScan(
           : await withSpan(
               "port-scan",
               { "tool.resolved": tools.get("portScanning")?.name ?? "none" },
-              () => scanPorts(hosts)
+              () => scanPorts(hosts, { stealth: options.stealth })
             );
 
         // Merge port data into hosts
