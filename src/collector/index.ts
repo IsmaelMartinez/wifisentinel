@@ -296,6 +296,12 @@ export async function collectNetworkScan(
           }),
         ]);
 
+        if (hidden?.suspectedCameras) {
+          for (const cam of hidden.suspectedCameras) {
+            emitter?.hostCameraDetected(cam.ip, cam.cameraIndicators ?? []);
+          }
+        }
+
         return [portResult, hidden, intrusion] as const;
       }
     );

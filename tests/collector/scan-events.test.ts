@@ -55,6 +55,16 @@ describe("ScanEventEmitter", () => {
     assert.equal(events[0].type, "port:found");
   });
 
+  it("emits host:camera-detected events", () => {
+    const emitter = new ScanEventEmitter();
+    const events: ScanEvent[] = [];
+    emitter.on("event", (e) => events.push(e));
+    emitter.hostCameraDetected("192.168.1.50", ["rtsp port open", "camera vendor"]);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].type, "host:camera-detected");
+    assert.equal((events[0] as any).ip, "192.168.1.50");
+  });
+
   it("serialises events as NDJSON", () => {
     const emitter = new ScanEventEmitter();
     const lines: string[] = [];

@@ -10,7 +10,8 @@ export type ScanEvent =
   | { type: "port:found"; ip: string; port: number; service: string; timestamp: string }
   | { type: "scan:complete"; scanId: string; hostCount: number; timestamp: string }
   | { type: "scan:score"; score: number; timestamp: string }
-  | { type: "bootstrap:complete"; gateway: string; ip: string; subnet: string; timestamp: string };
+  | { type: "bootstrap:complete"; gateway: string; ip: string; subnet: string; timestamp: string }
+  | { type: "host:camera-detected"; ip: string; indicators: string[]; timestamp: string };
 
 export class ScanEventEmitter extends EventEmitter {
   private ts(): string {
@@ -55,6 +56,10 @@ export class ScanEventEmitter extends EventEmitter {
 
   bootstrapComplete(gateway: string, ip: string, subnet: string): void {
     this.emit("event", { type: "bootstrap:complete", gateway, ip, subnet, timestamp: this.ts() } satisfies ScanEvent);
+  }
+
+  hostCameraDetected(ip: string, indicators: string[]): void {
+    this.emit("event", { type: "host:camera-detected", ip, indicators, timestamp: this.ts() } satisfies ScanEvent);
   }
 
   toJSON(event: ScanEvent): string {

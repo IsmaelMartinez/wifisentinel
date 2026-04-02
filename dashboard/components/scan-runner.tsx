@@ -19,6 +19,7 @@ type ScanEvent = {
   exitCode?: number;
   error?: string;
   gateway?: string;
+  indicators?: string[];
 };
 
 interface ScanOptions {
@@ -111,6 +112,7 @@ export function ScanRunner() {
 
   const enrichedHosts = useMemo(() => hosts.map((h) => {
     const enrichment = events.find((e) => e.type === "host:enriched" && e.ip === h.ip);
+    const cameraEvent = events.find((e) => e.type === "host:camera-detected" && e.ip === h.ip);
     const hostPorts = events
       .filter((e) => e.type === "port:found" && e.ip === h.ip)
       .map((e) => ({ port: e.port!, service: e.service! }));
@@ -118,7 +120,7 @@ export function ScanRunner() {
       ip: h.ip!,
       mac: h.mac!,
       vendor: enrichment?.vendor,
-      isCamera: false,
+      isCamera: !!cameraEvent,
       ports: hostPorts,
     };
   }), [hosts, events]);
