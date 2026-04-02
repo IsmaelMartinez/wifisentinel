@@ -89,14 +89,12 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
       .selectAll<SVGLineElement, TopologyLink>("line")
       .data(links, (d) => `${(d.source as unknown as TopologyNode).id ?? d.source}-${(d.target as unknown as TopologyNode).id ?? d.target}`)
       .join(
-        (enter) =>
-          enter
-            .append("line")
-            .attr("stroke", "#333")
-            .attr("stroke-width", "1"),
+        (enter) => enter.append("line"),
         (update) => update,
         (exit) => exit.remove(),
-      );
+      )
+      .attr("stroke", "#333")
+      .attr("stroke-width", "1");
 
     // Data-join for node groups
     const nodeSel = nodeGroup
@@ -105,35 +103,30 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
       .join(
         (enter) => {
           const g = enter.append("g").attr("class", "node");
-
-          g.append("circle")
-            .attr("r", (d) => (d.isGateway ? 20 : 14))
-            .attr("fill", "#1a1a2a")
-            .attr("stroke", nodeColor)
-            .attr("stroke-width", (d) => (d.isGateway ? "2.5" : "1.5"));
-
-          g.append("text")
-            .attr("class", "label")
-            .attr("text-anchor", "middle")
-            .attr("fill", (d) => (d.isGateway ? "#cca700" : "#ccc"))
-            .attr("font-size", "9")
-            .attr("font-family", "monospace")
-            .text((d) => (d.isGateway ? d.id : `.${d.label}`));
-
-          g.filter((d) => !!d.vendor)
-            .append("text")
-            .attr("class", "vendor")
-            .attr("text-anchor", "middle")
-            .attr("fill", "#555")
-            .attr("font-size", "8")
-            .attr("font-family", "monospace")
-            .text((d) => d.vendor ?? "");
-
+          g.append("circle").attr("fill", "#1a1a2a");
+          g.append("text").attr("class", "label").attr("text-anchor", "middle").attr("font-family", "monospace");
+          g.append("text").attr("class", "vendor").attr("text-anchor", "middle").attr("font-family", "monospace");
           return g;
         },
         (update) => update,
         (exit) => exit.remove(),
       );
+
+    // Bind visual properties on the merged selection so both entering and updating nodes stay current
+    nodeSel.select<SVGCircleElement>("circle")
+      .attr("r", (d) => (d.isGateway ? 20 : 14))
+      .attr("stroke", nodeColor)
+      .attr("stroke-width", (d) => (d.isGateway ? "2.5" : "1.5"));
+
+    nodeSel.select<SVGTextElement>("text.label")
+      .attr("fill", (d) => (d.isGateway ? "#cca700" : "#ccc"))
+      .attr("font-size", "9")
+      .text((d) => (d.isGateway ? d.id : `.${d.label}`));
+
+    nodeSel.select<SVGTextElement>("text.vendor")
+      .attr("fill", "#555")
+      .attr("font-size", "8")
+      .text((d) => d.vendor ?? "");
 
     const simulation = forceSimulation<TopologyNode>(nodes)
       .force("link", forceLink<TopologyNode, TopologyLink>(links).id((d) => d.id).distance(100))
