@@ -10,6 +10,7 @@ import {
   type SimulationNodeDatum,
   type SimulationLinkDatum,
 } from "d3-force";
+import { select } from "d3-selection";
 
 interface TopologyNode extends SimulationNodeDatum {
   id: string;
@@ -70,6 +71,63 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
 
     simulationRef.current?.stop();
 
+    const svg = select(svgRef.current);
+
+    // Create persistent layer groups once; select them if they already exist
+    let linkGroup = svg.select<SVGGElement>("g.links");
+    if (linkGroup.empty()) {
+      linkGroup = svg.append("g").attr("class", "links");
+    }
+
+    let nodeGroup = svg.select<SVGGElement>("g.nodes");
+    if (nodeGroup.empty()) {
+      nodeGroup = svg.append("g").attr("class", "nodes");
+    }
+
+    // Data-join for links
+    const linkSel = linkGroup
+      .selectAll<SVGLineElement, TopologyLink>("line")
+      .data(links, (d) => `${(d.source as unknown as TopologyNode).id ?? d.source}-${(d.target as unknown as TopologyNode).id ?? d.target}`)
+      .join(
+        (enter) => enter.append("line"),
+        (update) => update,
+        (exit) => exit.remove(),
+      )
+      .attr("stroke", "#333")
+      .attr("stroke-width", "1");
+
+    // Data-join for node groups
+    const nodeSel = nodeGroup
+      .selectAll<SVGGElement, TopologyNode>("g.node")
+      .data(nodes, (d) => d.id)
+      .join(
+        (enter) => {
+          const g = enter.append("g").attr("class", "node");
+          g.append("circle").attr("fill", "#1a1a2a");
+          g.append("text").attr("class", "label").attr("text-anchor", "middle").attr("font-family", "monospace");
+          g.append("text").attr("class", "vendor").attr("text-anchor", "middle").attr("font-family", "monospace");
+          return g;
+        },
+        (update) => update,
+        (exit) => exit.remove(),
+      );
+
+    // Bind visual properties on the merged selection so both entering and updating nodes stay current
+    nodeSel.select<SVGCircleElement>("circle")
+      .attr("r", (d) => (d.isGateway ? 20 : 14))
+      .attr("stroke", nodeColor)
+      .attr("stroke-width", (d) => (d.isGateway ? "2.5" : "1.5"));
+
+    nodeSel.select<SVGTextElement>("text.label")
+      .attr("fill", (d) => (d.isGateway ? "#cca700" : "#ccc"))
+      .attr("font-size", "9")
+      .text((d) => (d.isGateway ? d.id : `.${d.label}`));
+
+    nodeSel.select<SVGTextElement>("text.vendor")
+      .attr("fill", "#555")
+      .attr("font-size", "8")
+      .text((d) => d.vendor ?? "");
+
     const simulation = forceSimulation<TopologyNode>(nodes)
       .force("link", forceLink<TopologyNode, TopologyLink>(links).id((d) => d.id).distance(100))
       .force("charge", forceManyBody().strength(-200))
@@ -78,59 +136,24 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
 
     simulationRef.current = simulation;
 
-    const svg = svgRef.current;
-
     simulation.on("tick", () => {
-      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      linkSel
+        .attr("x1", (d) => String((d.source as unknown as TopologyNode).x ?? 0))
+        .attr("y1", (d) => String((d.source as unknown as TopologyNode).y ?? 0))
+        .attr("x2", (d) => String((d.target as unknown as TopologyNode).x ?? 0))
+        .attr("y2", (d) => String((d.target as unknown as TopologyNode).y ?? 0));
 
-      for (const link of links) {
-        const source = link.source as unknown as TopologyNode;
-        const target = link.target as unknown as TopologyNode;
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1", String(source.x ?? 0));
-        line.setAttribute("y1", String(source.y ?? 0));
-        line.setAttribute("x2", String(target.x ?? 0));
-        line.setAttribute("y2", String(target.y ?? 0));
-        line.setAttribute("stroke", "#333");
-        line.setAttribute("stroke-width", "1");
-        svg.appendChild(line);
-      }
+      nodeSel.select<SVGCircleElement>("circle")
+        .attr("cx", (d) => String(d.x ?? 0))
+        .attr("cy", (d) => String(d.y ?? 0));
 
-      for (const node of nodes) {
-        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", String(node.x ?? 0));
-        circle.setAttribute("cy", String(node.y ?? 0));
-        circle.setAttribute("r", node.isGateway ? "20" : "14");
-        circle.setAttribute("fill", "#1a1a2a");
-        circle.setAttribute("stroke", nodeColor(node));
-        circle.setAttribute("stroke-width", node.isGateway ? "2.5" : "1.5");
-        g.appendChild(circle);
+      nodeSel.select<SVGTextElement>("text.label")
+        .attr("x", (d) => String(d.x ?? 0))
+        .attr("y", (d) => String((d.y ?? 0) + 4));
 
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.setAttribute("x", String(node.x ?? 0));
-        text.setAttribute("y", String((node.y ?? 0) + 4));
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("fill", node.isGateway ? "#cca700" : "#ccc");
-        text.setAttribute("font-size", "9");
-        text.setAttribute("font-family", "monospace");
-        text.textContent = node.isGateway ? node.id : `.${node.label}`;
-        g.appendChild(text);
-
-        if (node.vendor) {
-          const vendor = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          vendor.setAttribute("x", String(node.x ?? 0));
-          vendor.setAttribute("y", String((node.y ?? 0) + 28));
-          vendor.setAttribute("text-anchor", "middle");
-          vendor.setAttribute("fill", "#555");
-          vendor.setAttribute("font-size", "8");
-          vendor.setAttribute("font-family", "monospace");
-          vendor.textContent = node.vendor;
-          g.appendChild(vendor);
-        }
-
-        svg.appendChild(g);
-      }
+      nodeSel.select<SVGTextElement>("text.vendor")
+        .attr("x", (d) => String(d.x ?? 0))
+        .attr("y", (d) => String((d.y ?? 0) + 28));
     });
 
     return () => { simulation.stop(); };
