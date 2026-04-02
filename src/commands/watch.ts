@@ -34,9 +34,11 @@ export function registerWatchCommand(program: Command): void {
     .option("--alert-security-change", "Alert on security posture changes (default: true)", true)
     .option("--no-alert-security-change", "Disable alerts on security posture changes")
     .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
+    .option("--no-save", "Skip saving scan results to history")
     .option("-v, --verbose", "Verbose output")
     .action(async (opts) => {
-      const intervalMs = Math.max(1, parseFloat(opts.interval)) * 60 * 1000;
+      const parsed = parseFloat(opts.interval);
+      const intervalMs = (Number.isNaN(parsed) ? 5 : Math.max(1, parsed)) * 60 * 1000;
       const useEvents = opts.events === true;
 
       initTelemetry({
@@ -56,13 +58,9 @@ export function registerWatchCommand(program: Command): void {
       let previousResult: NetworkScanResult | undefined;
       let cycle = 0;
 
-      const shutdown = async () => {
+      const shutdown = () => {
+        console.error("\n[wifisentinel] Stopping after current scan completes...");
         running = false;
-        if (!useEvents) {
-          console.error("\n[wifisentinel] Watch stopped.");
-        }
-        await shutdownTelemetry();
-        process.exit(0);
       };
 
       process.on("SIGINT", shutdown);
@@ -90,10 +88,12 @@ export function registerWatchCommand(program: Command): void {
           const score = computeSecurityScore(result);
 
           // Save to history
-          const compliance = scoreAllStandards(result);
-          const analysis = analyseAllPersonas(result);
-          const rfAnalysis = analyseRF(result);
-          saveScan(result, compliance, analysis, rfAnalysis);
+          if (opts.save !== false) {
+            const compliance = scoreAllStandards(result);
+            const analysis = analyseAllPersonas(result);
+            const rfAnalysis = analyseRF(result);
+            saveScan(result, compliance, analysis, rfAnalysis);
+          }
 
           if (cycle === 1) {
             // Baseline scan
