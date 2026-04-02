@@ -63,6 +63,7 @@ describe("ScanEventEmitter", () => {
     assert.equal(events.length, 1);
     assert.equal(events[0].type, "host:camera-detected");
     assert.equal((events[0] as any).ip, "192.168.1.50");
+    assert.deepEqual((events[0] as any).indicators, ["rtsp port open", "camera vendor"]);
   });
 
   it("serialises events as NDJSON", () => {
