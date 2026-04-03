@@ -16,12 +16,12 @@ export function SidebarNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-10 flex w-56 flex-col border-r border-border bg-card">
+    <aside className="fixed inset-y-0 left-0 z-10 flex w-56 flex-col border-r border-border bg-card" role="complementary">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <Shield className="h-5 w-5 text-primary" />
+        <Shield className="h-5 w-5 text-primary" aria-hidden="true" />
         <span className="font-semibold">WiFi Sentinel</span>
       </div>
-      <nav className="flex-1 space-y-1 p-2">
+      <nav className="flex-1 space-y-1 p-2" aria-label="Main navigation">
         {navItems.map((item) => {
           const isActive = item.href === "/"
             ? pathname === "/"
@@ -30,6 +30,7 @@ export function SidebarNav() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                 isActive
@@ -37,7 +38,7 @@ export function SidebarNav() {
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className="h-4 w-4" aria-hidden="true" />
               {item.label}
             </Link>
           );

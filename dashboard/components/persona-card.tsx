@@ -41,6 +41,8 @@ export function PersonaCard({ analysis }: { analysis: PersonaAnalysis }) {
         className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
         role="button"
         tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={`${analysis.displayName} — ${analysis.riskRating} risk — ${analysis.insights.length} findings`}
         onClick={() => setExpanded(!expanded)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(!expanded); } }}
       >
