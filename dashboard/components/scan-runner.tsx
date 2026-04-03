@@ -257,7 +257,7 @@ export function ScanRunner() {
                     value={options.interval}
                     onChange={(e) => setOptions((prev) => ({ ...prev, interval: parseInt(e.target.value) || 5 }))}
                     disabled={running}
-                    className="w-12 bg-transparent border border-zinc-600 rounded px-1 text-center"
+                    className="w-12 bg-transparent border border-zinc-600 rounded px-1 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   min
                 </label>

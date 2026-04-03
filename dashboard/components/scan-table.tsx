@@ -35,7 +35,7 @@ export function ScanTable({ entries }: { entries: IndexEntry[] }) {
             key={e.scanId}
             role="button"
             tabIndex={0}
-            className="cursor-pointer"
+            className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => router.push(`/scans/${e.scanId}`)}
             onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); router.push(`/scans/${e.scanId}`); } }}
           >
