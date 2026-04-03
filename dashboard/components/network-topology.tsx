@@ -93,7 +93,7 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
         (update) => update,
         (exit) => exit.remove(),
       )
-      .attr("stroke", "#333")
+      .attr("stroke", "#555")
       .attr("stroke-width", "1");
 
     // Data-join for node groups
@@ -103,7 +103,7 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
       .join(
         (enter) => {
           const g = enter.append("g").attr("class", "node");
-          g.append("circle").attr("fill", "#1a1a2a");
+          g.append("circle").attr("fill", "#1e1e2e");
           g.append("text").attr("class", "label").attr("text-anchor", "middle").attr("font-family", "monospace");
           g.append("text").attr("class", "vendor").attr("text-anchor", "middle").attr("font-family", "monospace");
           return g;
@@ -116,7 +116,7 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
     nodeSel.select<SVGCircleElement>("circle")
       .attr("r", (d) => (d.isGateway ? 20 : 14))
       .attr("stroke", nodeColor)
-      .attr("stroke-width", (d) => (d.isGateway ? "2.5" : "1.5"));
+      .attr("stroke-width", (d) => (d.isGateway ? "3" : "2"));
 
     nodeSel.select<SVGTextElement>("text.label")
       .attr("fill", (d) => (d.isGateway ? "#cca700" : "#ccc"))
@@ -124,7 +124,7 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
       .text((d) => (d.isGateway ? d.id : `.${d.label}`));
 
     nodeSel.select<SVGTextElement>("text.vendor")
-      .attr("fill", "#555")
+      .attr("fill", "#888")
       .attr("font-size", "8")
       .text((d) => d.vendor ?? "");
 

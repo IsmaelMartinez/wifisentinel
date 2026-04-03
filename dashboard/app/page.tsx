@@ -46,7 +46,7 @@ export default function OverviewPage() {
         </div>
         <Link
           href={`/scans/${latest.scanId}`}
-          className="text-sm text-primary hover:underline"
+          className="text-sm text-primary underline underline-offset-4"
         >
           View Full Report
         </Link>
@@ -134,7 +134,7 @@ export default function OverviewPage() {
                 <p>
                   Channel {rfSummary.channelMap.currentChannel} &middot;
                   Saturation: <span className={
-                    rfSummary.channelMap.currentSaturation <= 30 ? "text-green-400" :
+                    rfSummary.channelMap.currentSaturation <= 30 ? "text-teal-400" :
                     rfSummary.channelMap.currentSaturation <= 60 ? "text-yellow-400" : "text-red-400"
                   }>{rfSummary.channelMap.currentSaturation}%</span>
                 </p>
@@ -145,7 +145,7 @@ export default function OverviewPage() {
                 )}
                 <p>
                   Rogue APs: <span className={
-                    rfSummary.rogueAPs.riskLevel === "clear" ? "text-green-400" : "text-red-400"
+                    rfSummary.rogueAPs.riskLevel === "clear" ? "text-teal-400" : "text-red-400"
                   }>{rfSummary.rogueAPs.riskLevel}</span>
                 </p>
               </>
@@ -158,10 +158,10 @@ export default function OverviewPage() {
 
       {/* Quick links */}
       <div className="flex gap-4">
-        <Link href="/scans" className="text-sm text-primary hover:underline">
+        <Link href="/scans" className="text-sm text-primary underline underline-offset-4">
           View History
         </Link>
-        <Link href="/trends" className="text-sm text-primary hover:underline">
+        <Link href="/trends" className="text-sm text-primary underline underline-offset-4">
           View Trends
         </Link>
       </div>

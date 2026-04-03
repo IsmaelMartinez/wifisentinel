@@ -38,7 +38,7 @@ export default async function ScanDetailPage({
           <a
             href={`/api/scans/${scan.meta.scanId}/export`}
             download
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-primary underline underline-offset-4"
           >
             Export HTML
           </a>
