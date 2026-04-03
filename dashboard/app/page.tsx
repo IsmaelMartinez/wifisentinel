@@ -110,13 +110,16 @@ export default function OverviewPage() {
             <div className="flex items-end gap-1 h-16">
               {[...entries].reverse().map((e) => {
                 const height = Math.max(4, (e.securityScore / 10) * 64);
-                const color = e.securityScore >= 8 ? "bg-green-500" : e.securityScore >= 5 ? "bg-yellow-500" : "bg-red-500";
+                const color = e.securityScore >= 8 ? "bg-teal-500" : e.securityScore >= 5 ? "bg-amber-500" : "bg-red-500";
+                const label = `Score ${e.securityScore.toFixed(1)} on ${new Date(e.timestamp).toLocaleDateString()}`;
                 return (
                   <div
                     key={e.scanId}
                     className={`${color} rounded-sm flex-1 min-w-1`}
                     style={{ height }}
-                    title={`${e.securityScore.toFixed(1)} — ${new Date(e.timestamp).toLocaleDateString()}`}
+                    role="img"
+                    aria-label={label}
+                    title={label}
                   />
                 );
               })}

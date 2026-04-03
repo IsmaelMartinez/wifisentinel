@@ -58,7 +58,7 @@ export default async function ScanDetailPage({
         </TabsList>
 
         {/* Summary Tab */}
-        <TabsContent value="summary" className="space-y-4 mt-4">
+        <TabsContent value="summary" className="space-y-4 mt-4" aria-label="Summary">
           <div className="grid grid-cols-3 gap-4">
             <Card>
               <CardContent className="flex flex-col items-center pt-6">
@@ -118,7 +118,7 @@ export default async function ScanDetailPage({
         </TabsContent>
 
         {/* Personas Tab */}
-        <TabsContent value="personas" className="space-y-4 mt-4">
+        <TabsContent value="personas" className="space-y-4 mt-4" aria-label="Persona analysis">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm text-muted-foreground">Consensus:</span>
             <RiskBadge risk={analysis.consensusRating} />
@@ -129,7 +129,7 @@ export default async function ScanDetailPage({
         </TabsContent>
 
         {/* Compliance Tab */}
-        <TabsContent value="compliance" className="space-y-4 mt-4">
+        <TabsContent value="compliance" className="space-y-4 mt-4" aria-label="Compliance scoring">
           <div className="flex items-center gap-4 mb-2">
             <GradeBadge grade={compliance.overallGrade} />
             <div>
@@ -142,7 +142,7 @@ export default async function ScanDetailPage({
         </TabsContent>
 
         {/* RF Tab */}
-        <TabsContent value="rf" className="space-y-4 mt-4">
+        <TabsContent value="rf" className="space-y-4 mt-4" aria-label="RF intelligence">
           {rfAnalysis ? (
             <>
               <Card>

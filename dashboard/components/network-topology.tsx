@@ -159,7 +159,20 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
     return () => { simulation.stop(); };
   }, [gateway, hosts, width, height]);
 
+  const hostSummary = hosts.length === 0
+    ? "No hosts"
+    : `${hosts.length} host${hosts.length !== 1 ? "s" : ""} connected to gateway ${gateway}`;
+
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" style={{ maxHeight: height }} />
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-auto"
+      style={{ maxHeight: height }}
+      role="img"
+      aria-label={`Network topology map: ${hostSummary}`}
+    >
+      <title>Network topology map: {hostSummary}</title>
+    </svg>
   );
 }
