@@ -52,7 +52,7 @@ export function ComplianceCard({ standard }: { standard: StandardScore }) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="w-full bg-muted rounded-full h-2 mb-4">
+        <div className="w-full bg-zinc-700 rounded-full h-2 mb-4">
           <div
             className={`h-2 rounded-full ${
               standard.score >= 80 ? "bg-green-500" : standard.score >= 60 ? "bg-yellow-500" : "bg-red-500"

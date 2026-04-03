@@ -38,8 +38,11 @@ export function PersonaCard({ analysis }: { analysis: PersonaAnalysis }) {
   return (
     <Card>
       <CardHeader
-        className="cursor-pointer"
+        className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(!expanded); } }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

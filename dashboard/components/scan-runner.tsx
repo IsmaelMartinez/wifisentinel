@@ -207,14 +207,14 @@ export function ScanRunner() {
             {running ? (
               <button
                 onClick={stopScan}
-                className="px-4 py-2 bg-red-400 text-black rounded font-semibold text-sm"
+                className="px-4 py-2 bg-red-400 text-black rounded font-semibold text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Stop
               </button>
             ) : (
               <button
                 onClick={startScan}
-                className="px-4 py-2 bg-teal-400 text-black rounded font-semibold text-sm"
+                className="px-4 py-2 bg-teal-400 text-black rounded font-semibold text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {options.watch ? "Start Watch" : "Start Scan"}
               </button>
@@ -257,7 +257,7 @@ export function ScanRunner() {
                     value={options.interval}
                     onChange={(e) => setOptions((prev) => ({ ...prev, interval: parseInt(e.target.value) || 5 }))}
                     disabled={running}
-                    className="w-12 bg-transparent border border-border rounded px-1 text-center"
+                    className="w-12 bg-transparent border border-zinc-600 rounded px-1 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   min
                 </label>
@@ -281,7 +281,7 @@ export function ScanRunner() {
                 </div>
               ))}
               {activeScanners.map((s) => (
-                <div key={s} className="text-blue-400 animate-pulse">
+                <div key={s} className="text-blue-400 animate-pulse motion-reduce:animate-none">
                   ◐ {s}...
                 </div>
               ))}
