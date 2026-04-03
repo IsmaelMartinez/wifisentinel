@@ -170,9 +170,9 @@ export function NetworkTopology({ gateway, hosts, width = 500, height = 350 }: P
       className="w-full h-auto"
       style={{ maxHeight: height }}
       role="img"
-      aria-label={`Network topology map: ${hostSummary}`}
+      aria-labelledby="topology-title"
     >
-      <title>Network topology map: {hostSummary}</title>
+      <title id="topology-title">Network topology map: {hostSummary}</title>
     </svg>
   );
 }
