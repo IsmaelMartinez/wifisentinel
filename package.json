@@ -43,7 +43,7 @@
     "figures": "^6.1.0",
     "listr2": "^10.2.1",
     "log-update": "^7.2.0",
-    "oui-data": "^1.1.562",
+    "oui-data": "^1.1.564",
     "sparkly": "^6.0.1",
     "terminal-link": "^5.0.0",
     "zod": "^4.3.6"
