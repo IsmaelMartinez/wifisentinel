@@ -6,14 +6,15 @@ const src = path.resolve(process.cwd(), "../src");
 const nextConfig: NextConfig = {
   transpilePackages: ["../src"],
   serverExternalPackages: ["zod"],
-  // Turbopack (default in Next.js 16) does not support extensionAlias, so we
-  // map each @wifisentinel/*.js import to the real .ts source file explicitly.
+  // Turbopack (default in Next.js 16) does not support extensionAlias.
+  // Map each @wifisentinel/*.js import to the real .ts source file using
+  // relative paths from the dashboard directory (where Next.js runs from).
   turbopack: {
     resolveAlias: {
-      "@wifisentinel/analyser/rf/index.js": path.join(src, "analyser/rf/index.ts"),
-      "@wifisentinel/analyser/score.js": path.join(src, "analyser/score.ts"),
-      "@wifisentinel/reporter/html.reporter.js": path.join(src, "reporter/html.reporter.ts"),
-      "@wifisentinel/store/index.js": path.join(src, "store/index.ts"),
+      "@wifisentinel/analyser/rf/index.js": "../src/analyser/rf/index.ts",
+      "@wifisentinel/analyser/score.js": "../src/analyser/score.ts",
+      "@wifisentinel/reporter/html.reporter.js": "../src/reporter/html.reporter.ts",
+      "@wifisentinel/store/index.js": "../src/store/index.ts",
     },
   },
   webpack: (config) => {
