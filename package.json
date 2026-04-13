@@ -30,20 +30,20 @@
     "lint": "eslint src/ tests/"
   },
   "dependencies": {
-    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
     "@opentelemetry/resources": "^2.6.1",
     "@opentelemetry/sdk-metrics": "^2.6.1",
     "@opentelemetry/sdk-node": "^0.214.0",
     "@opentelemetry/sdk-trace-base": "^2.6.1",
     "@opentelemetry/semantic-conventions": "^1.40.0",
-    "chalk": "^5.4.0",
+    "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "figures": "^6.1.0",
     "listr2": "^10.2.1",
     "log-update": "^8.0.0",
-    "oui-data": "^1.1.564",
+    "oui-data": "^1.1.569",
     "sparkly": "^6.0.1",
     "terminal-link": "^5.0.0",
     "zod": "^4.3.6"
@@ -52,9 +52,9 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
     "eslint": "^10.2.0",
-    "tsx": "^4.19.0",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2",
-    "typescript-eslint": "^8.58.0"
+    "typescript-eslint": "^8.58.2"
   },
   "engines": {
     "node": ">=20"
