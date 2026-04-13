@@ -37,9 +37,9 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Overview</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Overview</h1>
           <p className="text-sm text-muted-foreground">
             {scan.wifi.ssid ?? "(hidden)"} &middot; {new Date(scan.meta.timestamp).toLocaleString()}
           </p>
@@ -53,7 +53,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Top metrics */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Card>
           <CardContent className="flex flex-col items-center pt-6">
             <ScoreGauge score={latest.securityScore} />
@@ -87,7 +87,7 @@ export default function OverviewPage() {
           <CardTitle className="text-base">Persona Risk Assessment</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3 sm:gap-4">
             {analysis.analyses.map((a) => (
               <div key={a.persona} className="flex flex-col items-center gap-1.5">
                 <RiskBadge risk={a.riskRating} />
@@ -101,7 +101,7 @@ export default function OverviewPage() {
       </Card>
 
       {/* Score trend + RF summary */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Score Trend</CardTitle>
@@ -160,7 +160,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Quick links */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
         <Link href="/scans" className="text-sm text-primary underline underline-offset-4">
           View History
         </Link>
