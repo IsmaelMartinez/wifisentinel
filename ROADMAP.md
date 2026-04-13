@@ -1,18 +1,19 @@
 # WiFi Sentinel — Roadmap
 
-## Phase 1: CLI Scanner (COMPLETE)
+## Phase 1: CLI Scanner (NEAR COMPLETE)
 
 - [x] Design spec and investigation spike
 - [x] Core schema (NetworkScanResult + zod validation)
 - [x] Tool resolver with three-tier fallback chains
-- [x] 10 scanner modules: wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, speed, traffic
+- [x] 9 scanner modules: wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, speed
+- [ ] Traffic analysis scanner (schema and `--skip-traffic` flag wired up, implementation pending)
 - [x] OTEL tracing and metrics layer
 - [x] Terminal reporter with ASCII output and scorecard
-- [x] CLI entry point (scan, tv commands)
+- [x] CLI entry point (scan command)
 - [x] Tuning: gateway detection, DNS false positives, camera detection, WiFi parsing
 - [x] Tested on two live networks (Airbnb Amsterdam 8.2/10, home UK 8.7/10)
-- [x] LG webOS TV controller (SSAP over wss://3001) — side quest
-- [x] Curated UK IPTV playlist (33 channels)
+- [ ] LG webOS TV controller (SSAP over wss://3001) — side quest (not yet implemented)
+- [ ] Curated UK IPTV playlist (33 channels)
 
 ## Phase 1b: AI Persona Layer (COMPLETE)
 
@@ -112,7 +113,7 @@
   - [ ] Latency measurement (ping-like round-trip timing via fetch)
 - [ ] Browser scan results integrated into the same dashboard and history store
 - [ ] Progressive Web App (PWA) support for offline access to past scan results
-- [ ] Remote scan trigger: start a full CLI scan on the Mac from the mobile browser
+- [x] Remote scan trigger: start a full CLI scan on the Mac from the mobile browser (API route + ScanRunner UI with live progress)
 
 ## Phase 7: Continuous Monitoring (IN PROGRESS)
 
@@ -121,5 +122,5 @@
 - [x] Event stream output (NDJSON) for piping into external SIEM/monitoring tools
 - [ ] Anomaly detection: baseline normal network behaviour, flag deviations
 - [ ] Device tracking: log when devices join/leave, build presence timeline
-- [ ] Signal quality trending: track WiFi SNR, latency, packet loss over time
+- [ ] Signal quality trending: extend `rf --trend` (SNR done) to also track latency, jitter, and packet loss over time
 - [ ] Threat correlation: cross-reference nearby network changes with intrusion indicators
