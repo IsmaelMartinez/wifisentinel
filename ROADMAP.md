@@ -96,7 +96,25 @@
 - [x] Upgrade TypeScript from 5.x to 6.x — added `"types": ["node"]` to tsconfig.json
 - [x] Upgrade `@types/node` from 22.x to 25.x
 
-## Phase 6: Continuous Monitoring (IN PROGRESS)
+## Phase 6: Mobile & Browser Support (IN PROGRESS)
+
+- [x] Responsive dashboard: collapsible sidebar, adaptive grids, mobile-friendly scan history cards
+- [x] Lightweight `/mobile` page: compact card-based summary for quick phone glances
+- [x] Viewport meta tag and touch-friendly tap targets
+- [ ] Browser-based network scan: gather what the browser can see without system commands
+  - [ ] Connection quality via Network Information API (`navigator.connection` — RTT, downlink, effectiveType)
+  - [ ] Speed test via fetch (download/upload blob timing)
+  - [ ] DNS resolution timing via Resource Timing API
+  - [ ] Public IP detection and geolocation (via external API)
+  - [ ] Local IP discovery via WebRTC (where browser permits)
+  - [ ] DNS security checks via DNS-over-HTTPS (DoH) queries
+  - [ ] TLS and security header analysis of user-specified URLs (via server-side proxy)
+  - [ ] Latency measurement (ping-like round-trip timing via fetch)
+- [ ] Browser scan results integrated into the same dashboard and history store
+- [ ] Progressive Web App (PWA) support for offline access to past scan results
+- [ ] Remote scan trigger: start a full CLI scan on the Mac from the mobile browser
+
+## Phase 7: Continuous Monitoring (IN PROGRESS)
 
 - [x] `wifisentinel watch` mode: continuous scanning at configurable intervals
 - [x] Real-time alerting on network changes (new hosts, dropped hosts, security changes)
