@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
         <SidebarNav />
-        <main className="pt-14 min-h-screen p-4 md:pt-0 md:pl-56 md:p-6">
+        <main className="pt-14 min-h-screen p-4 md:p-6 md:pl-56">
           {children}
         </main>
       </body>
