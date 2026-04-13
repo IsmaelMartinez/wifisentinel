@@ -141,14 +141,14 @@ export default function MobilePage() {
       </div>
 
       {/* Priority actions */}
-      {analysis.priorityActions.length > 0 && (
+      {analysis.consensusActions.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
             <span className="text-xs font-semibold">Priority Actions</span>
           </div>
           <div className="space-y-1.5">
-            {analysis.priorityActions.slice(0, 5).map((action, i) => (
+            {analysis.consensusActions.slice(0, 5).map((action, i) => (
               <p key={i} className="text-xs text-muted-foreground leading-relaxed">
                 {i + 1}. {action}
               </p>
