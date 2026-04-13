@@ -62,7 +62,7 @@ export default function TrendsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Trends</h1>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
         <Card>
           <CardHeader><CardTitle className="text-base">Security Score</CardTitle></CardHeader>
           <CardContent>

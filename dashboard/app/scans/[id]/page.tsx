@@ -31,8 +31,8 @@ export default async function ScanDetailPage({
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl sm:text-2xl font-bold">
             Scan Report
           </h1>
           <a
@@ -43,14 +43,14 @@ export default async function ScanDetailPage({
             Export HTML
           </a>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground break-words">
           {scan.wifi.ssid ?? "(hidden)"} &middot; {new Date(scan.meta.timestamp).toLocaleString()} &middot;
           ID: <span className="font-mono">{scan.meta.scanId.slice(0, 8)}</span>
         </p>
       </div>
 
       <Tabs defaultValue="summary">
-        <TabsList>
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="personas">Personas</TabsTrigger>
           <TabsTrigger value="compliance">Compliance</TabsTrigger>
@@ -59,7 +59,7 @@ export default async function ScanDetailPage({
 
         {/* Summary Tab */}
         <TabsContent value="summary" className="space-y-4 mt-4" aria-label="Summary">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
             <Card>
               <CardContent className="flex flex-col items-center pt-6">
                 <ScoreGauge score={score} />
@@ -88,7 +88,7 @@ export default async function ScanDetailPage({
             </Card>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <Card>
               <CardHeader><CardTitle className="text-base">Security Posture</CardTitle></CardHeader>
               <CardContent className="text-sm space-y-1">
