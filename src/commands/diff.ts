@@ -2,8 +2,7 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { loadScan } from "../store/index.js";
-import { diffScans, type ScanDiff, type FieldChange, type HostChange } from "../store/diff.js";
-import { pad } from "../reporter/render-helpers.js";
+import { diffScans, type FieldChange, type HostChange } from "../store/diff.js";
 
 function directionMarker(dir: string): string {
   if (dir === "improved") return chalk.green("+");

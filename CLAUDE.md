@@ -20,22 +20,24 @@ npm run dev -- scan --analyse -v                               # full analysis w
 npm run dev -- scan -o json -f report.json                     # JSON output to file
 npm run dev -- scan --otel otlp                                # enable OTEL tracing
 npm run dev -- analyse -v                                      # dedicated analysis command
-npm run dev -- tv                                              # LG webOS TV control (side quest)
+npm run dev -- watch --interval 10m                            # continuous monitoring with alerting
+npm run dev -- devices                                         # per-MAC presence timelines from history
+npm run dev -- recon example.com --analyse                     # external attack surface recon
 ```
 
 Tests are in `tests/` and run with `npm test` (Node built-in test runner via tsx). ESLint is configured in `eslint.config.js` and run with `npm run lint`.
 
 ## Architecture
 
-WiFi Sentinel is a macOS-focused CLI tool that scans the local network and produces multi-persona security reports. It runs system commands (nmap, arp, ifconfig, etc.) and parses their output to build a structured `NetworkScanResult`.
+WiFi Sentinel is a CLI tool (macOS-first, with a Linux path) that scans the local network and produces multi-persona security reports. It runs system commands (nmap, arp, ifconfig, ip, iw, nmcli, etc.) and parses their output to build a structured `NetworkScanResult`.
 
 The pipeline flows: CLI (commander) -> Collector -> Scanners -> Analyser -> Reporter.
 
 ### `src/collector/` — Data collection layer
 
-The collector orchestrates all scanning. `tool-resolver.ts` implements a three-tier fallback chain (preferred -> fallback -> minimal) for each capability (e.g. nmap -> arp-scan -> arp for host discovery). `exec.ts` provides safe command execution via `execFileSync`/`execFile` (no shell, avoiding injection). Nine scanners in `scanners/` each parse output from system tools into typed data. `schema/scan-result.ts` is the central Zod-validated schema — the `NetworkScanResult` type flows through everything.
+The collector orchestrates all scanning. `tool-resolver.ts` implements a three-tier fallback chain (preferred -> fallback -> minimal) for each capability (e.g. nmap -> arp-scan -> arp for host discovery). `exec.ts` provides safe command execution via `execFileSync`/`execFile` (no shell, avoiding injection). Ten scanners in `scanners/` each parse output from system tools into typed data (wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, deauth, speed). `schema/scan-result.ts` is the central Zod-validated schema — the `NetworkScanResult` type flows through everything. The `traffic` field in the schema is reserved for a future traffic-capture scanner; it is currently not populated (see ROADMAP Phase 1).
 
-Network detection is hardcoded to `en0` (macOS WiFi interface). The scan runs in stages: parallel independent scans first (wifi, dns, security, connections), then host discovery, then deep analysis (ports, hidden devices, intrusion detection), and finally speed test last to avoid skewing results.
+Network detection branches by platform: macOS uses `ifconfig en0` + `networksetup`; Linux uses `ip route` + `ip addr` to pick the default wireless interface. The scan runs in stages: parallel independent scans first (wifi, dns, security, connections), then host discovery, then deep analysis (ports, hidden devices, intrusion detection, deauth detection), and finally speed test last to avoid skewing results.
 
 ### `src/analyser/` — AI persona and standards scoring
 
@@ -43,15 +45,19 @@ Two sub-modules produce the analysis layer. `personas/` contains five analysis f
 
 ### `src/reporter/` — Output formatting
 
-Three reporters: `terminal.reporter.ts` produces coloured ASCII output with a scorecard, `analysis.reporter.ts` adds persona perspectives and standards scoring, `json.reporter.ts` emits structured JSON with both scan data and analysis. `render-helpers.ts` has shared chalk-based formatting utilities.
+Core reporters: `terminal.reporter.ts` produces coloured ASCII output with a scorecard, `analysis.reporter.ts` adds persona perspectives and standards scoring, `json.reporter.ts` emits structured JSON with both scan data and analysis, `html.reporter.ts` renders a shareable HTML export. Specialised reporters cover RF (`rf.reporter.ts`), recon (`recon.reporter.ts`, `recon-json.reporter.ts`), watch-mode events (`watch.reporter.ts`), and the live progress renderer (`progress.renderer.ts`). `render-helpers.ts` has shared chalk-based formatting utilities.
+
+### `src/commands/` — Additional CLI commands
+
+Beyond `scan` / `analyse` (registered directly in `cli.ts`), each file in `src/commands/` registers one sub-command on the Commander program: `history`, `diff`, `trend`, `schedule`, `rf`, `export`, `recon`, `recon-history`, `watch` (continuous monitoring), `devices` (per-MAC presence timelines aggregated from scan history).
+
+### `src/store/` — Scan persistence
+
+`src/store/index.ts` persists scans to `~/.wifisentinel/scans/` as JSON files with a validated index. `recon-store.ts` does the same for recon results. `diff.ts` computes structural deltas between two stored scans.
 
 ### `src/telemetry/` — OpenTelemetry instrumentation
 
 Tracing wraps scan phases in spans via `withSpan()`. Metrics record tool resolution tiers and scan durations. Supports console, OTLP, or no-op exporters.
-
-### `src/tools/tv/` — LG webOS TV controller (side quest)
-
-SSAP-over-WebSocket client for LG TVs. Separate from the scanning pipeline.
 
 ## Conventions
 

@@ -28,13 +28,6 @@ function parseChannel(raw: string): { channel: number; band: string; width: stri
   return { channel, band, width };
 }
 
-function parseSignalNoise(signalStr: string, noiseStr: string): { signal: number; noise: number; snr: number } {
-  const signal = parseInt(signalStr, 10) || 0;
-  const noise = parseInt(noiseStr, 10) || 0;
-  const snr = noise !== 0 ? signal - noise : 0;
-  return { signal, noise, snr };
-}
-
 function parseTxRate(raw: string): number {
   const match = raw.match(/([\d.]+)/);
   return match ? parseFloat(match[1]) : 0;
@@ -43,42 +36,6 @@ function parseTxRate(raw: string): number {
 function parseMacRandomised(raw: string): boolean {
   const lower = raw.toLowerCase();
   return lower === "enabled" || lower === "yes" || lower === "true";
-}
-
-/**
- * Parse a single Wi-Fi network block from system_profiler output.
- * The block is the indented lines under a network SSID heading.
- */
-function parseNetworkBlock(block: string): Partial<NearbyNetwork> & { ssid?: string | null } {
-  const get = (key: string): string => {
-    const re = new RegExp(`^\\s*${key}:\\s*(.+)$`, "im");
-    const m = block.match(re);
-    return m ? m[1].trim() : "";
-  };
-
-  const ssidRaw = get("SSID");
-  const ssid = ssidRaw || null;
-  const bssid = get("BSSID") || get("Network ID") || undefined;
-  const security = get("Security") || get("Network Security") || "Unknown";
-  const protocol = get("PHY Mode") || get("802.11 Protocol") || "Unknown";
-
-  const channelRaw = get("Channel");
-  const { channel } = parseChannel(channelRaw);
-
-  const signalRaw = get("Signal / Noise") || get("Signal");
-  let signal: number;
-  let noise: number;
-  if (signalRaw.includes("/")) {
-    const parts = signalRaw.split("/");
-    signal = parseInt(parts[0].trim(), 10) || 0;
-    noise = parseInt(parts[1]?.trim() ?? "0", 10) || 0;
-  } else {
-    signal = parseInt(signalRaw, 10) || 0;
-    const noiseRaw = get("Noise");
-    noise = parseInt(noiseRaw, 10) || 0;
-  }
-
-  return { ssid, bssid, security, protocol, channel, signal, noise };
 }
 
 /**
@@ -108,7 +65,6 @@ function parseSystemProfiler(output: string): WifiResult {
     return m ? m[1].trim() : "";
   };
 
-  const ssid = get("Current Network Information") || null;
   // system_profiler uses a heading like: "      MySSID:"
   // Current connection info is under "Current Network Information:" block
   const currentMatch = output.match(/Current Network Information:\s*\n([\s\S]*?)(?:\n\s{4,}\S|\n\s*Other Local Wi-Fi Networks:|$)/i);

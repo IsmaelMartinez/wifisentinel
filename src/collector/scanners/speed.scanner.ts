@@ -55,14 +55,13 @@ async function pingTarget(target: string, count: number): Promise<PingStats> {
 }
 
 async function measureDnsResolution(): Promise<number> {
-  const start = Date.now();
-  // Resolve a domain that's unlikely to be cached
+  // Warm the resolver path with a random (likely uncached) lookup
   const random = Math.random().toString(36).substring(2, 8);
   run("dig", [`${random}.example.com`, "+short", "+time=3"], 5_000);
-  // Also measure a real domain
-  const start2 = Date.now();
+  // Measure a real domain
+  const start = Date.now();
   run("dig", ["cloudflare.com", "+short", "+time=3"], 5_000);
-  return Date.now() - start2;
+  return Date.now() - start;
 }
 
 interface DownloadResult {

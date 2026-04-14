@@ -51,7 +51,6 @@ function checkEncryptionStrength(result: NetworkScanResult): Finding {
   const isWpa3 = sec.includes("wpa3");
   const isWpa2 = sec.includes("wpa2");
   const isWep = sec.includes("wep");
-  const isOpen = sec === "none" || sec === "open";
 
   let status: Finding["status"];
   if (isWpa3) status = "pass";
@@ -97,10 +96,6 @@ function checkKeyManagement(result: NetworkScanResult): Finding {
 
 function checkIntrusionDetection(result: NetworkScanResult): Finding {
   const hasIntrusion = !!result.intrusionIndicators;
-  const arpMonitored =
-    hasIntrusion && result.intrusionIndicators!.arpAnomalies !== undefined;
-  const scanDetection =
-    hasIntrusion && result.intrusionIndicators!.scanDetection.length >= 0;
 
   return {
     id: "NIST-W-3.1",
@@ -168,7 +163,6 @@ function checkDoubleNat(result: NetworkScanResult): Finding {
 
 function checkGatewaySecurity(result: NetworkScanResult): Finding {
   const gw = result.network.gateway;
-  const hasVendor = !!gw.vendor;
   const firewallEnabled = result.security.firewall.enabled;
 
   return {
