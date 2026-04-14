@@ -87,7 +87,15 @@ export function ScanRunner() {
       });
 
       if (!response.ok || !response.body) {
-        setError(`Scan failed: ${response.statusText}`);
+        // Try to extract a helpful JSON error body (e.g. 409 "already running")
+        let detail = response.statusText;
+        try {
+          const body = await response.json();
+          if (body && typeof body.error === "string") detail = body.error;
+        } catch {
+          // Non-JSON body — fall back to statusText
+        }
+        setError(`Scan failed: ${detail}`);
         setRunning(false);
         return;
       }
