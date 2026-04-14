@@ -16,6 +16,7 @@ import { registerExportCommand } from "./commands/export.js";
 import { registerReconCommand } from "./commands/recon.js";
 import { registerReconHistoryCommand } from "./commands/recon-history.js";
 import { registerWatchCommand } from "./commands/watch.js";
+import { registerDevicesCommand } from "./commands/devices.js";
 import { saveScan } from "./store/index.js";
 import { analyseRF } from "./analyser/rf/index.js";
 import { scoreAllStandards } from "./analyser/standards/index.js";
@@ -215,5 +216,6 @@ registerExportCommand(program);
 registerReconCommand(program);
 registerReconHistoryCommand(program);
 registerWatchCommand(program);
+registerDevicesCommand(program);
 
 program.parse();

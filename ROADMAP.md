@@ -121,6 +121,6 @@
 - [x] Real-time alerting on network changes (new hosts, dropped hosts, security changes)
 - [x] Event stream output (NDJSON) for piping into external SIEM/monitoring tools
 - [ ] Anomaly detection: baseline normal network behaviour, flag deviations
-- [ ] Device tracking: log when devices join/leave, build presence timeline
+- [x] Device tracking: `wifisentinel devices` aggregates scan history into per-MAC presence timelines with join/leave sessions, ratio, and metadata (hostnames, vendors, IPs, device types, camera flag)
 - [ ] Signal quality trending: extend `rf --trend` (SNR done) to also track latency, jitter, and packet loss over time
 - [ ] Threat correlation: cross-reference nearby network changes with intrusion indicators
