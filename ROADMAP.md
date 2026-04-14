@@ -5,15 +5,13 @@
 - [x] Design spec and investigation spike
 - [x] Core schema (NetworkScanResult + zod validation)
 - [x] Tool resolver with three-tier fallback chains
-- [x] 9 scanner modules: wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, speed
+- [x] 10 scanner modules: wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, deauth, speed
 - [ ] Traffic analysis scanner (schema and `--skip-traffic` flag wired up, implementation pending)
 - [x] OTEL tracing and metrics layer
 - [x] Terminal reporter with ASCII output and scorecard
 - [x] CLI entry point (scan command)
 - [x] Tuning: gateway detection, DNS false positives, camera detection, WiFi parsing
 - [x] Tested on two live networks (Airbnb Amsterdam 8.2/10, home UK 8.7/10)
-- [ ] LG webOS TV controller (SSAP over wss://3001) — side quest (not yet implemented)
-- [ ] Curated UK IPTV playlist (33 channels)
 
 ## Phase 1b: AI Persona Layer (COMPLETE)
 
@@ -124,3 +122,10 @@
 - [x] Device tracking: `wifisentinel devices` aggregates scan history into per-MAC presence timelines with join/leave sessions, ratio, and metadata (hostnames, vendors, IPs, device types, camera flag)
 - [ ] Signal quality trending: extend `rf --trend` (SNR done) to also track latency, jitter, and packet loss over time
 - [ ] Threat correlation: cross-reference nearby network changes with intrusion indicators
+
+## Deferred / Side Quests
+
+These are exploratory ideas that are on-hold — no implementation has landed and they are not on the active roadmap.
+
+- [ ] LG webOS TV controller (SSAP over `wss://…:3001`) — discovered via the scanner's host discovery, originally planned as a scriptable remote. No code in the repo.
+- [ ] Curated UK IPTV playlist — `public/uk-freeview-plus.m3u` is checked in, but no CLI command consumes it.

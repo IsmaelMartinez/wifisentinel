@@ -14,7 +14,7 @@ Multi-persona WiFi and network security analyser with compliance scoring, RF int
 
 **External reconnaissance** — `recon <domain>` maps the external attack surface of a domain: DNS enumeration (brute + certificate transparency), WHOIS, TLS/SSL grading, and HTTP security header analysis. Results are scored and analysed through the same persona layer.
 
-**Scan history and observability** — scans are persisted to `~/.wifisentinel/scans/`. `history`, `trend`, and `diff` commands let you review past scans, track compliance over time, and compare two scan snapshots. Scheduled scanning via launchd/cron is available through the `schedule` command.
+**Scan history and observability** — scans are persisted to `~/.wifisentinel/scans/`. `history`, `trend`, and `diff` commands let you review past scans, track compliance over time, and compare two scan snapshots. `devices` aggregates scan history into per-MAC presence timelines. Scheduled scanning via launchd/cron is available through the `schedule` command, and `watch` runs continuous scans with alerting on changes.
 
 **Dashboard** — Next.js app (dark theme, shadcn/ui) showing scan details, real-time persona perspectives, historical trends, and compliance tracking. HTML report export from both CLI and dashboard.
 
@@ -83,6 +83,8 @@ wifisentinel recon example.com
 |---|---|
 | `scan` | Scan the current network and produce a security report |
 | `analyse` | Scan + full multi-persona analysis and compliance scoring |
+| `watch` | Continuous scanning at a configurable interval with alerting on changes |
+| `devices` | Per-MAC presence timelines aggregated from scan history |
 | `rf` | RF channel map, saturation scores, rogue AP detection |
 | `recon <domain>` | External attack surface mapping for a domain |
 | `export` | Export a past scan as an HTML report |
@@ -95,14 +97,42 @@ wifisentinel recon example.com
 ### `scan` / `analyse` options
 
 ```text
--o, --output <format>   Output format: terminal, json  (default: terminal)
--f, --file <path>       Write output to file instead of stdout
---skip-ports            Skip port scanning
---skip-traffic          Skip traffic analysis
---skip-speed            Skip speed test
---otel <exporter>       OTEL exporter: console, otlp, none  (default: none)
--v, --verbose           Verbose output
---no-save               Skip saving scan to history
+-o, --output <format>       Output format: terminal, json  (default: terminal)
+-f, --file <path>           Write output to file instead of stdout
+--skip-ports                Skip port scanning
+--skip-traffic              Skip traffic analysis (reserved — scanner not yet implemented)
+--skip-speed                Skip speed test
+--no-vendor-lookup          Skip MAC vendor lookups (no calls to api.macvendors.com)
+--stealth                   Passive host discovery, randomised port timing, skip speed/traffic
+--monitor-interface <iface> (scan only) Enable deauth detection via monitor mode on this interface
+--events                    (scan only) Output scan events as NDJSON instead of a report
+--otel <exporter>           OTEL exporter: console, otlp, none  (default: none)
+-v, --verbose               Verbose output
+--analyse                   (scan only) Include multi-persona analysis in the output
+--no-save                   Skip saving scan to history
+```
+
+### `watch` options
+
+```text
+--interval <minutes>             Scan interval in minutes (default: 5)
+--no-alert-new-hosts             Disable alerts on newly joined hosts
+--no-alert-dropped-hosts         Disable alerts on hosts leaving
+--no-alert-security-change       Disable alerts on security/WiFi changes
+--events                         Output NDJSON events to stdout instead of a rendered report
+--skip-ports / --skip-speed      Reduce per-cycle cost
+--stealth                        Passive, randomised scanning
+```
+
+### `devices` options
+
+```text
+-n, --limit <count>     Number of scans to include (default: 50)
+--ssid <name>           Filter by SSID
+--active                Show only currently present devices
+--mac <mac>             Show a detailed timeline for a specific MAC (prefix match)
+--since <date>          Only include scans at or after this ISO date
+--json                  Output as JSON
 ```
 
 ### `recon` options
@@ -186,6 +216,12 @@ wifisentinel diff <id1> <id2>
 
 # Set up automatic scanning every 6 hours
 wifisentinel schedule enable
+
+# Continuous monitoring in the foreground with change alerts
+wifisentinel watch --interval 10
+
+# Who has been on the network (aggregated from the last 50 scans)
+wifisentinel devices
 ```
 
 If you haven't run `npm link`, use `npm run dev -- <command>` instead.

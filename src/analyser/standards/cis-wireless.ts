@@ -35,7 +35,6 @@ function checkEncryption(result: NetworkScanResult): Finding {
   const isWpa3 = sec.includes("wpa3");
   const isWpa2 = sec.includes("wpa2");
   const isWep = sec.includes("wep");
-  const isOpen = sec === "none" || sec === "open";
 
   let status: Finding["status"] = "fail";
   if (isWpa3) status = "pass";

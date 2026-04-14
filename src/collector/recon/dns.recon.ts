@@ -24,7 +24,7 @@ const SUBDOMAIN_PREFIXES = [
   "portal",
 ];
 
-function parseDigRecords(output: string, type: string, domain: string): DnsRecord[] {
+function parseDigRecords(output: string, type: string): DnsRecord[] {
   const records: DnsRecord[] = [];
   for (const line of output.split("\n")) {
     const trimmed = line.trim();
@@ -48,7 +48,7 @@ function parseDigRecords(output: string, type: string, domain: string): DnsRecor
 function queryRecords(domain: string, type: string): DnsRecord[] {
   const result = run("dig", ["+noall", "+answer", domain, type], 10_000);
   if (result.exitCode !== 0) return [];
-  return parseDigRecords(result.stdout, type, domain);
+  return parseDigRecords(result.stdout, type);
 }
 
 function discoverSubdomains(

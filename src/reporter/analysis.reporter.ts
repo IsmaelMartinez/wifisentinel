@@ -1,10 +1,9 @@
 import chalk from "chalk";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import { scoreAllStandards } from "../analyser/standards/index.js";
-import type { ComplianceReport, FindingStatus, Finding } from "../analyser/standards/types.js";
+import type { ComplianceReport, FindingStatus } from "../analyser/standards/types.js";
 import { analyseAllPersonas } from "../analyser/personas/index.js";
-import type { FullAnalysis, PersonaId, Insight } from "../analyser/personas/types.js";
-import type { RiskRating } from "../analyser/personas/types.js";
+import type { FullAnalysis, PersonaId } from "../analyser/personas/types.js";
 import { W, hRule, sectionHeader, row, scoreBar, link } from "./render-helpers.js";
 import { renderTerminalReport } from "./terminal.reporter.js";
 

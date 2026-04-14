@@ -1,6 +1,6 @@
 // src/reporter/rf.reporter.ts
 import chalk from "chalk";
-import type { RFAnalysis, ChannelInfo, RogueAPFinding, EnvironmentChange } from "../analyser/rf/index.js";
+import type { RFAnalysis } from "../analyser/rf/index.js";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
 import { pad } from "./render-helpers.js";
 

@@ -6,11 +6,6 @@ type ArpAnomaly = IntrusionResult["arpAnomalies"][number];
 type SuspiciousHost = IntrusionResult["suspiciousHosts"][number];
 type ScanDetection = IntrusionResult["scanDetection"][number];
 
-interface ArpEntry {
-  ip: string;
-  mac: string;
-}
-
 // Parse `arp -a` output into a map of ip -> mac
 function parseArpTable(output: string): Map<string, string> {
   const table = new Map<string, string>();

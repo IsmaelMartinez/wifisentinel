@@ -4,7 +4,6 @@ import { run } from "./exec.js";
 import {
   resolveAllTools,
   toolchainSummary,
-  type ResolvedToolResult,
 } from "./tool-resolver.js";
 import type { NetworkScanResult } from "./schema/scan-result.js";
 import { scanWifi } from "./scanners/wifi.scanner.js";

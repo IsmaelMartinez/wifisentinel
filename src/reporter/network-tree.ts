@@ -1,6 +1,5 @@
 import chalk from "chalk";
 
-const TEAL = chalk.hex("#4ec9b0");
 const RED = chalk.hex("#f44747");
 const AMBER = chalk.hex("#cca700");
 

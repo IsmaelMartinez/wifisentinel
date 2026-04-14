@@ -1,6 +1,5 @@
 // src/store/diff.ts
 import type { StoredScan } from "./types.js";
-import type { Host } from "../collector/schema/scan-result.js";
 
 export interface FieldChange {
   field: string;
