@@ -1,0 +1,126 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":preserveSemverRanges"
+  ],
+  "labels": ["dependencies"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/London",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 4,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "description": "Group OpenTelemetry packages",
+      "matchPackageNames": ["/^@opentelemetry/"],
+      "groupName": "opentelemetry",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Group React packages",
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ],
+      "groupName": "react",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group Radix UI packages",
+      "matchPackageNames": ["/^@radix-ui/"],
+      "groupName": "radix-ui",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group d3 packages",
+      "matchPackageNames": ["/^d3-/", "/^@types\\/d3-/"],
+      "groupName": "d3",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group Next.js packages",
+      "matchPackageNames": ["next"],
+      "groupName": "nextjs",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group TypeScript tooling",
+      "matchPackageNames": [
+        "typescript",
+        "tsx",
+        "eslint",
+        "@eslint/js",
+        "typescript-eslint",
+        "@types/node"
+      ],
+      "groupName": "typescript-tooling",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group Tailwind / PostCSS tooling",
+      "matchPackageNames": [
+        "tailwindcss",
+        "tailwind-merge",
+        "autoprefixer",
+        "postcss",
+        "class-variance-authority",
+        "clsx"
+      ],
+      "groupName": "tailwind-tooling",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group all remaining non-major CLI dependencies",
+      "matchFileNames": ["package.json"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "cli non-major",
+      "automerge": true
+    },
+    {
+      "description": "Group all remaining non-major dashboard dependencies",
+      "matchFileNames": ["dashboard/package.json"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dashboard non-major",
+      "addLabels": ["dashboard"],
+      "automerge": true
+    },
+    {
+      "description": "Group and auto-merge GitHub Actions digest/patch/minor updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "addLabels": ["ci"],
+      "automerge": true,
+      "pinDigests": true
+    },
+    {
+      "description": "Major updates: separate PRs, no automerge",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["major-update"]
+    }
+  ],
+  "platformAutomerge": true,
+  "automergeStrategy": "squash"
+}
