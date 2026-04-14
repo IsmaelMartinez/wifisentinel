@@ -7,6 +7,23 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    groups:
+      opentelemetry:
+        patterns:
+          - "@opentelemetry/*"
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "tsx"
+          - "eslint"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "@types/node"
+      cli-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: npm
     directory: /dashboard
@@ -16,6 +33,36 @@ updates:
     labels:
       - dependencies
       - dashboard
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      d3:
+        patterns:
+          - "d3-*"
+          - "@types/d3-*"
+      nextjs:
+        patterns:
+          - "next"
+      tailwind-tooling:
+        patterns:
+          - "tailwindcss"
+          - "tailwind-merge"
+          - "autoprefixer"
+          - "postcss"
+          - "class-variance-authority"
+          - "clsx"
+      dashboard-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -23,3 +70,7 @@ updates:
       interval: weekly
     labels:
       - ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
