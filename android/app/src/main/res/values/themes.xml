@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The Compose theme lives in Kotlin (`ui/theme/Theme.kt`). This activity
+      theme only needs to set up edge-to-edge, disable the decor action bar,
+      and pick a Material3 base so the window background is sensible before
+      Compose takes over.
+    -->
+    <style name="Theme.WifiSentinel" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
