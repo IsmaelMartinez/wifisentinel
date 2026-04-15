@@ -120,6 +120,7 @@
   - [ ] Local scan history (Room) + `ActivityResultContracts.CreateDocument` export
   - [ ] Rule-based local analyser (subset of persona rules that are honest to evaluate on-device)
   - [ ] CLI-side `wifisentinel import <file>` command with relaxed schema for `meta.platform: "android"`
+  - [ ] Tests: JVM unit tests for `LocalScanner` stages with fake `WifiManager`/`ConnectivityManager`; instrumentation smoke test on emulator
 
 ## Phase 7: Continuous Monitoring (IN PROGRESS)
 

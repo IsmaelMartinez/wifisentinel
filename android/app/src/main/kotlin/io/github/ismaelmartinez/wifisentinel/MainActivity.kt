@@ -15,15 +15,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +53,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class PermissionState { UNKNOWN, GRANTED, DENIED }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ScanApp() {
@@ -62,6 +65,8 @@ private fun ScanApp() {
 
     var scanning by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<LocalScanResult?>(null) }
+    var permission by remember { mutableStateOf(PermissionState.UNKNOWN) }
+    var showRationale by remember { mutableStateOf(false) }
 
     val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.NEARBY_WIFI_DEVICES
@@ -69,18 +74,39 @@ private fun ScanApp() {
         Manifest.permission.ACCESS_FINE_LOCATION
     }
 
+    val runScan: () -> Unit = {
+        scope.launch {
+            scanning = true
+            result = scanner.scan(appVersion = BuildConfig.VERSION_NAME)
+            scanning = false
+        }
+        Unit
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) {
-            scope.launch {
-                scanning = true
-                // Hard-coded for the spike; switch to BuildConfig.VERSION_NAME
-                // once we enable `buildFeatures { buildConfig = true }`.
-                result = scanner.scan(appVersion = "0.1.0")
-                scanning = false
-            }
-        }
+        permission = if (granted) PermissionState.GRANTED else PermissionState.DENIED
+        if (granted) runScan()
+    }
+
+    if (showRationale) {
+        AlertDialog(
+            onDismissRequest = { showRationale = false },
+            title = { Text(stringResource(R.string.permission_rationale_title)) },
+            text = { Text(stringResource(R.string.permission_rationale_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRationale = false
+                    permissionLauncher.launch(scanPermission)
+                }) { Text(stringResource(R.string.permission_rationale_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRationale = false }) {
+                    Text(stringResource(R.string.permission_rationale_cancel))
+                }
+            },
+        )
     }
 
     Scaffold(
@@ -98,13 +124,28 @@ private fun ScanApp() {
         ) {
             Button(
                 enabled = !scanning,
-                onClick = { permissionLauncher.launch(scanPermission) },
+                onClick = {
+                    when (permission) {
+                        PermissionState.GRANTED -> runScan()
+                        // Show rationale on first tap and after an explicit
+                        // denial so the user knows why we're asking again.
+                        PermissionState.UNKNOWN,
+                        PermissionState.DENIED -> showRationale = true
+                    }
+                },
             ) {
                 Text(stringResource(R.string.scan_now))
             }
 
             if (scanning) {
                 CircularProgressIndicator()
+            }
+
+            if (permission == PermissionState.DENIED) {
+                Text(
+                    text = stringResource(R.string.permission_denied),
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
 
             when (val current = result) {

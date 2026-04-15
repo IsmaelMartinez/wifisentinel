@@ -43,9 +43,10 @@ either omitted or set to a documented sentinel.
 
 | Field | Source | Notes |
 |---|---|---|
-| `wifi.ssid`, `bssid`, `signal`, `frequency`, `security`, `channel` | `WifiManager.connectionInfo`, `ScanResult` | `ssid` requires location permission |
-| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Throttled to 4 per 2 min |
-| `wifi.macRandomised` | `WifiInfo.getMacAddress()` vs hardware MAC | Android randomises per-SSID by default from 10+ |
+| `wifi.ssid`, `bssid`, `signal`, `band`, `channel`, `txRate` | `NetworkCapabilities.transportInfo as WifiInfo` (API 29+) | `ssid`/`bssid` require the runtime scan permission; redacted otherwise |
+| `wifi.security` | Matched `ScanResult.capabilities` for the current BSSID | Requires a fresh `startScan()` — we trigger and await the broadcast |
+| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Throttled to 4 per 2 min; same permission gate |
+| `wifi.macRandomised` | — | **Not observable.** `WifiInfo.getMacAddress()` returns the sanitised `02:00:00:00:00:00` for all non-system callers; the real per-SSID randomisation flag lives in `WifiConfiguration.macRandomizationSetting` which requires a system permission. Omitted from the Android schema. |
 | `network.ip`, `subnet`, `gateway.ip`, `dns.servers` | `DhcpInfo` / `LinkProperties` | Available without extra permissions |
 | `network.gateway.mac` | ARP via `/proc/net/arp` | **Blocked** on modern Android; leave undefined |
 | `network.hosts` | TCP connect sweep + `NsdManager` (mDNS) | Lightweight; no OS fingerprint, no nmap-grade detail |
@@ -94,14 +95,18 @@ so the user is not misled into thinking the phone gave them a full audit.
 ### Data model
 
 `LocalScanResult` is a superset-friendly *subset* of `NetworkScanResult`: same
-field paths where they apply, same value shapes, missing fields omitted.
-This keeps the JSON export drop-in for the CLI's future import path.
+field names where they apply (`signal`, `txRate`, `band`, `channel`, `bssid`,
+`ssid`, `security`), same value shapes, missing fields omitted. This keeps
+the JSON export drop-in for the CLI's future import path.
 
 ### Scan pipeline (parallel where safe)
 
 1. **Permissions gate** — check `ACCESS_FINE_LOCATION` (or
-   `NEARBY_WIFI_DEVICES` on API 33+); prompt once, remember.
-2. **WiFi stage** — `connectionInfo` + `startScan()` + `getScanResults()`.
+   `NEARBY_WIFI_DEVICES` on API 33+); prompt with a rationale dialog, remember
+   the result across button taps within the same process.
+2. **WiFi stage** — `startScan()` → await `SCAN_RESULTS_AVAILABLE_ACTION`
+   broadcast (5 s timeout, fall back to cache) → `WifiInfo` via
+   `NetworkCapabilities.transportInfo` (the non-deprecated path on API 29+).
 3. **Network stage** — `DhcpInfo`, `LinkProperties`, VPN state.
 4. **Host discovery** — `NsdManager` service-type sweep (configurable list:
    `_http._tcp`, `_ipp._tcp`, `_airplay._tcp`, `_homekit._tcp`, `_ssh._tcp`,
@@ -122,9 +127,9 @@ Runtime (must be prompted):
 - `NEARBY_WIFI_DEVICES` — Android 13+, paired with
   `android:usesPermissionFlags="neverForLocation"`.
 
-The UX shows a one-shot rationale dialog (`Compose` `Dialog`) explaining why
-location is required for WiFi scanning, following Google's current
-guidelines.
+The UX shows a rationale dialog (Material3 `AlertDialog`) on the first tap
+and after any denial, explaining why the scan permission is required before
+the system dialog appears. This is implemented in `MainActivity.ScanApp()`.
 
 ## 6. Sync story (no LAN)
 
@@ -172,9 +177,12 @@ The skeleton under `android/` is a spike, not a feature-complete app. It ships:
 
 - A buildable Gradle project (AGP 8.7, Kotlin 2.0).
 - Manifest with the permissions listed above.
-- A single `MainActivity` + Compose scaffold.
-- A `LocalScanner` with the WiFi stage implemented and the other stages
-  stubbed with `TODO()`-style placeholders that return empty data.
+- A single `MainActivity` + Compose scaffold, with a rationale dialog and
+  a "permission denied" state.
+- A `LocalScanner` with the WiFi and network stages implemented — including
+  `startScan()` + broadcast-await so `security` is derived from fresh data
+  rather than a stale cache — and the host-discovery / latency stages
+  stubbed with empty-list placeholders.
 - A `LocalScanResult` data class that matches the schema subset in §3.
 
 It deliberately does **not** include:

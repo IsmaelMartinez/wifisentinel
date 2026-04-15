@@ -1,17 +1,25 @@
 package io.github.ismaelmartinez.wifisentinel.scan
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.wifi.ScanResult
+import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.util.UUID
+import kotlin.coroutines.resume
 
 /**
  * Orchestrates the on-device scan pipeline. Stages run sequentially for now
@@ -32,13 +40,19 @@ class LocalScanner(private val context: Context) {
      * the work happens on `Dispatchers.IO`.
      */
     suspend fun scan(appVersion: String): LocalScanResult = withContext(Dispatchers.IO) {
+        // Kick off a fresh AP scan up front so `deriveSecurity` isn't reading
+        // whatever stale cache the system last populated. The call is rate-
+        // limited (4 per 2 min on API 28+); if it's denied or times out we
+        // fall back to whatever's in cache.
+        val freshScan = requestFreshScanResults()
+
         LocalScanResult(
             meta = LocalScanResult.Meta(
                 scanId = UUID.randomUUID().toString(),
                 timestamp = Instant.now().toString(),
                 appVersion = appVersion,
             ),
-            wifi = captureWifi(),
+            wifi = captureWifi(freshScan),
             network = captureNetwork(),
             // Host discovery, latency probe, and analyser are deliberately
             // unimplemented in the spike. See docs/android-companion.md §9.
@@ -47,26 +61,40 @@ class LocalScanner(private val context: Context) {
         )
     }
 
-    private fun captureWifi(): LocalScanResult.Wifi? {
+    private fun captureWifi(scanResults: List<ScanResult>): LocalScanResult.Wifi? {
         if (!hasScanPermission()) return null
 
-        @Suppress("DEPRECATION")
-        val info = wifiManager.connectionInfo ?: return null
+        val info = currentWifiInfo() ?: return null
         if (info.networkId == -1) return null
 
         val frequencyMhz = info.frequency
+        val bssid = info.bssid?.takeIf { it.isNotEmpty() && it != "02:00:00:00:00:00" }
         return LocalScanResult.Wifi(
             ssid = info.ssid?.trim('"')?.takeIf { it.isNotEmpty() && it != "<unknown ssid>" },
-            bssid = info.bssid?.takeIf { it.isNotEmpty() && it != "02:00:00:00:00:00" },
+            bssid = bssid,
             // `WifiInfo` doesn't expose the security type directly — derive it
-            // from the matching `ScanResult` when we have scan permission.
-            security = deriveSecurity(info.bssid),
-            frequencyMhz = frequencyMhz,
+            // from the matching entry in the scan result set.
+            security = deriveSecurity(bssid, scanResults),
             channel = frequencyToChannel(frequencyMhz),
-            rssi = info.rssi,
-            linkSpeedMbps = info.linkSpeed,
-            macRandomised = macRandomisedOrNull(info),
+            band = frequencyToBand(frequencyMhz),
+            signal = info.rssi,
+            txRate = info.linkSpeed,
         )
+    }
+
+    /**
+     * On API 31+ the `WifiManager.getConnectionInfo()` path returns a
+     * redacted `WifiInfo` to non-system callers; the supported route is
+     * `NetworkCapabilities.getTransportInfo()`. `getTransportInfo()` exists
+     * since API 29, so we use it uniformly and only fall back to the
+     * deprecated getter if there is no active network.
+     */
+    private fun currentWifiInfo(): WifiInfo? {
+        val active = connectivityManager.activeNetwork
+        val caps = active?.let { connectivityManager.getNetworkCapabilities(it) }
+        (caps?.transportInfo as? WifiInfo)?.let { return it }
+        @Suppress("DEPRECATION")
+        return wifiManager.connectionInfo
     }
 
     private fun captureNetwork(): LocalScanResult.Network {
@@ -89,11 +117,9 @@ class LocalScanner(private val context: Context) {
         )
     }
 
-    private fun deriveSecurity(bssid: String?): String {
-        if (bssid == null || !hasScanPermission()) return "unknown"
-        @Suppress("DEPRECATION")
-        val results = runCatching { wifiManager.scanResults }.getOrElse { return "unknown" }
-        val match = results.firstOrNull { it.BSSID.equals(bssid, ignoreCase = true) }
+    private fun deriveSecurity(bssid: String?, scanResults: List<ScanResult>): String {
+        if (bssid == null) return "unknown"
+        val match = scanResults.firstOrNull { it.BSSID.equals(bssid, ignoreCase = true) }
             ?: return "unknown"
         val capabilities = match.capabilities ?: return "unknown"
         return when {
@@ -103,6 +129,73 @@ class LocalScanner(private val context: Context) {
             "WEP" in capabilities -> "WEP"
             capabilities.contains("ESS") && !capabilities.contains("WPA") -> "Open"
             else -> "unknown"
+        }
+    }
+
+    /**
+     * Request a fresh WiFi scan and suspend until the system broadcasts that
+     * new results are available. Returns the cached results if the scan is
+     * throttled, denied, or doesn't complete within [timeoutMs].
+     */
+    private suspend fun requestFreshScanResults(
+        timeoutMs: Long = 5_000,
+    ): List<ScanResult> {
+        if (!hasScanPermission()) return emptyList()
+
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine<List<ScanResult>> { cont ->
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(ctx: Context, intent: Intent) {
+                        try {
+                            context.unregisterReceiver(this)
+                        } catch (_: IllegalArgumentException) {
+                            // Already unregistered — safe to ignore.
+                        }
+                        if (cont.isActive) cont.resume(readCachedScanResults())
+                    }
+                }
+
+                ContextCompat.registerReceiver(
+                    context,
+                    receiver,
+                    IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
+                    ContextCompat.RECEIVER_NOT_EXPORTED,
+                )
+
+                cont.invokeOnCancellation {
+                    try {
+                        context.unregisterReceiver(receiver)
+                    } catch (_: IllegalArgumentException) {
+                        // Already unregistered.
+                    }
+                }
+
+                @Suppress("DEPRECATION")
+                val started = try {
+                    wifiManager.startScan()
+                } catch (_: SecurityException) {
+                    false
+                }
+                if (!started) {
+                    // Throttled or denied — resume with whatever is cached so
+                    // the caller isn't blocked for the full timeout.
+                    try {
+                        context.unregisterReceiver(receiver)
+                    } catch (_: IllegalArgumentException) {
+                        // Already unregistered.
+                    }
+                    if (cont.isActive) cont.resume(readCachedScanResults())
+                }
+            }
+        } ?: readCachedScanResults()
+    }
+
+    private fun readCachedScanResults(): List<ScanResult> {
+        return try {
+            @Suppress("DEPRECATION")
+            wifiManager.scanResults ?: emptyList()
+        } catch (_: SecurityException) {
+            emptyList()
         }
     }
 
@@ -116,23 +209,27 @@ class LocalScanner(private val context: Context) {
             PackageManager.PERMISSION_GRANTED
     }
 
-    private fun macRandomisedOrNull(info: android.net.wifi.WifiInfo): Boolean? {
-        // `WifiInfo.macAddress` has been deprecated and mostly stubbed to
-        // "02:00:00:00:00:00" since API 24; treat that sentinel as "yes,
-        // randomised" and leave everything else ambiguous.
-        @Suppress("DEPRECATION")
-        val reported = info.macAddress ?: return null
-        return reported == "02:00:00:00:00:00"
-    }
-
     private fun formatIpv4(value: Int): String =
         "${value and 0xFF}.${(value shr 8) and 0xFF}.${(value shr 16) and 0xFF}.${(value shr 24) and 0xFF}"
 
+    /**
+     * Channel numbering reference: IEEE 802.11-2020 §17 for 2.4/5 GHz; the
+     * 6 GHz case uses the WiFi 6E channel indexing where channel `n`
+     * corresponds to `5950 + 5n` MHz (so channel 1 = 5955 MHz, channel 5 =
+     * 5975 MHz, …).
+     */
     private fun frequencyToChannel(freqMhz: Int): Int = when {
         freqMhz == 2484 -> 14
         freqMhz in 2412..2472 -> (freqMhz - 2407) / 5
         freqMhz in 5170..5825 -> (freqMhz - 5000) / 5
-        freqMhz in 5955..7115 -> (freqMhz - 5950) / 5 // 6 GHz / WiFi 6E
+        freqMhz in 5955..7115 -> (freqMhz - 5950) / 5
         else -> 0
+    }
+
+    private fun frequencyToBand(freqMhz: Int): String = when {
+        freqMhz in 2400..2500 -> "2.4 GHz"
+        freqMhz in 5000..5900 -> "5 GHz"
+        freqMhz in 5925..7125 -> "6 GHz"
+        else -> "unknown"
     }
 }
