@@ -54,11 +54,8 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
-      - name: Install CLI dependencies
-        run: npm ci
-
       - name: Install dashboard dependencies
         run: cd dashboard && npm ci
 
       - name: Build dashboard
-        run: cd dashboard && npx next build
+        run: cd dashboard && npm run build
