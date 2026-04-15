@@ -23,11 +23,15 @@ const nextConfig: NextConfig = {
     };
     // The dashboard reuses sources from ../src that import packages like `zod`.
     // Webpack's default resolution walks up from the file's directory, which
-    // never reaches dashboard/node_modules. Prepend it so those imports resolve
-    // against the dashboard's installed dependencies.
+    // never reaches dashboard/node_modules. Prepend the absolute path so those
+    // imports resolve against the dashboard's installed dependencies, while
+    // also keeping the relative "node_modules" entry to preserve webpack's
+    // standard upward traversal for everything else.
+    const existingModules = config.resolve.modules ?? [];
     config.resolve.modules = [
       path.resolve(process.cwd(), "node_modules"),
-      ...(config.resolve.modules ?? ["node_modules"]),
+      ...existingModules,
+      ...(existingModules.includes("node_modules") ? [] : ["node_modules"]),
     ];
     return config;
   },
