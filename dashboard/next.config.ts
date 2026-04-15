@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
       ...config.resolve.extensionAlias,
       ".js": [".ts", ".tsx", ".js", ".jsx"],
     };
+    // The dashboard reuses sources from ../src that import packages like `zod`.
+    // Webpack's default resolution walks up from the file's directory, which
+    // never reaches dashboard/node_modules. Prepend it so those imports resolve
+    // against the dashboard's installed dependencies.
+    config.resolve.modules = [
+      path.resolve(process.cwd(), "node_modules"),
+      ...(config.resolve.modules ?? ["node_modules"]),
+    ];
     return config;
   },
 };
