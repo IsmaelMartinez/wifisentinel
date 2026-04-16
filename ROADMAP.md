@@ -1,12 +1,12 @@
 # WiFi Sentinel — Roadmap
 
-## Phase 1: CLI Scanner (NEAR COMPLETE)
+## Phase 1: CLI Scanner (COMPLETE)
 
 - [x] Design spec and investigation spike
 - [x] Core schema (NetworkScanResult + zod validation)
 - [x] Tool resolver with three-tier fallback chains
-- [x] 10 scanner modules: wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, deauth, speed
-- [ ] Traffic analysis scanner (schema and `--skip-traffic` flag wired up, implementation pending)
+- [x] 11 scanner modules: wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, deauth, speed, traffic
+- [x] Traffic analysis scanner (tshark preferred, tcpdump fallback; protocol breakdown, unencrypted flows, DNS queries, mDNS leaks)
 - [x] OTEL tracing and metrics layer
 - [x] Terminal reporter with ASCII output and scorecard
 - [x] CLI entry point (scan command)

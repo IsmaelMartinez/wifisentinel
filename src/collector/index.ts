@@ -16,6 +16,7 @@ import { scanHiddenDevices } from "./scanners/hidden-device.scanner.js";
 import { scanForIntrusions } from "./scanners/intrusion-detection.scanner.js";
 import { scanDeauth } from "./scanners/deauth.scanner.js";
 import { scanSpeed } from "./scanners/speed.scanner.js";
+import { scanTraffic } from "./scanners/traffic.scanner.js";
 import { withSpan } from "../telemetry/tracing.js";
 import {
   recordScanDuration,
@@ -143,6 +144,7 @@ function detectNetwork(): NetworkBootstrap {
 export interface ScanOptions {
   timeout?: number;
   skipTraffic?: boolean;
+  trafficDuration?: number;
   skipPortScan?: boolean;
   skipSpeed?: boolean;
   skipVendorLookup?: boolean;
@@ -248,8 +250,8 @@ export async function collectNetworkScan(
     }
     emitter?.scannerComplete("host-discovery", `${hosts.length} hosts discovered`);
 
-    // Step 5: Port scan + hidden device + intrusion detection + deauth detection (needs hosts)
-    const [portResults, hiddenDevices, intrusionIndicators, deauthDetection] = await withSpan(
+    // Step 5: Port scan + hidden device + intrusion detection + deauth detection + traffic capture (needs hosts)
+    const [portResults, hiddenDevices, intrusionIndicators, deauthDetection, traffic] = await withSpan(
       "deep-analysis",
       {},
       async () => {
@@ -287,7 +289,10 @@ export async function collectNetworkScan(
         emitter?.scannerStart("hidden-device-scan");
         emitter?.scannerStart("intrusion-detection");
         emitter?.scannerStart("deauth-detection");
-        const [hidden, intrusion, deauthDetection] = await Promise.all([
+        if (!options.skipTraffic) {
+          emitter?.scannerStart("traffic-capture");
+        }
+        const [hidden, intrusion, deauthDetection, traffic] = await Promise.all([
           withSpan("hidden-device-scan", {}, () => scanHiddenDevices(hosts)).then((r) => {
             emitter?.scannerComplete("hidden-device-scan", `${(r?.unknownDevices?.length ?? 0) + (r?.suspectedCameras?.length ?? 0)} hidden devices`);
             return r;
@@ -312,6 +317,25 @@ export async function collectNetworkScan(
             );
             return r;
           }),
+          options.skipTraffic
+            ? Promise.resolve(undefined)
+            : withSpan(
+                "traffic-capture",
+                { "tool.resolved": tools.get("packetAnalysis")?.name ?? "none" },
+                () =>
+                  scanTraffic({
+                    interface: bootstrap.interface,
+                    duration: options.trafficDuration,
+                  })
+              ).then((r) => {
+                emitter?.scannerComplete(
+                  "traffic-capture",
+                  r
+                    ? `${r.capturedPackets} packets, ${r.unencrypted.length} unencrypted flow(s)`
+                    : "unavailable (no tshark/tcpdump or permissions)"
+                );
+                return r;
+              }),
         ]);
 
         if (hidden?.suspectedCameras) {
@@ -320,7 +344,7 @@ export async function collectNetworkScan(
           }
         }
 
-        return [portResult, hidden, intrusion, deauthDetection] as const;
+        return [portResult, hidden, intrusion, deauthDetection, traffic] as const;
       }
     );
 
@@ -366,6 +390,7 @@ export async function collectNetworkScan(
       },
       localServices: portResults.localServices,
       security,
+      traffic,
       connections,
       hiddenDevices,
       intrusionIndicators,

@@ -40,6 +40,7 @@ program
   .option("-f, --file <path>", "Write output to file instead of stdout")
   .option("--skip-ports", "Skip port scanning on discovered hosts")
   .option("--skip-traffic", "Skip traffic analysis")
+  .option("--traffic-duration <seconds>", "Traffic capture duration in seconds (default 8)")
   .option("--skip-speed", "Skip speed test")
   .option("--no-vendor-lookup", "Skip MAC vendor lookups (prevents sending OUI data to api.macvendors.com)")
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
@@ -60,9 +61,11 @@ program
         console.error("[wifisentinel] Starting network scan...");
       }
 
+      const trafficDuration = opts.trafficDuration ? parseInt(opts.trafficDuration, 10) : undefined;
       const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic || opts.stealth,
+        trafficDuration: Number.isFinite(trafficDuration) ? trafficDuration : undefined,
         skipSpeed: opts.skipSpeed || opts.stealth,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
@@ -144,6 +147,7 @@ program
   .option("-f, --file <path>", "Write output to file instead of stdout")
   .option("--skip-ports", "Skip port scanning on discovered hosts")
   .option("--skip-traffic", "Skip traffic analysis")
+  .option("--traffic-duration <seconds>", "Traffic capture duration in seconds (default 8)")
   .option("--skip-speed", "Skip speed test")
   .option("--no-vendor-lookup", "Skip MAC vendor lookups (prevents sending OUI data to api.macvendors.com)")
   .option("--otel <exporter>", "OTEL exporter: console, otlp, none", "none")
@@ -161,9 +165,11 @@ program
         console.error("[wifisentinel] Starting network scan + analysis...");
       }
 
+      const trafficDuration = opts.trafficDuration ? parseInt(opts.trafficDuration, 10) : undefined;
       const scanOpts: ScanOptions = {
         skipPortScan: opts.skipPorts,
         skipTraffic: opts.skipTraffic || opts.stealth,
+        trafficDuration: Number.isFinite(trafficDuration) ? trafficDuration : undefined,
         skipSpeed: opts.skipSpeed || opts.stealth,
         skipVendorLookup: !opts.vendorLookup,
         verbose: opts.verbose,
