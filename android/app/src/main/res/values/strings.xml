@@ -10,5 +10,6 @@
     <string name="permission_rationale_ok">Grant</string>
     <string name="permission_rationale_cancel">Cancel</string>
     <string name="scan_empty_state">No scan yet. Tap \"Scan now\" to analyse this network.</string>
-    <string name="permission_denied">Permission denied. WiFi Sentinel needs the WiFi scan permission to inspect this network. Tap \"Scan now\" to try again, or grant it from Settings.</string>
+    <string name="permission_denied">Permission denied. WiFi Sentinel needs the WiFi scan permission to inspect this network.</string>
+    <string name="open_settings">Open settings</string>
 </resources>

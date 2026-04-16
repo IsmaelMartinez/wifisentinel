@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 /**
@@ -144,14 +145,32 @@ class LocalScanner(private val context: Context) {
 
         return withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine<List<ScanResult>> { cont ->
+                // Two code paths can race to resume the continuation: the
+                // broadcast receiver (main thread) and the `startScan()`
+                // failure branch (IO thread). Without this CAS guard, a
+                // broadcast from a prior in-flight scan landing just as
+                // `startScan()` returns false could trigger a double-resume
+                // and crash with `IllegalStateException("Already resumed")`.
+                val resumed = AtomicBoolean(false)
+
+                fun unregister(receiver: BroadcastReceiver) {
+                    try {
+                        context.unregisterReceiver(receiver)
+                    } catch (_: IllegalArgumentException) {
+                        // Already unregistered — safe to ignore.
+                    }
+                }
+
+                fun resumeOnce(value: List<ScanResult>) {
+                    if (resumed.compareAndSet(false, true) && cont.isActive) {
+                        cont.resume(value)
+                    }
+                }
+
                 val receiver = object : BroadcastReceiver() {
                     override fun onReceive(ctx: Context, intent: Intent) {
-                        try {
-                            context.unregisterReceiver(this)
-                        } catch (_: IllegalArgumentException) {
-                            // Already unregistered — safe to ignore.
-                        }
-                        if (cont.isActive) cont.resume(readCachedScanResults())
+                        unregister(this)
+                        resumeOnce(readCachedScanResults())
                     }
                 }
 
@@ -162,13 +181,7 @@ class LocalScanner(private val context: Context) {
                     ContextCompat.RECEIVER_NOT_EXPORTED,
                 )
 
-                cont.invokeOnCancellation {
-                    try {
-                        context.unregisterReceiver(receiver)
-                    } catch (_: IllegalArgumentException) {
-                        // Already unregistered.
-                    }
-                }
+                cont.invokeOnCancellation { unregister(receiver) }
 
                 @Suppress("DEPRECATION")
                 val started = try {
@@ -179,12 +192,8 @@ class LocalScanner(private val context: Context) {
                 if (!started) {
                     // Throttled or denied — resume with whatever is cached so
                     // the caller isn't blocked for the full timeout.
-                    try {
-                        context.unregisterReceiver(receiver)
-                    } catch (_: IllegalArgumentException) {
-                        // Already unregistered.
-                    }
-                    if (cont.isActive) cont.resume(readCachedScanResults())
+                    unregister(receiver)
+                    resumeOnce(readCachedScanResults())
                 }
             }
         } ?: readCachedScanResults()

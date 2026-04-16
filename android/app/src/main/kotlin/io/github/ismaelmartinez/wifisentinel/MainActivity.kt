@@ -1,8 +1,11 @@
 package io.github.ismaelmartinez.wifisentinel
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -146,6 +150,23 @@ private fun ScanApp() {
                     text = stringResource(R.string.permission_denied),
                     color = MaterialTheme.colorScheme.error,
                 )
+                // Once the user picks "Don't allow" (especially the
+                // "don't ask again" variant) the system permission
+                // dialog stops appearing, so re-launching the contract
+                // resolves denied immediately. This button sends them
+                // to the app's settings page where they can grant the
+                // permission manually.
+                OutlinedButton(onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }) {
+                    Text(stringResource(R.string.open_settings))
+                }
             }
 
             when (val current = result) {
