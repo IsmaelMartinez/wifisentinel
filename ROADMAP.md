@@ -112,6 +112,15 @@
 - [ ] Browser scan results integrated into the same dashboard and history store
 - [ ] Progressive Web App (PWA) support for offline access to past scan results
 - [x] Remote scan trigger: start a full CLI scan on the Mac from the mobile browser (API route + ScanRunner UI with live progress)
+- [ ] Android companion app (investigation stage, prototype in `android/`, design in [`docs/android-companion.md`](docs/android-companion.md))
+  - [x] Design document and architecture decisions
+  - [x] Kotlin + Jetpack Compose skeleton: Gradle project, manifest with scan permissions, `LocalScanner` with WiFi stage, `LocalScanResult` schema subset
+  - [ ] Host discovery stage (`NsdManager` mDNS sweep + TCP connect sweep with concurrency cap)
+  - [ ] Latency probe stage (HTTPS HEAD timing)
+  - [ ] Local scan history (Room) + `ActivityResultContracts.CreateDocument` export
+  - [ ] Rule-based local analyser (subset of persona rules that are honest to evaluate on-device)
+  - [ ] CLI-side `wifisentinel import <file>` command with relaxed schema for `meta.platform: "android"`
+  - [ ] Tests: JVM unit tests for `LocalScanner` stages with fake `WifiManager`/`ConnectivityManager`; instrumentation smoke test on emulator
 
 ## Phase 7: Continuous Monitoring (IN PROGRESS)
 

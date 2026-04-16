@@ -1,0 +1,19 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Gradle wrapper jar is materialised by Android Studio / `gradle wrapper`
+# on first open. Regenerate rather than check in a third-party binary.
+gradle/wrapper/gradle-wrapper.jar
+
+# Build outputs
+/app/build/
+/app/release/
+/app/debug/

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WiFi Sentinel</string>
+    <string name="scan_now">Scan now</string>
+    <string name="permission_rationale_title">Location permission needed</string>
+    <string name="permission_rationale_body">
+        Android requires the location permission to list nearby WiFi networks.
+        WiFi Sentinel does not read or record your device location.
+    </string>
+    <string name="permission_rationale_ok">Grant</string>
+    <string name="permission_rationale_cancel">Cancel</string>
+    <string name="scan_empty_state">No scan yet. Tap \"Scan now\" to analyse this network.</string>
+    <string name="permission_denied">Permission denied. WiFi Sentinel needs the WiFi scan permission to inspect this network.</string>
+    <string name="open_settings">Open settings</string>
+</resources>
