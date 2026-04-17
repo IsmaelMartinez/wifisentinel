@@ -98,7 +98,6 @@
 ## Phase 6: Mobile & Browser Support (IN PROGRESS)
 
 - [x] Responsive dashboard: collapsible sidebar, adaptive grids, mobile-friendly scan history cards
-- [x] Lightweight `/mobile` page: compact card-based summary for quick phone glances
 - [x] Viewport meta tag and touch-friendly tap targets
 - [ ] Browser-based network scan: gather what the browser can see without system commands
   - [ ] Connection quality via Network Information API (`navigator.connection` — RTT, downlink, effectiveType)

@@ -4,14 +4,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, History, TrendingUp, Shield, Menu, X, Smartphone } from "lucide-react";
+import { LayoutDashboard, History, TrendingUp, Shield, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/scans", label: "History", icon: History },
   { href: "/trends", label: "Trends", icon: TrendingUp },
-  { href: "/mobile", label: "Mobile View", icon: Smartphone },
 ];
 
 export function SidebarNav() {
