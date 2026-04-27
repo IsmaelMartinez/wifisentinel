@@ -15,7 +15,7 @@
     "d3-force": "^3.0.0",
     "d3-selection": "^3.0.0",
     "geist": "^1.7.0",
-    "lucide-react": "^1.8.0",
+    "lucide-react": "^1.11.0",
     "next": "^16.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -24,7 +24,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.2",
+    "@tailwindcss/postcss": "^4.2.4",
     "@types/d3-force": "^3.0.10",
     "@types/d3-selection": "^3.0.11",
     "@types/node": "^25.6.0",
