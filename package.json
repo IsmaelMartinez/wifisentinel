@@ -60,6 +60,8 @@
     "node": ">=20"
   },
   "overrides": {
-    "protobufjs": "^8.0.2"
+    "@opentelemetry/otlp-transformer": {
+      "protobufjs": "^8.0.2"
+    }
   }
 }
