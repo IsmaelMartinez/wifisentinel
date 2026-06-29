@@ -30,8 +30,8 @@
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.0.0",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15",
+    "autoprefixer": "^10.5.2",
+    "postcss": "^8.5.16",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3"
   },
