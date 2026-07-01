@@ -98,7 +98,10 @@ object LocalAnalyser {
     ): List<Finding> {
         val vpnActive = network?.vpnActive == true
         if (vpnActive) return emptyList()
-        val insecureLink = wifi?.security?.uppercase() in setOf("OPEN", "WEP", null)
+        // Only warn when we positively know the link is insecure. When wifi is
+        // null the security type is unknown (no permission / on cellular), so a
+        // "no VPN on an insecure network" warning would be a false positive.
+        val insecureLink = wifi?.security?.uppercase() in setOf("OPEN", "WEP")
         if (!insecureLink) return emptyList()
         return listOf(
             Finding(

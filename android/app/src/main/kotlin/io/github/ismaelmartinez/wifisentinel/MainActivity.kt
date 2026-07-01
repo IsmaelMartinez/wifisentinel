@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
 import io.github.ismaelmartinez.wifisentinel.ui.theme.WifiSentinelTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -117,9 +118,14 @@ private fun ScanApp() {
     ) { uri ->
         val current = result
         if (uri != null && current != null) {
-            runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    stream.write(json.encodeToString(current).toByteArray())
+            // The result callback runs on the main thread; writing the document
+            // (potentially to slow cloud storage) is blocking I/O, so offload it
+            // to avoid stutter / ANR.
+            scope.launch(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(json.encodeToString(current).toByteArray())
+                    }
                 }
             }
         }
@@ -234,8 +240,11 @@ private fun ScanApp() {
                         Text(stringResource(R.string.export_scan))
                     }
 
+                    // Cache the serialization so it doesn't re-run on every
+                    // recomposition (e.g. while scrolling).
+                    val jsonString = remember(current) { json.encodeToString(current) }
                     Text(
-                        text = json.encodeToString(current),
+                        text = jsonString,
                         fontFamily = FontFamily.Monospace,
                     )
                 }

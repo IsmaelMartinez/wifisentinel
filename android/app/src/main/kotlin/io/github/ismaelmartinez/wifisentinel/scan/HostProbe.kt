@@ -8,7 +8,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -70,18 +72,36 @@ class HostProbe(private val context: Context) {
         val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager
             ?: return@coroutineScope emptyList()
 
+        // NsdManager.resolveService allows only ONE active resolution at a time —
+        // below API 34 concurrent calls fail with FAILURE_ALREADY_ACTIVE and the
+        // hosts are silently dropped. So every discovered service is funnelled
+        // through a single serial resolver instead of resolving inline from each
+        // (concurrent) discovery callback.
+        val toResolve = Channel<NsdServiceInfo>(Channel.UNLIMITED)
+        val found = LinkedHashMap<String, LocalScanResult.Host>()
+
+        val resolver = launch {
+            for (service in toResolve) {
+                resolveOne(nsd, service)?.let { found[it.ip] = it }
+            }
+        }
+
         serviceTypes.map { type ->
-            async { discoverServiceType(nsd, type, perServiceTimeoutMs) }
-        }.awaitAll().flatten()
+            async { discoverServiceType(nsd, type, perServiceTimeoutMs) { toResolve.trySend(it) } }
+        }.awaitAll()
+
+        // Discovery windows have all elapsed; drain the queue and collect.
+        toResolve.close()
+        resolver.join()
+        found.values.toList()
     }
 
     private suspend fun discoverServiceType(
         nsd: NsdManager,
         serviceType: String,
         timeoutMs: Long,
-    ): List<LocalScanResult.Host> {
-        val found = mutableMapOf<String, LocalScanResult.Host>()
-
+        onFound: (NsdServiceInfo) -> Unit,
+    ) {
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(regType: String) {}
             override fun onDiscoveryStopped(serviceType: String) {}
@@ -89,38 +109,39 @@ class HostProbe(private val context: Context) {
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
 
             override fun onServiceFound(service: NsdServiceInfo) {
-                resolve(nsd, service) { host ->
-                    synchronized(found) { found[host.ip] = host }
-                }
+                onFound(service)
             }
 
             override fun onServiceLost(service: NsdServiceInfo) {}
         }
 
-        return try {
+        try {
             nsd.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
-            withTimeoutOrNull(timeoutMs) {
-                // NSD has no "discovery complete" signal, so we simply let it run
-                // for the window and collect whatever resolves.
-                while (true) kotlinx.coroutines.delay(100)
-            }
-            synchronized(found) { found.values.toList() }
+            // NSD has no "discovery complete" signal, so we simply let it run for
+            // the window and forward whatever it finds to the resolver queue.
+            kotlinx.coroutines.delay(timeoutMs)
         } finally {
             runCatching { nsd.stopServiceDiscovery(listener) }
         }
     }
 
-    private fun resolve(
+    /** Resolve one service, suspending until it resolves, fails, or times out. */
+    private suspend fun resolveOne(
         nsd: NsdManager,
         service: NsdServiceInfo,
-        onResolved: (LocalScanResult.Host) -> Unit,
-    ) {
+        timeoutMs: Long = 1_500,
+    ): LocalScanResult.Host? {
+        val deferred = CompletableDeferred<LocalScanResult.Host?>()
         val callback = object : NsdManager.ResolveListener {
-            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
+            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                deferred.complete(null)
+            }
+
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                val ip = hostAddressOf(serviceInfo) ?: return
-                onResolved(
-                    LocalScanResult.Host(
+                val ip = hostAddressOf(serviceInfo)
+                deferred.complete(
+                    if (ip == null) null
+                    else LocalScanResult.Host(
                         ip = ip,
                         hostname = serviceInfo.serviceName.takeIf { it.isNotBlank() },
                         serviceType = serviceInfo.serviceType?.trim('.')?.takeIf { it.isNotBlank() },
@@ -132,7 +153,9 @@ class HostProbe(private val context: Context) {
         // resolveService is deprecated on API 34+ in favour of registerServiceInfoCallback,
         // but it remains the only path that works uniformly down to minSdk 29.
         @Suppress("DEPRECATION")
-        runCatching { nsd.resolveService(service, callback) }
+        val started = runCatching { nsd.resolveService(service, callback) }.isSuccess
+        if (!started) return null
+        return withTimeoutOrNull(timeoutMs) { deferred.await() }
     }
 
     private fun hostAddressOf(info: NsdServiceInfo): String? {
@@ -158,9 +181,16 @@ class HostProbe(private val context: Context) {
                 val ip = "$subnetBase.$hostByte"
                 async {
                     gate.withPermit {
-                        val open = sweepPorts.filter { port -> isOpen(ip, port, connectTimeoutMs) }
+                        // Probe the host's ports concurrently so an offline host
+                        // costs one connect timeout, not one per port.
+                        val open = coroutineScope {
+                            sweepPorts
+                                .map { port -> async { if (isOpen(ip, port, connectTimeoutMs)) port else null } }
+                                .awaitAll()
+                                .filterNotNull()
+                        }
                         if (open.isEmpty()) null
-                        else LocalScanResult.Host(ip = ip, openPorts = open)
+                        else LocalScanResult.Host(ip = ip, openPorts = open.sorted())
                     }
                 }
             }
