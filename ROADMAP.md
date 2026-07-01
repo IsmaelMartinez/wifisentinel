@@ -114,11 +114,13 @@
 - [ ] Android companion app (investigation stage, prototype in `android/`, design in [`docs/android-companion.md`](docs/android-companion.md))
   - [x] Design document and architecture decisions
   - [x] Kotlin + Jetpack Compose skeleton: Gradle project, manifest with scan permissions, `LocalScanner` with WiFi stage, `LocalScanResult` schema subset
-  - [ ] Host discovery stage (`NsdManager` mDNS sweep + TCP connect sweep with concurrency cap)
-  - [ ] Latency probe stage (HTTPS HEAD timing)
-  - [ ] Local scan history (Room) + `ActivityResultContracts.CreateDocument` export
-  - [ ] Rule-based local analyser (subset of persona rules that are honest to evaluate on-device)
-  - [ ] CLI-side `wifisentinel import <file>` command with relaxed schema for `meta.platform: "android"`
+  - [x] Host discovery stage (`NsdManager` mDNS sweep + TCP connect sweep with concurrency cap)
+  - [x] Latency probe stage (HTTPS HEAD timing)
+  - [x] `ActivityResultContracts.CreateDocument` JSON export from the app
+  - [ ] Local scan history (Room) — still pending; export is file-based for now
+  - [x] Rule-based local analyser (subset of persona rules that are honest to evaluate on-device)
+  - [x] CLI-side `wifisentinel import <file>` command with relaxed schema for `meta.platform: "android"`
+  - [x] JVM unit tests for the `LocalAnalyser` rules (pure, no emulator)
   - [ ] Tests: JVM unit tests for `LocalScanner` stages with fake `WifiManager`/`ConnectivityManager`; instrumentation smoke test on emulator
 
 ## Phase 7: Continuous Monitoring (IN PROGRESS)

@@ -20,6 +20,12 @@ data class LocalScanResult(
     val network: Network?,
     val hosts: List<Host> = emptyList(),
     val latencyMs: Long? = null,
+    /**
+     * Rule-based on-device analysis. Omitted from the JSON export's contract
+     * with the CLI import path (which recomputes analysis from the raw fields),
+     * but useful for the phone UI. Null until the analyse stage has run.
+     */
+    val analysis: Analysis? = null,
 ) {
     @Serializable
     data class Meta(
@@ -65,4 +71,27 @@ data class LocalScanResult(
         val serviceType: String? = null,
         val openPorts: List<Int> = emptyList(),
     )
+
+    /**
+     * Result of the rule-based [io.github.ismaelmartinez.wifisentinel.analyse.LocalAnalyser].
+     * `partial` mirrors `meta.partial`: this is an honest subset of the CLI's
+     * multi-persona analysis, evaluated only from phone-visible fields.
+     */
+    @Serializable
+    data class Analysis(
+        val overallRisk: Severity,
+        val findings: List<Finding>,
+        val partial: Boolean = true,
+    )
+
+    @Serializable
+    data class Finding(
+        val severity: Severity,
+        val title: String,
+        val detail: String,
+    )
+
+    /** Ordered most to least severe; [ordinal] gives the ranking. */
+    @Serializable
+    enum class Severity { CRITICAL, HIGH, MEDIUM, LOW, INFO }
 }

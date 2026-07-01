@@ -58,7 +58,10 @@ export const NetworkScanResult = z.object({
     timestamp: z.string(),
     duration: z.number(),
     hostname: z.string(),
-    platform: z.enum(["darwin", "linux", "win32"]),
+    platform: z.enum(["darwin", "linux", "win32", "android"]),
+    // Set when the scan does not carry the full CLI shape — e.g. imported
+    // from the Android companion, which can only observe a subset of fields.
+    partial: z.boolean().optional(),
     toolchain: z.record(z.string(), z.string().nullable()),
   }),
 

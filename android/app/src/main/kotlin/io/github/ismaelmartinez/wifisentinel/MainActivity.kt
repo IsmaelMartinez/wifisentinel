@@ -46,6 +46,46 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+private fun severityColour(severity: LocalScanResult.Severity, scheme: androidx.compose.material3.ColorScheme) =
+    when (severity) {
+        LocalScanResult.Severity.CRITICAL, LocalScanResult.Severity.HIGH -> scheme.error
+        LocalScanResult.Severity.MEDIUM -> scheme.tertiary
+        LocalScanResult.Severity.LOW, LocalScanResult.Severity.INFO -> scheme.onSurfaceVariant
+    }
+
+@Composable
+private fun AnalysisSummary(analysis: LocalScanResult.Analysis) {
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.overall_risk, analysis.overallRisk.name),
+            style = MaterialTheme.typography.titleMedium,
+            color = severityColour(analysis.overallRisk, scheme),
+        )
+        if (analysis.partial) {
+            Text(
+                text = stringResource(R.string.partial_analysis_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        analysis.findings.forEach { finding ->
+            Column {
+                Text(
+                    text = "[${finding.severity.name}] ${finding.title}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = severityColour(finding.severity, scheme),
+                )
+                Text(
+                    text = finding.detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +111,19 @@ private fun ScanApp() {
     var result by remember { mutableStateOf<LocalScanResult?>(null) }
     var permission by remember { mutableStateOf(PermissionState.UNKNOWN) }
     var showRationale by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        val current = result
+        if (uri != null && current != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(json.encodeToString(current).toByteArray())
+                }
+            }
+        }
+    }
 
     val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.NEARBY_WIFI_DEVICES
@@ -171,10 +224,21 @@ private fun ScanApp() {
 
             when (val current = result) {
                 null -> Text(stringResource(R.string.scan_empty_state))
-                else -> Text(
-                    text = json.encodeToString(current),
-                    fontFamily = FontFamily.Monospace,
-                )
+                else -> {
+                    current.analysis?.let { AnalysisSummary(it) }
+
+                    OutlinedButton(
+                        enabled = !scanning,
+                        onClick = { exportLauncher.launch("wifisentinel-scan.json") },
+                    ) {
+                        Text(stringResource(R.string.export_scan))
+                    }
+
+                    Text(
+                        text = json.encodeToString(current),
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))
