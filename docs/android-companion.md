@@ -173,23 +173,40 @@ Explicit follow-ups we are **not** doing in the first pass:
 
 ## 9. Prototype scope (what's in `android/`)
 
-The skeleton under `android/` is a spike, not a feature-complete app. It ships:
+The skeleton under `android/` has grown past the first spike. It ships:
 
 - A buildable Gradle project (AGP 8.7, Kotlin 2.0).
 - Manifest with the permissions listed above.
-- A single `MainActivity` + Compose scaffold, with a rationale dialog and
-  a "permission denied" state.
-- A `LocalScanner` with the WiFi and network stages implemented — including
-  `startScan()` + broadcast-await so `security` is derived from fresh data
-  rather than a stale cache — and the host-discovery / latency stages
-  stubbed with empty-list placeholders.
-- A `LocalScanResult` data class that matches the schema subset in §3.
+- A single `MainActivity` + Compose scaffold, with a rationale dialog, a
+  "permission denied" state, a rule-based analysis summary, and a
+  `CreateDocument` JSON export button.
+- A `LocalScanner` that runs the full MVP pipeline:
+  - **WiFi stage** — `startScan()` + broadcast-await so `security` is derived
+    from fresh data rather than a stale cache.
+  - **Network stage** — `DhcpInfo` / `LinkProperties` / VPN state.
+  - **Host discovery** (`HostProbe`) — `NsdManager` mDNS sweep across the
+    service-type list in §4, plus a bounded (32-way) TCP connect sweep of the
+    local /24 on common ports, merged by IP.
+  - **Latency probe** (`LatencyProbe`) — single HTTPS `HEAD` to Cloudflare's
+    trace endpoint.
+  - **Analyse stage** (`LocalAnalyser`, package `analyse`) — the honest subset
+    of persona/standards rules (WiFi link security, VPN posture, cleartext LAN
+    services, latency), pure and JVM-unit-tested.
+- A `LocalScanResult` data class that matches the schema subset in §3, now
+  including the on-device `Analysis` model.
 
-It deliberately does **not** include:
+On the CLI side, `wifisentinel import <file>` (see `src/commands/import.ts` and
+`src/collector/android-import.ts`) validates the export against a relaxed Zod
+schema, expands it into a full `NetworkScanResult` with `meta.platform:
+"android"` and `meta.partial: true`, and stores it so it appears in
+`history` / `trend` / `diff` / `devices`.
 
-- Room storage (the schema still needs a round of review).
-- The TCP sweep or NSD host probe (both want their own tests).
-- Any UI beyond a single "Scan now" button and a JSON dump.
+It deliberately does **not** yet include:
+
+- Room storage (the schema still needs a round of review; export is file-based
+  via `CreateDocument` for now).
+- JVM unit tests for the WiFi/network stages with fake `WifiManager` /
+  `ConnectivityManager`, and an emulator instrumentation smoke test.
 
 ## 10. Open questions
 

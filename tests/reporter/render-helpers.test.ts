@@ -24,7 +24,12 @@ describe("statusIcon", () => {
 
   it("fail: contains cross icon and 'Fail' label", () => {
     const plain = stripAnsi(statusIcon("fail"));
-    assert.ok(plain.includes("✘") || plain.includes("x") || plain.includes("X"), `expected cross in: ${plain}`);
+    // figures emits the heavy cross (✖) on unicode terminals and the ASCII
+    // fallback (×) elsewhere, e.g. non-TTY CI runs.
+    assert.ok(
+      ["✘", "✖", "×", "x", "X"].some((c) => plain.includes(c)),
+      `expected cross in: ${plain}`
+    );
     assert.ok(plain.toLowerCase().includes("fail"), `expected 'fail' in: ${plain}`);
   });
 
@@ -39,7 +44,13 @@ describe("statusIcon", () => {
 
   it("info: contains info icon and 'Info' label", () => {
     const plain = stripAnsi(statusIcon("info"));
-    assert.ok(plain.includes("ℹ") || plain.includes("ⓘ") || plain.includes("·"), `expected info symbol in: ${plain}`);
+    // figures emits ℹ on unicode terminals and the ASCII fallback "i"
+    // elsewhere; the "Info" label itself has no lowercase i, so requiring the
+    // glyph still verifies an icon is present.
+    assert.ok(
+      ["ℹ", "ⓘ", "·", "i"].some((c) => plain.includes(c)),
+      `expected info symbol in: ${plain}`
+    );
     assert.ok(plain.toLowerCase().includes("info"), `expected 'info' in: ${plain}`);
   });
 

@@ -13,7 +13,9 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import io.github.ismaelmartinez.wifisentinel.analyse.LocalAnalyser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -36,6 +38,9 @@ class LocalScanner(private val context: Context) {
     private val connectivityManager: ConnectivityManager =
         context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+    private val hostProbe = HostProbe(context.applicationContext)
+    private val latencyProbe = LatencyProbe()
+
     /**
      * Run the full scan pipeline. Must be called from a coroutine scope —
      * the work happens on `Dispatchers.IO`.
@@ -47,19 +52,30 @@ class LocalScanner(private val context: Context) {
         // fall back to whatever's in cache.
         val freshScan = requestFreshScanResults()
 
-        LocalScanResult(
+        val wifi = captureWifi(freshScan)
+        val network = captureNetwork()
+
+        // Host discovery (mDNS + bounded TCP sweep) and the latency probe are
+        // independent, so run them concurrently. Both are best-effort and
+        // return empty/null on failure rather than aborting the scan.
+        val hostsDeferred = async { hostProbe.discover(network.ip) }
+        val latencyDeferred = async { latencyProbe.measure() }
+        val hosts = hostsDeferred.await()
+        val latencyMs = latencyDeferred.await()
+
+        val base = LocalScanResult(
             meta = LocalScanResult.Meta(
                 scanId = UUID.randomUUID().toString(),
                 timestamp = Instant.now().toString(),
                 appVersion = appVersion,
             ),
-            wifi = captureWifi(freshScan),
-            network = captureNetwork(),
-            // Host discovery, latency probe, and analyser are deliberately
-            // unimplemented in the spike. See docs/android-companion.md §9.
-            hosts = emptyList(),
-            latencyMs = null,
+            wifi = wifi,
+            network = network,
+            hosts = hosts,
+            latencyMs = latencyMs,
         )
+
+        base.copy(analysis = LocalAnalyser.analyse(base))
     }
 
     private fun captureWifi(scanResults: List<ScanResult>): LocalScanResult.Wifi? {
