@@ -58,10 +58,10 @@ class HostProbe(private val context: Context) {
     suspend fun discover(localIp: String?): List<LocalScanResult.Host> =
         withContext(Dispatchers.IO) {
             val mdns = runCatching { discoverMdns() }.getOrDefault(emptyList())
-            val swept = localIp?.let { subnetBaseOf(it) }
-                ?.let { base -> runCatching { sweepTcp(base, ownHostByte(localIp)) }.getOrDefault(emptyList()) }
+            val swept = localIp?.let { HostMerge.subnetBaseOf(it) }
+                ?.let { base -> runCatching { sweepTcp(base, HostMerge.ownHostByte(localIp)) }.getOrDefault(emptyList()) }
                 ?: emptyList()
-            mergeByIp(mdns + swept)
+            HostMerge.mergeByIp(mdns + swept)
         }
 
     // ---- mDNS ----------------------------------------------------------------
@@ -205,34 +205,4 @@ class HostProbe(private val context: Context) {
                 true
             }.getOrDefault(false)
         }
-
-    // ---- helpers -------------------------------------------------------------
-
-    private fun mergeByIp(hosts: List<LocalScanResult.Host>): List<LocalScanResult.Host> {
-        val byIp = LinkedHashMap<String, LocalScanResult.Host>()
-        for (host in hosts) {
-            val existing = byIp[host.ip]
-            byIp[host.ip] = if (existing == null) {
-                host
-            } else {
-                existing.copy(
-                    hostname = existing.hostname ?: host.hostname,
-                    serviceType = existing.serviceType ?: host.serviceType,
-                    openPorts = (existing.openPorts + host.openPorts).distinct().sorted(),
-                )
-            }
-        }
-        return byIp.values.sortedBy { ipSortKey(it.ip) }
-    }
-
-    private fun subnetBaseOf(ip: String): String? {
-        val octets = ip.split(".")
-        return if (octets.size == 4) octets.take(3).joinToString(".") else null
-    }
-
-    private fun ownHostByte(ip: String?): Int? =
-        ip?.split(".")?.getOrNull(3)?.toIntOrNull()
-
-    private fun ipSortKey(ip: String): Long =
-        ip.split(".").fold(0L) { acc, octet -> acc * 256 + (octet.toLongOrNull() ?: 0) }
 }

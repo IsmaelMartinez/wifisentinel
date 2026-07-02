@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31+ backup / device-to-device transfer rules. The scan history is
+  private, so it is excluded from both cloud backup and device transfer.
+  (allowBackup=false already disables cloud backup; this documents intent
+  and covers the transfer path too.)
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="wifisentinel-scans.db" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="wifisentinel-scans.db" />
+    </device-transfer>
+</data-extraction-rules>

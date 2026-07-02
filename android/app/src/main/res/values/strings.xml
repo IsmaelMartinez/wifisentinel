@@ -15,4 +15,12 @@
     <string name="export_scan">Export as JSON</string>
     <string name="overall_risk">Overall risk: %s</string>
     <string name="partial_analysis_note">Partial analysis — a phone can only see a subset of what the desktop scanner inspects.</string>
+    <string name="view_history">Scan history</string>
+    <string name="back">Back</string>
+    <string name="history_title">Scan history</string>
+    <string name="history_empty">No saved scans yet. Run a scan to build history.</string>
+    <string name="history_unknown_ssid">Unknown network</string>
+    <string name="history_risk">Risk: %s</string>
+    <string name="loading">Loading…</string>
+    <string name="scan_not_found">This scan is no longer available.</string>
 </resources>

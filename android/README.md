@@ -16,10 +16,14 @@ android/
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── kotlin/io/github/ismaelmartinez/wifisentinel/
-│       │   ├── MainActivity.kt   # Compose entry point
-│       │   ├── scan/             # LocalScanner + data model
+│       │   ├── MainActivity.kt   # Compose entry point (Scan/History/Detail)
+│       │   ├── analyse/          # LocalAnalyser (rule-based)
+│       │   ├── scan/             # LocalScanner + probes + pure mapping helpers
+│       │   ├── store/            # Room ScanStore (on-device history)
 │       │   └── ui/theme/         # Compose theme
-│       └── res/values/           # strings + theme
+│       ├── res/values/           # strings + theme
+│       └── res/xml/              # backup exclusion rules
+│   └── src/test/kotlin/          # JVM unit tests (no emulator)
 ├── build.gradle.kts              # root build file
 ├── settings.gradle.kts
 └── gradle.properties
@@ -29,16 +33,25 @@ android/
 
 - Requests `ACCESS_FINE_LOCATION` / `NEARBY_WIFI_DEVICES` at runtime.
 - Reads the current WiFi connection via `WifiManager`.
-- Renders a single scan screen with a "Scan now" button.
-- Prints the result as JSON.
-
-## What's stubbed
-
-- Host discovery (NSD + TCP connect sweep).
-- Latency / speed probes.
-- Local scan history (Room).
+- Host discovery (NSD mDNS sweep + bounded TCP connect sweep, merged by IP).
+- Latency probe (HTTPS `HEAD` timing).
+- Rule-based local analyser (honest subset of the CLI's persona rules).
+- Scan / History / Detail screens (single activity, hand-rolled navigation).
+- On-device scan history via Room — every completed scan is auto-saved and
+  listed newest-first; tap a row to re-view and re-export it.
 - JSON export via `ActivityResultContracts.CreateDocument`.
-- Rule-based local analyser.
+
+## What's stubbed / pending
+
+- Speed test (download throughput) — off by default to spare mobile data.
+- Emulator instrumentation smoke test.
+
+## Building without an Android SDK
+
+The Kotlin/Android module needs the Android SDK to compile. On a machine with
+only Gradle + Java (e.g. some CI/sandbox environments) `./gradlew` cannot build
+the app or run the JVM unit tests — use Android Studio or install the SDK
+(`sdkmanager`, `ANDROID_HOME`) first.
 
 ## Build
 

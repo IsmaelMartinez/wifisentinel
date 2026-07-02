@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto-backup is already disabled globally via android:allowBackup="false".
+  These rules are belt-and-braces: even if backup is ever re-enabled, the
+  on-device scan history database must never leave the device.
+-->
+<full-backup-content>
+    <exclude domain="database" path="wifisentinel-scans.db" />
+</full-backup-content>

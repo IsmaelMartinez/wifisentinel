@@ -85,15 +85,15 @@ class LocalScanner(private val context: Context) {
         if (info.networkId == -1) return null
 
         val frequencyMhz = info.frequency
-        val bssid = info.bssid?.takeIf { it.isNotEmpty() && it != "02:00:00:00:00:00" }
+        val bssid = WifiMapping.normaliseBssid(info.bssid)
         return LocalScanResult.Wifi(
-            ssid = info.ssid?.trim('"')?.takeIf { it.isNotEmpty() && it != "<unknown ssid>" },
+            ssid = WifiMapping.normaliseSsid(info.ssid),
             bssid = bssid,
             // `WifiInfo` doesn't expose the security type directly — derive it
             // from the matching entry in the scan result set.
             security = deriveSecurity(bssid, scanResults),
-            channel = frequencyToChannel(frequencyMhz),
-            band = frequencyToBand(frequencyMhz),
+            channel = WifiMapping.frequencyToChannel(frequencyMhz),
+            band = WifiMapping.frequencyToBand(frequencyMhz),
             signal = info.rssi,
             txRate = info.linkSpeed,
         )
@@ -127,8 +127,8 @@ class LocalScanner(private val context: Context) {
             ?: emptyList()
 
         return LocalScanResult.Network(
-            ip = dhcp?.ipAddress?.takeIf { it != 0 }?.let(::formatIpv4),
-            gatewayIp = dhcp?.gateway?.takeIf { it != 0 }?.let(::formatIpv4),
+            ip = dhcp?.ipAddress?.takeIf { it != 0 }?.let(WifiMapping::formatIpv4),
+            gatewayIp = dhcp?.gateway?.takeIf { it != 0 }?.let(WifiMapping::formatIpv4),
             dnsServers = dnsServers,
             vpnActive = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true,
         )
@@ -138,15 +138,7 @@ class LocalScanner(private val context: Context) {
         if (bssid == null) return "unknown"
         val match = scanResults.firstOrNull { it.BSSID.equals(bssid, ignoreCase = true) }
             ?: return "unknown"
-        val capabilities = match.capabilities ?: return "unknown"
-        return when {
-            "WPA3" in capabilities -> "WPA3"
-            "WPA2" in capabilities -> "WPA2"
-            "WPA" in capabilities -> "WPA"
-            "WEP" in capabilities -> "WEP"
-            capabilities.contains("ESS") && !capabilities.contains("WPA") -> "Open"
-            else -> "unknown"
-        }
+        return WifiMapping.securityFromCapabilities(match.capabilities)
     }
 
     /**
@@ -232,29 +224,5 @@ class LocalScanner(private val context: Context) {
         }
         return ContextCompat.checkSelfPermission(context, required) ==
             PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun formatIpv4(value: Int): String =
-        "${value and 0xFF}.${(value shr 8) and 0xFF}.${(value shr 16) and 0xFF}.${(value shr 24) and 0xFF}"
-
-    /**
-     * Channel numbering reference: IEEE 802.11-2020 §17 for 2.4/5 GHz; the
-     * 6 GHz case uses the WiFi 6E channel indexing where channel `n`
-     * corresponds to `5950 + 5n` MHz (so channel 1 = 5955 MHz, channel 5 =
-     * 5975 MHz, …).
-     */
-    private fun frequencyToChannel(freqMhz: Int): Int = when {
-        freqMhz == 2484 -> 14
-        freqMhz in 2412..2472 -> (freqMhz - 2407) / 5
-        freqMhz in 5170..5825 -> (freqMhz - 5000) / 5
-        freqMhz in 5955..7115 -> (freqMhz - 5950) / 5
-        else -> 0
-    }
-
-    private fun frequencyToBand(freqMhz: Int): String = when {
-        freqMhz in 2400..2500 -> "2.4 GHz"
-        freqMhz in 5000..5900 -> "5 GHz"
-        freqMhz in 5925..7125 -> "6 GHz"
-        else -> "unknown"
     }
 }

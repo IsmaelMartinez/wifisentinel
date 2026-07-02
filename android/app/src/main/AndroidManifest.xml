@@ -26,6 +26,8 @@
         android:theme="@style/Theme.WifiSentinel"
         android:supportsRtl="true"
         android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         tools:targetApi="35">
 
         <activity
