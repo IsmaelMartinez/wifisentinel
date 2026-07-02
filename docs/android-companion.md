@@ -175,11 +175,25 @@ Explicit follow-ups we are **not** doing in the first pass:
 
 The skeleton under `android/` has grown past the first spike. It ships:
 
-- A buildable Gradle project (AGP 8.7, Kotlin 2.0).
+- A buildable Gradle project (AGP 8.7, Kotlin 2.0, Room via KSP).
 - Manifest with the permissions listed above.
-- A single `MainActivity` + Compose scaffold, with a rationale dialog, a
-  "permission denied" state, a rule-based analysis summary, and a
-  `CreateDocument` JSON export button.
+- A single `MainActivity` hosting three Compose screens behind a tiny
+  hand-rolled navigation state machine (no navigation-compose, no Hilt):
+  - **Scan** — rationale dialog, "permission denied" state, rule-based
+    analysis summary, and a `CreateDocument` JSON export button.
+  - **History** — a newest-first list of stored scans (SSID, timestamp,
+    overall risk), each row tappable.
+  - **Detail** — re-views a stored scan and re-exports it via the same
+    `CreateDocument` flow.
+- On-device history via **Room** (`store/` package): a single `scans` table
+  storing each completed `LocalScanResult` as a serialized
+  `kotlinx.serialization` JSON blob keyed by `meta.scanId`, ordered by
+  `timestamp` descending, with denormalised `ssid`/`overallRisk` columns so
+  the list renders without deserialising every blob. `ScanStore` wraps the DAO,
+  auto-persists every completed scan, and exposes the history as a reactive
+  `Flow`. The table is excluded from auto-backup: `allowBackup=false` plus
+  explicit `fullBackupContent`/`dataExtractionRules` that exclude
+  `wifisentinel-scans.db` (§7).
 - A `LocalScanner` that runs the full MVP pipeline:
   - **WiFi stage** — `startScan()` + broadcast-await so `security` is derived
     from fresh data rather than a stale cache.
@@ -194,6 +208,18 @@ The skeleton under `android/` has grown past the first spike. It ships:
     services, latency), pure and JVM-unit-tested.
 - A `LocalScanResult` data class that matches the schema subset in §3, now
   including the on-device `Analysis` model.
+- JVM unit tests (`src/test/kotlin`, no emulator) covering the pure logic:
+  - `LocalAnalyserTest` — the rule-based analyser.
+  - `WifiMappingTest` — the WiFi/network mapping (`WifiMapping`) extracted from
+    `LocalScanner`: SSID/BSSID normalisation and redaction, security derivation
+    from `ScanResult.capabilities`, frequency→channel/band, and the
+    little-endian `DhcpInfo` IPv4 formatting.
+  - `HostMergeTest` — `HostProbe`'s merge-by-IP (hostname/serviceType/port
+    union, numeric-IP ordering) and subnet-derivation helpers (`HostMerge`).
+
+  The mapping helpers were extracted into pure `WifiMapping`/`HostMerge` objects
+  precisely so they can be tested on the JVM without faking `WifiManager` /
+  `ConnectivityManager` or standing up an emulator.
 
 On the CLI side, `wifisentinel import <file>` (see `src/commands/import.ts` and
 `src/collector/android-import.ts`) validates the export against a relaxed Zod
@@ -203,10 +229,15 @@ schema, expands it into a full `NetworkScanResult` with `meta.platform:
 
 It deliberately does **not** yet include:
 
-- Room storage (the schema still needs a round of review; export is file-based
-  via `CreateDocument` for now).
-- JVM unit tests for the WiFi/network stages with fake `WifiManager` /
-  `ConnectivityManager`, and an emulator instrumentation smoke test.
+- An emulator instrumentation smoke test that exercises Room and the scan
+  pipeline end-to-end on a real device/emulator (the JVM tests cover the pure
+  logic; the device-dependent glue is still untested in CI).
+
+> **Build note.** This environment has Gradle + Java but no Android SDK, so the
+> Kotlin/Android module cannot be compiled or run here. The Room + KSP wiring,
+> the Compose screens, and the new tests were written against the documented
+> APIs and need an SDK-equipped machine (Android Studio, or `sdkmanager` +
+> `ANDROID_HOME`) to run `./gradlew assembleDebug` and `./gradlew test`.
 
 ## 10. Open questions
 
