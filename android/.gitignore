@@ -9,9 +9,9 @@
 .cxx
 local.properties
 
-# Gradle wrapper jar is materialised by Android Studio / `gradle wrapper`
-# on first open. Regenerate rather than check in a third-party binary.
-gradle/wrapper/gradle-wrapper.jar
+# The Gradle wrapper (gradlew, gradlew.bat, gradle/wrapper/*) is committed
+# so CI and fresh clones build without a local Gradle install. The jar is
+# pinned alongside gradle-wrapper.properties (Gradle 8.11.1 + SHA-256).
 
 # Build outputs
 /app/build/
