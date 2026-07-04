@@ -21,6 +21,11 @@ data class LocalScanResult(
     val hosts: List<Host> = emptyList(),
     val latencyMs: Long? = null,
     /**
+     * Opt-in download speed test result. Null when the user left the toggle
+     * off or the probe failed — never zero-filled.
+     */
+    val speed: Speed? = null,
+    /**
      * Rule-based on-device analysis. Omitted from the JSON export's contract
      * with the CLI import path (which recomputes analysis from the raw fields),
      * but useful for the phone UI. Null until the analyse stage has run.
@@ -71,6 +76,25 @@ data class LocalScanResult(
         val serviceType: String? = null,
         val openPorts: List<Int> = emptyList(),
     )
+
+    /**
+     * Download-only subset of the CLI's `speed` section. The CLI shape also
+     * carries upload, jitter, and packet-loss measurements the phone doesn't
+     * take, so only the `download` object (whose field names match exactly)
+     * is present here.
+     */
+    @Serializable
+    data class Speed(
+        val download: Download,
+    ) {
+        @Serializable
+        data class Download(
+            val speedMbps: Double,
+            val bytesTransferred: Long,
+            val durationMs: Long,
+            val testUrl: String,
+        )
+    }
 
     /**
      * Result of the rule-based [io.github.ismaelmartinez.wifisentinel.analyse.LocalAnalyser].

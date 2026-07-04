@@ -16,6 +16,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -44,6 +46,9 @@ android {
         }
         named("test") {
             java.srcDirs("src/test/kotlin")
+        }
+        named("androidTest") {
+            java.srcDirs("src/androidTest/kotlin")
         }
     }
 
@@ -90,4 +95,11 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation("junit:junit:4.13.2")
+
+    // Instrumented (emulator) tests: Compose UI smoke test + Room DAO test.
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

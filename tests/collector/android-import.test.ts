@@ -36,6 +36,14 @@ const fullExport = {
     { ip: "192.168.1.20", openPorts: [] },
   ],
   latencyMs: 24,
+  speed: {
+    download: {
+      speedMbps: 87.5,
+      bytesTransferred: 26214400,
+      durationMs: 2396,
+      testUrl: "https://speed.cloudflare.com/__down?bytes=26214400",
+    },
+  },
 };
 
 describe("AndroidScanImport schema", () => {
@@ -98,6 +106,16 @@ describe("androidImportToScanResult", () => {
     assert.equal(printer.mac, "unknown");
     assert.deepEqual(printer.ports, [{ port: 631, service: "unknown", state: "open" }]);
     assert.deepEqual(result.network.hosts[1].ports, []);
+  });
+
+  it("accepts the opt-in speed section but does not expand it", () => {
+    // The CLI speed shape also requires upload / jitter / packet-loss the
+    // phone doesn't measure; zero-filling those would produce false "slow
+    // upload" persona findings, so the download figure is deliberately not
+    // carried across (see the comment in android-import.ts).
+    const result = androidImportToScanResult(fullExport);
+    assert.equal(result.speed, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
   });
 
   it("reflects VPN state into the security section", () => {

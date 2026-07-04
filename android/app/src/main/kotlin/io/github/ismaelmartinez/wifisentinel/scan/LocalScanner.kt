@@ -40,12 +40,19 @@ class LocalScanner(private val context: Context) {
 
     private val hostProbe = HostProbe(context.applicationContext)
     private val latencyProbe = LatencyProbe()
+    private val speedProbe = SpeedProbe()
 
     /**
      * Run the full scan pipeline. Must be called from a coroutine scope —
      * the work happens on `Dispatchers.IO`.
+     *
+     * @param includeSpeedTest run the opt-in download throughput probe
+     *   (~25 MB of data — see [SpeedProbe]). Off by default.
      */
-    suspend fun scan(appVersion: String): LocalScanResult = withContext(Dispatchers.IO) {
+    suspend fun scan(
+        appVersion: String,
+        includeSpeedTest: Boolean = false,
+    ): LocalScanResult = withContext(Dispatchers.IO) {
         // Kick off a fresh AP scan up front so `deriveSecurity` isn't reading
         // whatever stale cache the system last populated. The call is rate-
         // limited (4 per 2 min on API 28+); if it's denied or times out we
@@ -63,6 +70,11 @@ class LocalScanner(private val context: Context) {
         val hosts = hostsDeferred.await()
         val latencyMs = latencyDeferred.await()
 
+        // Speed test runs last, after the latency probe has finished, so the
+        // bulk download can't inflate the latency figure (the CLI orders its
+        // stages the same way).
+        val speed = if (includeSpeedTest) speedProbe.measure() else null
+
         val base = LocalScanResult(
             meta = LocalScanResult.Meta(
                 scanId = UUID.randomUUID().toString(),
@@ -73,6 +85,7 @@ class LocalScanner(private val context: Context) {
             network = network,
             hosts = hosts,
             latencyMs = latencyMs,
+            speed = speed,
         )
 
         base.copy(analysis = LocalAnalyser.analyse(base))

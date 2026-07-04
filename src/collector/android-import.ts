@@ -53,6 +53,22 @@ export const AndroidScanImport = z.object({
     )
     .optional(),
   latencyMs: z.number().nullable().optional(),
+  // Opt-in download speed test. Parsed so the export stays a documented
+  // drop-in, but NOT expanded into `NetworkScanResult.speed`: the CLI's speed
+  // section also requires upload / jitter / packet-loss measurements the
+  // phone doesn't take, and zero-filling those would read as genuine "slow
+  // upload" findings to the personas.
+  speed: z
+    .object({
+      download: z.object({
+        speedMbps: z.number(),
+        bytesTransferred: z.number(),
+        durationMs: z.number(),
+        testUrl: z.string(),
+      }),
+    })
+    .nullable()
+    .optional(),
 });
 
 export type AndroidScanImport = z.infer<typeof AndroidScanImport>;
