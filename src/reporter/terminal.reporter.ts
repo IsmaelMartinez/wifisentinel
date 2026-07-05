@@ -382,23 +382,34 @@ function renderSpeedTest(result: NetworkScanResult): string {
 
   // Download/Upload bars
   const maxBar = 40;
-  const dlBar = Math.min(maxBar, Math.round(s.download.speedMbps / 5));
-  const dlColor = s.download.speedMbps >= 50 ? TEAL : s.download.speedMbps >= 10 ? AMBER : RED;
-  lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(Math.max(0, 10 - dlBar)))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
+  if (s.download) {
+    const dlBar = Math.min(maxBar, Math.round(s.download.speedMbps / 5));
+    const dlColor = s.download.speedMbps >= 50 ? TEAL : s.download.speedMbps >= 10 ? AMBER : RED;
+    lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(Math.max(0, 10 - dlBar)))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
+  }
   if (s.upload) {
     const ulBar = Math.min(maxBar, Math.round(s.upload.speedMbps / 5));
     const ulColor = s.upload.speedMbps >= 20 ? TEAL : s.upload.speedMbps >= 5 ? AMBER : RED;
     lines.push(row(`  Upload    ${ulColor("█".repeat(ulBar) + "░".repeat(Math.max(0, 10 - ulBar)))}  ${chalk.bold(s.upload.speedMbps.toFixed(1) + " Mbps")}`));
   }
-  lines.push(row(""));
+  if (s.download || s.upload) lines.push(row(""));
 
-  // Latency
-  if (s.latency && s.jitter) {
+  // Latency — each line renders only when its measurement exists (an imported
+  // Android scan carries just `internetMs`, with no jitter figures).
+  if (s.latency) {
     const latColor = (ms: number) => ms < 20 ? TEAL : ms < 50 ? AMBER : RED;
     lines.push(row(`  Latency`));
-    lines.push(row(`    Gateway:     ${latColor(s.latency.gatewayMs)(s.latency.gatewayMs.toFixed(1) + " ms")}   jitter: ${s.jitter.gatewayMs.toFixed(1)} ms`));
-    lines.push(row(`    Internet:    ${latColor(s.latency.internetMs)(s.latency.internetMs.toFixed(1) + " ms")}   jitter: ${s.jitter.internetMs.toFixed(1)} ms`));
-    lines.push(row(`    DNS resolve: ${s.latency.dnsResolutionMs} ms`));
+    if (s.latency.gatewayMs !== undefined) {
+      const jitter = s.jitter ? `   jitter: ${s.jitter.gatewayMs.toFixed(1)} ms` : "";
+      lines.push(row(`    Gateway:     ${latColor(s.latency.gatewayMs)(s.latency.gatewayMs.toFixed(1) + " ms")}${jitter}`));
+    }
+    if (s.latency.internetMs !== undefined) {
+      const jitter = s.jitter ? `   jitter: ${s.jitter.internetMs.toFixed(1)} ms` : "";
+      lines.push(row(`    Internet:    ${latColor(s.latency.internetMs)(s.latency.internetMs.toFixed(1) + " ms")}${jitter}`));
+    }
+    if (s.latency.dnsResolutionMs !== undefined) {
+      lines.push(row(`    DNS resolve: ${s.latency.dnsResolutionMs} ms`));
+    }
     lines.push(row(""));
   }
 
@@ -411,7 +422,7 @@ function renderSpeedTest(result: NetworkScanResult): string {
   }
 
   // WiFi utilisation
-  if (s.wifiLinkRate !== undefined && s.wifiLinkRate > 0 && s.effectiveUtilisation !== undefined) {
+  if (s.download && s.wifiLinkRate !== undefined && s.wifiLinkRate > 0 && s.effectiveUtilisation !== undefined) {
     const utilColor = s.effectiveUtilisation > 50 ? TEAL : s.effectiveUtilisation > 20 ? AMBER : RED;
     lines.push(row(`  WiFi Link Rate: ${s.wifiLinkRate} Mbps → actual throughput: ${s.download.speedMbps.toFixed(1)} Mbps (${utilColor(s.effectiveUtilisation.toFixed(1) + "% utilisation")})`));
     lines.push(row(""));

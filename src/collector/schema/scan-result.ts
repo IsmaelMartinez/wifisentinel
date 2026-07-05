@@ -215,18 +215,19 @@ export const NetworkScanResult = z.object({
     })
     .optional(),
 
-  // A speed section always carries at least a download measurement; the other
-  // sub-sections are optional so partial sources (the Android companion's
-  // opt-in download-only probe) can degrade to absent rather than zero-fill —
-  // the same convention as the optional top-level sections above. The CLI's
-  // own speed scanner still populates everything.
+  // Every sub-section of `speed` is optional so partial sources (the Android
+  // companion's always-on latency probe and its opt-in download-only speed
+  // test) can degrade to absent rather than zero-fill — the same convention
+  // as the optional top-level sections above. The latency sub-fields are
+  // individually optional for the same reason: the phone only measures
+  // `internetMs`. The CLI's own speed scanner still populates everything.
   speed: z
     .object({
       latency: z
         .object({
-          gatewayMs: z.number(),
-          internetMs: z.number(),
-          dnsResolutionMs: z.number(),
+          gatewayMs: z.number().optional(),
+          internetMs: z.number().optional(),
+          dnsResolutionMs: z.number().optional(),
         })
         .optional(),
       jitter: z
@@ -235,12 +236,14 @@ export const NetworkScanResult = z.object({
           internetMs: z.number(),
         })
         .optional(),
-      download: z.object({
-        speedMbps: z.number(),
-        bytesTransferred: z.number(),
-        durationMs: z.number(),
-        testUrl: z.string(),
-      }),
+      download: z
+        .object({
+          speedMbps: z.number(),
+          bytesTransferred: z.number(),
+          durationMs: z.number(),
+          testUrl: z.string(),
+        })
+        .optional(),
       upload: z
         .object({
           speedMbps: z.number(),

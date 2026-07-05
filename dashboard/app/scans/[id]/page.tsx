@@ -108,8 +108,12 @@ export default async function ScanDetailPage({
                 <p>TIME_WAIT: {scan.connections.timeWait}</p>
                 {scan.speed && (
                   <>
-                    <p className="mt-2">Download: {scan.speed.download.speedMbps} Mbps</p>
-                    {scan.speed.latency && <p>Latency: {scan.speed.latency.internetMs} ms</p>}
+                    {scan.speed.download && (
+                      <p className="mt-2">Download: {scan.speed.download.speedMbps} Mbps</p>
+                    )}
+                    {scan.speed.latency?.internetMs !== undefined && (
+                      <p>Latency: {scan.speed.latency.internetMs} ms</p>
+                    )}
                   </>
                 )}
               </CardContent>

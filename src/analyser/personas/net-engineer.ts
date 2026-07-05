@@ -65,7 +65,7 @@ export function analyseAsNetEngineer(
   if (result.speed) {
     const s = result.speed;
 
-    if ((s.rating === "poor" || s.rating === "unusable") && s.upload) {
+    if ((s.rating === "poor" || s.rating === "unusable") && s.download && s.upload) {
       insights.push({
         id: "ne-poor-speed",
         title: `Speed test rated "${s.rating}" — significant performance issue`,
@@ -82,6 +82,7 @@ export function analyseAsNetEngineer(
 
     // --- Low Wi-Fi utilisation ---
     if (
+      s.download &&
       s.wifiLinkRate !== undefined &&
       s.wifiLinkRate > 0 &&
       s.effectiveUtilisation !== undefined &&
@@ -102,7 +103,12 @@ export function analyseAsNetEngineer(
     }
 
     // --- Packet loss ---
-    if (s.packetLoss && s.latency && (s.packetLoss.gatewayPercent > 0 || s.packetLoss.internetPercent > 2)) {
+    if (
+      s.packetLoss &&
+      s.latency?.gatewayMs !== undefined &&
+      s.latency.internetMs !== undefined &&
+      (s.packetLoss.gatewayPercent > 0 || s.packetLoss.internetPercent > 2)
+    ) {
       const gw = s.packetLoss.gatewayPercent;
       const inet = s.packetLoss.internetPercent;
       const severity = gw > 5 || inet > 10 ? "high" : "medium";
@@ -121,7 +127,12 @@ export function analyseAsNetEngineer(
     }
 
     // --- High latency ---
-    if (s.latency && s.jitter && s.latency.gatewayMs > 20) {
+    if (
+      s.jitter &&
+      s.latency?.gatewayMs !== undefined &&
+      s.latency.internetMs !== undefined &&
+      s.latency.gatewayMs > 20
+    ) {
       insights.push({
         id: "ne-high-gateway-latency",
         title: `Gateway latency ${s.latency.gatewayMs.toFixed(1)} ms is above normal threshold`,
@@ -154,7 +165,10 @@ export function analyseAsNetEngineer(
   }
 
   // --- DNS resolution speed ---
-  if (result.speed?.latency && result.speed.latency.dnsResolutionMs > 100) {
+  if (
+    result.speed?.latency?.dnsResolutionMs !== undefined &&
+    result.speed.latency.dnsResolutionMs > 100
+  ) {
     insights.push({
       id: "ne-slow-dns",
       title: `DNS resolution at ${result.speed.latency.dnsResolutionMs} ms is slowing page loads`,

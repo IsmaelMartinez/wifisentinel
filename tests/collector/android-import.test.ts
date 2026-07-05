@@ -130,9 +130,51 @@ describe("androidImportToScanResult", () => {
     if (parsed.success) {
       assert.equal(parsed.data.speed, undefined);
       const result = androidImportToScanResult(parsed.data);
-      assert.equal(result.speed, undefined);
+      // The download section degrades to absent; the independently-measured
+      // latency figure still comes across.
+      assert.equal(result.speed?.download, undefined);
+      assert.equal(result.speed?.latency?.internetMs, 24);
       assert.doesNotThrow(() => NetworkScanResult.parse(result));
     }
+  });
+
+  it("maps the phone's latency figure into speed.latency.internetMs", () => {
+    const result = androidImportToScanResult(fullExport);
+    assert.equal(result.speed?.latency?.internetMs, 24);
+    // The latency sub-fields the phone can't measure stay absent — the same
+    // degrade-to-absent convention as the download-only speed section.
+    assert.equal(result.speed?.latency?.gatewayMs, undefined);
+    assert.equal(result.speed?.latency?.dnsResolutionMs, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("builds a latency-only speed section when the speed test was off", () => {
+    const result = androidImportToScanResult({ ...fullExport, speed: undefined });
+    assert.equal(result.speed?.latency?.internetMs, 24);
+    assert.equal(result.speed?.download, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    // Latency-only records must still flow through the analysis layer.
+    assert.doesNotThrow(() => scoreAllStandards(result));
+    assert.doesNotThrow(() => analyseAllPersonas(result));
+  });
+
+  it("omits the speed section entirely when neither latency nor download exist", () => {
+    const result = androidImportToScanResult({
+      ...fullExport,
+      speed: undefined,
+      latencyMs: undefined,
+    });
+    assert.equal(result.speed, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("treats a null latencyMs (failed probe) as absent", () => {
+    const result = androidImportToScanResult({
+      ...fullExport,
+      speed: undefined,
+      latencyMs: null,
+    });
+    assert.equal(result.speed, undefined);
   });
 
   it("reflects VPN state into the security section", () => {

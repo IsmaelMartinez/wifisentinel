@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark teal, matching the app theme's sentinel/security palette. -->
+    <color name="ic_launcher_background">#0B3C43</color>
+</resources>

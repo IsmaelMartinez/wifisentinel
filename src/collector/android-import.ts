@@ -76,8 +76,9 @@ export type AndroidScanImport = z.infer<typeof AndroidScanImport>;
  * Expand an Android companion export into a full `NetworkScanResult`. Fields the
  * phone cannot measure are set to explicit sentinels ("unknown", 0, false, or
  * an empty collection) and the optional deep-scan sections (traffic, hidden
- * devices, intrusion, deauth) are omitted entirely. The opt-in speed test is
- * carried across as a download-only `speed` section. `meta.partial` is set so
+ * devices, intrusion, deauth) are omitted entirely. The always-on latency
+ * probe and the opt-in speed test are carried across as a partial `speed`
+ * section (`latency.internetMs` and/or `download`). `meta.partial` is set so
  * history/diff/trend/devices can render the record without treating the
  * sentinels as genuine findings.
  */
@@ -86,6 +87,19 @@ export function androidImportToScanResult(
 ): NetworkScanResult {
   const wifi = input.wifi ?? undefined;
   const network = input.network ?? undefined;
+
+  // The phone measures internet latency (a single HTTPS HEAD round-trip) on
+  // every scan, and the download throughput only when the user opts in. Both
+  // land in the `speed` section; the sub-fields the phone can't measure
+  // (gateway/DNS latency, upload, jitter, packet loss, rating, …) stay absent
+  // rather than zero-filled — zeros would read as genuine findings.
+  const speed: NetworkScanResult["speed"] = {
+    ...(typeof input.latencyMs === "number"
+      ? { latency: { internetMs: input.latencyMs } }
+      : {}),
+    ...(input.speed?.download ? { download: input.speed.download } : {}),
+  };
+  const hasSpeed = Object.keys(speed).length > 0;
 
   return {
     meta: {
@@ -166,10 +180,6 @@ export function androidImportToScanResult(
       timeWait: 0,
       topDestinations: [],
     },
-    // The phone's opt-in probe only measures the download; the other speed
-    // sub-sections (upload, jitter, packet loss, rating, …) are optional in
-    // the schema and stay absent rather than zero-filled — zeros would read
-    // as genuine "slow upload" findings to the personas.
-    ...(input.speed?.download ? { speed: { download: input.speed.download } } : {}),
+    ...(hasSpeed ? { speed } : {}),
   };
 }
