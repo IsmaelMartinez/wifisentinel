@@ -215,36 +215,49 @@ export const NetworkScanResult = z.object({
     })
     .optional(),
 
+  // A speed section always carries at least a download measurement; the other
+  // sub-sections are optional so partial sources (the Android companion's
+  // opt-in download-only probe) can degrade to absent rather than zero-fill —
+  // the same convention as the optional top-level sections above. The CLI's
+  // own speed scanner still populates everything.
   speed: z
     .object({
-      latency: z.object({
-        gatewayMs: z.number(),
-        internetMs: z.number(),
-        dnsResolutionMs: z.number(),
-      }),
-      jitter: z.object({
-        gatewayMs: z.number(),
-        internetMs: z.number(),
-      }),
+      latency: z
+        .object({
+          gatewayMs: z.number(),
+          internetMs: z.number(),
+          dnsResolutionMs: z.number(),
+        })
+        .optional(),
+      jitter: z
+        .object({
+          gatewayMs: z.number(),
+          internetMs: z.number(),
+        })
+        .optional(),
       download: z.object({
         speedMbps: z.number(),
         bytesTransferred: z.number(),
         durationMs: z.number(),
         testUrl: z.string(),
       }),
-      upload: z.object({
-        speedMbps: z.number(),
-        bytesTransferred: z.number(),
-        durationMs: z.number(),
-        testUrl: z.string(),
-      }),
-      packetLoss: z.object({
-        gatewayPercent: z.number(),
-        internetPercent: z.number(),
-      }),
-      wifiLinkRate: z.number(),
-      effectiveUtilisation: z.number(),
-      rating: z.enum(["excellent", "good", "fair", "poor", "unusable"]),
+      upload: z
+        .object({
+          speedMbps: z.number(),
+          bytesTransferred: z.number(),
+          durationMs: z.number(),
+          testUrl: z.string(),
+        })
+        .optional(),
+      packetLoss: z
+        .object({
+          gatewayPercent: z.number(),
+          internetPercent: z.number(),
+        })
+        .optional(),
+      wifiLinkRate: z.number().optional(),
+      effectiveUtilisation: z.number().optional(),
+      rating: z.enum(["excellent", "good", "fair", "poor", "unusable"]).optional(),
     })
     .optional(),
 });

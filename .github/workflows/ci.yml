@@ -7,6 +7,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  # Android SDK platform used by both android jobs: SDK package lists,
+  # emulator api-level inputs, and the AVD cache key all derive from this so
+  # a bump can't leave the jobs on different SDKs. Keep it in sync with
+  # compileSdk in android/app/build.gradle.kts.
+  ANDROID_API_LEVEL: "35"
+
 jobs:
   typecheck-and-build:
     runs-on: ubuntu-latest
@@ -56,11 +63,15 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
+
+      # Job-scoped Gradle caching (setup-java's `cache: gradle` derives one
+      # shared key for every job, so whichever job saved first would starve
+      # the other of its extra dependencies).
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
-          packages: platforms;android-35 build-tools;35.0.0 platform-tools
+          packages: platforms;android-${{ env.ANDROID_API_LEVEL }} build-tools;35.0.0 platform-tools
 
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest
@@ -92,11 +103,13 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
+
+      # Job-scoped Gradle caching — see the note on the android job.
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
-          packages: platforms;android-35 build-tools;35.0.0 platform-tools
+          packages: platforms;android-${{ env.ANDROID_API_LEVEL }} build-tools;35.0.0 platform-tools
 
       - name: Cache AVD
         id: avd-cache
@@ -105,13 +118,16 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api-35
+          # Cache entries are immutable: bump the -vN suffix whenever emulator
+          # tooling updates make the cached quick-boot snapshot stale (symptom:
+          # every run restores the cache and still cold-boots).
+          key: avd-api-${{ env.ANDROID_API_LEVEL }}-v1
 
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
         with:
-          api-level: 35
+          api-level: ${{ env.ANDROID_API_LEVEL }}
           arch: x86_64
           target: google_apis
           force-avd-creation: false
@@ -122,7 +138,7 @@ jobs:
       - name: Instrumented tests
         uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
         with:
-          api-level: 35
+          api-level: ${{ env.ANDROID_API_LEVEL }}
           arch: x86_64
           target: google_apis
           force-avd-creation: false

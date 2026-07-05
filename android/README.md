@@ -66,6 +66,11 @@ artifact; the separate `android-instrumented` job boots an API 35 x86_64
 emulator (reactivecircus/android-emulator-runner, with AVD snapshot caching)
 and runs the instrumented suite.
 
+**Known gap:** neither instrumented test triggers an actual scan, so the
+device-dependent pipeline glue (`LocalScanner` / `HostProbe` / `WifiManager`
+interplay) is still not exercised end-to-end in CI — regressions there only
+surface on a real device.
+
 ## Build
 
 The Gradle wrapper (8.11.1) is committed, so `./gradlew` works out of the box —

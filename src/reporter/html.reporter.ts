@@ -274,13 +274,13 @@ ${scan.speed ? `
   <div class="grid2">
     <div>
       <p>Download: ${scan.speed.download.speedMbps} Mbps</p>
-      <p>Upload: ${scan.speed.upload.speedMbps} Mbps</p>
-      <p>Rating: ${esc(scan.speed.rating)}</p>
+      ${scan.speed.upload ? `<p>Upload: ${scan.speed.upload.speedMbps} Mbps</p>` : ""}
+      ${scan.speed.rating ? `<p>Rating: ${esc(scan.speed.rating)}</p>` : ""}
     </div>
     <div>
-      <p>Latency: ${scan.speed.latency.internetMs} ms</p>
-      <p>Jitter: ${scan.speed.jitter.internetMs} ms</p>
-      <p>Packet Loss: ${scan.speed.packetLoss.internetPercent}%</p>
+      ${scan.speed.latency ? `<p>Latency: ${scan.speed.latency.internetMs} ms</p>` : ""}
+      ${scan.speed.jitter ? `<p>Jitter: ${scan.speed.jitter.internetMs} ms</p>` : ""}
+      ${scan.speed.packetLoss ? `<p>Packet Loss: ${scan.speed.packetLoss.internetPercent}%</p>` : ""}
     </div>
   </div>
 </div>` : ""}

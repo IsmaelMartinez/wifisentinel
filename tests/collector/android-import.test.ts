@@ -108,14 +108,31 @@ describe("androidImportToScanResult", () => {
     assert.deepEqual(result.network.hosts[1].ports, []);
   });
 
-  it("accepts the opt-in speed section but does not expand it", () => {
-    // The CLI speed shape also requires upload / jitter / packet-loss the
-    // phone doesn't measure; zero-filling those would produce false "slow
-    // upload" persona findings, so the download figure is deliberately not
-    // carried across (see the comment in android-import.ts).
+  it("carries the opt-in speed test across as a download-only speed section", () => {
     const result = androidImportToScanResult(fullExport);
-    assert.equal(result.speed, undefined);
+    assert.deepEqual(result.speed?.download, fullExport.speed.download);
+    // The sub-sections the phone doesn't measure stay absent, not zero-filled
+    // (zeros would read as genuine "slow upload" persona findings).
+    assert.equal(result.speed?.upload, undefined);
+    assert.equal(result.speed?.rating, undefined);
     assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("degrades a malformed speed section to absent instead of rejecting the scan", () => {
+    const trimmed = {
+      ...fullExport,
+      // Missing bytesTransferred/durationMs/testUrl — e.g. a hand-trimmed
+      // export or a future app version after field drift.
+      speed: { download: { speedMbps: 87.5 } },
+    };
+    const parsed = AndroidScanImport.safeParse(trimmed);
+    assert.equal(parsed.success, true);
+    if (parsed.success) {
+      assert.equal(parsed.data.speed, undefined);
+      const result = androidImportToScanResult(parsed.data);
+      assert.equal(result.speed, undefined);
+      assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    }
   });
 
   it("reflects VPN state into the security section", () => {

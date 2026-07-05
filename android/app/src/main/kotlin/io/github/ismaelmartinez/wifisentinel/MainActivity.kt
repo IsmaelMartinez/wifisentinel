@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
+import io.github.ismaelmartinez.wifisentinel.scan.SpeedProbe
 import io.github.ismaelmartinez.wifisentinel.store.ScanStore
 import io.github.ismaelmartinez.wifisentinel.store.ScanSummary
 import io.github.ismaelmartinez.wifisentinel.ui.theme.WifiSentinelTheme
@@ -253,14 +254,19 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
     val runScan: () -> Unit = {
         scope.launch {
             scanning = true
-            val scanned = scanner.scan(
-                appVersion = BuildConfig.VERSION_NAME,
-                includeSpeedTest = includeSpeedTest,
-            )
-            result = scanned
-            // Persist every completed scan so it shows up in history.
-            store.save(scanned)
-            scanning = false
+            // The finally guarantees the spinner clears and the buttons
+            // re-enable even if the scan or the save throws.
+            try {
+                val scanned = scanner.scan(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    includeSpeedTest = includeSpeedTest,
+                )
+                result = scanned
+                // Persist every completed scan so it shows up in history.
+                store.save(scanned)
+            } finally {
+                scanning = false
+            }
         }
         Unit
     }
@@ -339,7 +345,10 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
                     enabled = !scanning,
                 )
                 Text(
-                    text = stringResource(R.string.speed_test_toggle),
+                    text = stringResource(
+                        R.string.speed_test_toggle,
+                        SpeedProbe.DOWNLOAD_MEGABYTES,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }

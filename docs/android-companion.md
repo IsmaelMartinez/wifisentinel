@@ -237,6 +237,10 @@ The skeleton under `android/` has grown past the first spike. It ships:
   emulator (reactivecircus/android-emulator-runner with AVD snapshot caching),
   separate from the `android` unit-test/APK job.
 
+  Neither instrumented test triggers an actual scan: the device-dependent
+  pipeline glue (`LocalScanner` / `HostProbe` / `WifiManager` interplay)
+  remains unexercised end-to-end in CI and is only verified on real devices.
+
 On the CLI side, `wifisentinel import <file>` (see `src/commands/import.ts` and
 `src/collector/android-import.ts`) validates the export against a relaxed Zod
 schema, expands it into a full `NetworkScanResult` with `meta.platform:

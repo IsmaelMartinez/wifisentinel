@@ -13,7 +13,7 @@
     <string name="permission_denied">Permission denied. WiFi Sentinel needs the WiFi scan permission to inspect this network.</string>
     <string name="open_settings">Open settings</string>
     <string name="export_scan">Export as JSON</string>
-    <string name="speed_test_toggle">Include speed test (downloads ~25 MB)</string>
+    <string name="speed_test_toggle">Include speed test (downloads ~%1$d MB)</string>
     <string name="speed_download_result">Download speed: %1$.1f Mbps</string>
     <string name="overall_risk">Overall risk: %s</string>
     <string name="partial_analysis_note">Partial analysis — a phone can only see a subset of what the desktop scanner inspects.</string>
