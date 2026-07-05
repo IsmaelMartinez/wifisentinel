@@ -242,12 +242,13 @@ export const NetworkScanResult = z.object({
         })
         // An empty latency object would defeat the degrade-to-absent
         // convention (sections are omitted, never left as empty husks).
-        // `method` is an annotation, not a measurement — it doesn't count.
+        // `method` is an annotation, not a measurement — it doesn't count,
+        // but any measurement field added later does, without touching this.
         .refine(
           (l) =>
-            l.gatewayMs !== undefined ||
-            l.internetMs !== undefined ||
-            l.dnsResolutionMs !== undefined,
+            Object.entries(l).some(
+              ([key, value]) => key !== "method" && value !== undefined
+            ),
           {
             message: "latency must carry at least one measurement",
           }

@@ -63,8 +63,13 @@ data class LocalScanResult(
          * and excluding the connected AP (see [WifiMapping.mapNearbyNetworks]).
          * Feeds the CLI's `wifi.nearbyNetworks` on import so channel-congestion
          * analysis works on imported scans.
+         *
+         * Null (never empty-defaulted) when the scan predates this field —
+         * scans stored in Room by earlier app versions deserialise to null, so
+         * "not collected" stays distinguishable from a genuine zero-AP
+         * observation. The scanner always sets a (possibly empty) list.
          */
-        val nearbyNetworks: List<NearbyNetwork> = emptyList(),
+        val nearbyNetworks: List<NearbyNetwork>? = null,
     )
 
     /**

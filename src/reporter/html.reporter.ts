@@ -1,6 +1,7 @@
 import type { StoredScan } from "../store/types.js";
 import { computeSecurityScore } from "../analyser/score.js";
 import { analyseRF } from "../analyser/rf/index.js";
+import { latencyMethodNote } from "../collector/schema/latency.js";
 
 function esc(str: string): string {
   return str
@@ -278,7 +279,7 @@ ${scan.speed ? `
       ${scan.speed.rating ? `<p>Rating: ${esc(scan.speed.rating)}</p>` : ""}
     </div>
     <div>
-      ${scan.speed.latency?.internetMs !== undefined ? `<p>Latency: ${scan.speed.latency.internetMs} ms${scan.speed.latency.method === "https-rtt" ? " (HTTPS round-trip — healthy is ~100–400 ms)" : ""}</p>` : ""}
+      ${scan.speed.latency?.internetMs !== undefined ? `<p>Latency: ${scan.speed.latency.internetMs} ms${latencyMethodNote(scan.speed.latency.method)}</p>` : ""}
       ${scan.speed.jitter ? `<p>Jitter: ${scan.speed.jitter.internetMs} ms</p>` : ""}
       ${scan.speed.packetLoss ? `<p>Packet Loss: ${scan.speed.packetLoss.internetPercent}%</p>` : ""}
     </div>

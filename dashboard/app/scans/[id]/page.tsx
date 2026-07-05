@@ -9,6 +9,7 @@ import { ComplianceCard } from "@/components/compliance-card";
 import { ChannelChart } from "@/components/channel-chart";
 import { getScan } from "@/lib/store";
 import { computeSecurityScore } from "@wifisentinel/analyser/score.js";
+import { latencyMethodNote } from "@wifisentinel/collector/schema/latency.js";
 
 export const dynamic = "force-dynamic";
 
@@ -114,9 +115,7 @@ export default async function ScanDetailPage({
                     {scan.speed.latency?.internetMs !== undefined && (
                       <p>
                         Latency: {scan.speed.latency.internetMs} ms
-                        {scan.speed.latency.method === "https-rtt"
-                          ? " (HTTPS round-trip — healthy is ~100–400 ms)"
-                          : ""}
+                        {latencyMethodNote(scan.speed.latency.method)}
                       </p>
                     )}
                   </>

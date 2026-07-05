@@ -39,6 +39,13 @@ class WifiMappingTest {
     }
 
     @Test
+    fun lowercasesBssidToOneCanonicalForm() {
+        // BSSIDs are case-insensitive hex; a single canonical form keeps
+        // history/trend comparisons trivial.
+        assertEquals("aa:bb:cc:dd:ee:ff", WifiMapping.normaliseBssid("AA:BB:CC:DD:EE:FF"))
+    }
+
+    @Test
     fun dropsRedactedBssid() {
         assertNull(WifiMapping.normaliseBssid("02:00:00:00:00:00"))
         assertNull(WifiMapping.normaliseBssid(""))
@@ -84,6 +91,14 @@ class WifiMappingTest {
     fun mapsFiveGhzChannels() {
         assertEquals(36, WifiMapping.frequencyToChannel(5180))
         assertEquals(165, WifiMapping.frequencyToChannel(5825))
+    }
+
+    @Test
+    fun mapsUnii4Channels() {
+        // 5845/5865/5885 MHz are real APs (UNII-4), not the channel-0 sentinel.
+        assertEquals(169, WifiMapping.frequencyToChannel(5845))
+        assertEquals(173, WifiMapping.frequencyToChannel(5865))
+        assertEquals(177, WifiMapping.frequencyToChannel(5885))
     }
 
     @Test
@@ -204,5 +219,14 @@ class WifiMappingTest {
             connectedBssid = null,
         ).single()
         assertNull(mapped.ssid)
+    }
+
+    @Test
+    fun mappedBssidsAreLowercased() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(raw(bssid = "11:22:33:44:55:AA")),
+            connectedBssid = null,
+        ).single()
+        assertEquals("11:22:33:44:55:aa", mapped.bssid)
     }
 }

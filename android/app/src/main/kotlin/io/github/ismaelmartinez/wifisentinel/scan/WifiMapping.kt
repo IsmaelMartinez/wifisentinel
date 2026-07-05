@@ -18,9 +18,13 @@ internal object WifiMapping {
     fun normaliseSsid(raw: String?): String? =
         raw?.trim('"')?.takeIf { it.isNotEmpty() && it != UNKNOWN_SSID }
 
-    /** Drop empty and the redacted `02:00:...` BSSID. */
+    /**
+     * Lowercase (BSSIDs are case-insensitive hex; one canonical form keeps
+     * history/trend comparisons trivial), drop empty and the redacted
+     * `02:00:...` BSSID.
+     */
     fun normaliseBssid(raw: String?): String? =
-        raw?.takeIf { it.isNotEmpty() && it != REDACTED_BSSID }
+        raw?.lowercase()?.takeIf { it.isNotEmpty() && it != REDACTED_BSSID }
 
     /** Map a `ScanResult.capabilities` string to a coarse security label. */
     fun securityFromCapabilities(capabilities: String?): String {
@@ -44,7 +48,10 @@ internal object WifiMapping {
     fun frequencyToChannel(freqMhz: Int): Int = when {
         freqMhz == 2484 -> 14
         freqMhz in 2412..2472 -> (freqMhz - 2407) / 5
-        freqMhz in 5170..5825 -> (freqMhz - 5000) / 5
+        // Upper bound 5895 includes UNII-4 (5845/5865/5885 MHz → channels
+        // 169/173/177) — stopping at 5825 mapped real APs to the channel-0
+        // "unknown" sentinel.
+        freqMhz in 5170..5895 -> (freqMhz - 5000) / 5
         freqMhz in 5955..7115 -> (freqMhz - 5950) / 5
         else -> 0
     }
@@ -85,27 +92,37 @@ internal object WifiMapping {
      * SSIDs/BSSIDs, derive security/channel/band, exclude the connected AP,
      * dedupe by BSSID keeping the strongest sighting, sort strongest-first,
      * and cap at [cap]. Entries without a usable BSSID are dropped — they
-     * can't be deduped or told apart from the connected AP.
+     * can't be deduped or told apart from the connected AP. Dedupe happens
+     * on the raw entries so sightings discarded by it are never fully mapped.
      */
     fun mapNearbyNetworks(
         raw: List<RawNearbyNetwork>,
         connectedBssid: String?,
         cap: Int = NEARBY_NETWORKS_CAP,
-    ): List<LocalScanResult.NearbyNetwork> =
-        raw.mapNotNull { entry ->
-            val bssid = normaliseBssid(entry.bssid) ?: return@mapNotNull null
-            if (bssid.equals(connectedBssid, ignoreCase = true)) return@mapNotNull null
-            LocalScanResult.NearbyNetwork(
-                ssid = normaliseSsid(entry.ssid),
-                bssid = bssid,
-                security = securityFromCapabilities(entry.capabilities),
-                channel = frequencyToChannel(entry.frequencyMhz),
-                band = frequencyToBand(entry.frequencyMhz),
-                signal = entry.signalDbm,
-            )
+    ): List<LocalScanResult.NearbyNetwork> {
+        // normaliseBssid lowercases, so plain equality is case-insensitive.
+        val connected = connectedBssid?.lowercase()
+        val strongestByBssid = LinkedHashMap<String, RawNearbyNetwork>()
+        for (entry in raw) {
+            val bssid = normaliseBssid(entry.bssid) ?: continue
+            if (bssid == connected) continue
+            val existing = strongestByBssid[bssid]
+            if (existing == null || entry.signalDbm > existing.signalDbm) {
+                strongestByBssid[bssid] = entry
+            }
         }
-            .groupBy { it.bssid.lowercase() }
-            .map { (_, sightings) -> sightings.maxBy { it.signal } }
-            .sortedByDescending { it.signal }
+        return strongestByBssid.entries
+            .sortedByDescending { it.value.signalDbm }
             .take(cap)
+            .map { (bssid, entry) ->
+                LocalScanResult.NearbyNetwork(
+                    ssid = normaliseSsid(entry.ssid),
+                    bssid = bssid,
+                    security = securityFromCapabilities(entry.capabilities),
+                    channel = frequencyToChannel(entry.frequencyMhz),
+                    band = frequencyToBand(entry.frequencyMhz),
+                    signal = entry.signalDbm,
+                )
+            }
+    }
 }

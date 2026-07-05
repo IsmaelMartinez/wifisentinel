@@ -33,6 +33,8 @@ export const AndroidScanImport = z.object({
       // Nearby APs observed by the phone's WifiManager scan (deduped by
       // BSSID and capped on-device). `band` is phone-only colour — the CLI
       // `NearbyNetwork` shape has no band field, so the adapter drops it.
+      // Null when the scan predates the field (pre-upgrade Room records
+      // re-exported by a newer app version).
       nearbyNetworks: z
         .array(
           z.object({
@@ -44,6 +46,7 @@ export const AndroidScanImport = z.object({
             signal: z.number().optional(),
           })
         )
+        .nullable()
         .optional(),
     })
     .nullable()
@@ -147,16 +150,28 @@ export function androidImportToScanResult(
       // `protocol` and `noise` aren't in the phone's scan results — the same
       // sentinels ("unknown", 0) as the connected-AP fields above. Feeding
       // these through lets the net-engineer channel-congestion insight work
-      // on imported scans.
-      nearbyNetworks: (wifi?.nearbyNetworks ?? []).map((n) => ({
-        ssid: n.ssid ?? null,
-        ...(n.bssid ? { bssid: n.bssid } : {}),
-        security: n.security ?? "unknown",
-        protocol: "unknown",
-        channel: n.channel ?? 0,
-        signal: n.signal ?? 0,
-        noise: 0,
-      })),
+      // on imported scans. Entries missing bssid/channel/signal are dropped
+      // (the phone always emits all three — they're non-nullable in
+      // `LocalScanResult.NearbyNetwork`): sentinel-filling would misrepresent
+      // observable data, e.g. 0 dBm reads as the strongest possible signal.
+      // Channel 0 (the phone's own unknown-frequency sentinel) is dropped
+      // too — RF consumers place channels numerically, so 0 would count as
+      // 2.4 GHz overlap for channels 1–2 and fabricate congestion.
+      nearbyNetworks: (wifi?.nearbyNetworks ?? []).flatMap((n) =>
+        n.bssid && n.channel !== undefined && n.channel > 0 && n.signal !== undefined
+          ? [
+              {
+                ssid: n.ssid ?? null,
+                bssid: n.bssid.toLowerCase(),
+                security: n.security ?? "unknown",
+                protocol: "unknown",
+                channel: n.channel,
+                signal: n.signal,
+                noise: 0,
+              },
+            ]
+          : []
+      ),
     },
     network: {
       interface: "wlan0",

@@ -33,7 +33,7 @@ const fullExport = {
         band: "5 GHz",
         signal: -70,
       },
-      { ssid: null, bssid: "22:33:44:55:66:77", security: "WPA2", channel: 149, band: "5 GHz", signal: -80 },
+      { ssid: null, bssid: "22:33:44:55:66:AA", security: "WPA2", channel: 149, band: "5 GHz", signal: -80 },
     ],
   },
   network: {
@@ -272,18 +272,69 @@ describe("androidImportToScanResult", () => {
     // Not observable from the phone — sentinels, same as the connected AP.
     assert.equal(first.protocol, "unknown");
     assert.equal(first.noise, 0);
-    // Hidden networks keep their null SSID.
+    // Hidden networks keep their null SSID; BSSIDs normalise to lowercase.
     assert.equal(hidden.ssid, null);
+    assert.equal(hidden.bssid, "22:33:44:55:66:aa");
     assert.doesNotThrow(() => NetworkScanResult.parse(result));
   });
 
   it("defaults nearby networks to empty when the export predates the field", () => {
+    for (const legacy of [undefined, null]) {
+      const result = androidImportToScanResult({
+        ...fullExport,
+        wifi: { ...fullExport.wifi, nearbyNetworks: legacy },
+      });
+      assert.deepEqual(result.wifi.nearbyNetworks, []);
+      assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    }
+  });
+
+  it("drops nearby entries missing bssid/channel/signal instead of sentinel-filling", () => {
+    // 0 dBm would read as the strongest possible signal and channel 0
+    // aliases with the unknown-channel sentinel — dropping is the honest
+    // degradation for hand-trimmed or drifted exports.
     const result = androidImportToScanResult({
       ...fullExport,
-      wifi: { ...fullExport.wifi, nearbyNetworks: undefined },
+      wifi: {
+        ...fullExport.wifi,
+        nearbyNetworks: [
+          { ssid: "NoBssid", channel: 6, signal: -60 },
+          { ssid: "NoChannel", bssid: "33:44:55:66:77:88", signal: -60 },
+          { ssid: "UnknownFreq", bssid: "44:55:66:77:88:99", channel: 0, signal: -60 },
+          { ssid: "NoSignal", bssid: "55:66:77:88:99:aa", channel: 6 },
+          { ssid: "Kept", bssid: "66:77:88:99:aa:bb", channel: 6, signal: -60 },
+        ],
+      },
     });
-    assert.deepEqual(result.wifi.nearbyNetworks, []);
-    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    assert.deepEqual(
+      result.wifi.nearbyNetworks.map((n) => n.ssid),
+      ["Kept"]
+    );
+  });
+
+  it("never fires channel congestion on the unknown-channel sentinel", () => {
+    // Connected channel unknown (absent → 0 sentinel) + nearby entries on
+    // channel 0 must not read as "channel 0 is congested". The import layer
+    // already drops channel-0 nearby entries, so build the sentinel state
+    // directly to exercise the persona's own guard.
+    const result = androidImportToScanResult({
+      ...fullExport,
+      wifi: { ...fullExport.wifi, channel: undefined },
+    });
+    result.wifi.nearbyNetworks = [1, 2, 3].map((i) => ({
+      ssid: `Mystery${i}`,
+      bssid: `00:00:00:00:01:0${i}`,
+      security: "unknown",
+      protocol: "unknown",
+      channel: 0,
+      signal: -60,
+      noise: 0,
+    }));
+    assert.equal(result.wifi.channel, 0);
+    const analysis = analyseAllPersonas(result);
+    const netEngineer = analysis.analyses.find((a) => a.persona === "net-engineer");
+    const ids = new Set(netEngineer?.insights.map((i) => i.id));
+    assert.equal(ids.has("ne-channel-congestion"), false);
   });
 
   it("feeds nearby networks into the net-engineer channel-congestion insight", () => {

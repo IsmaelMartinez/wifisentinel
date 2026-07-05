@@ -9,6 +9,8 @@ import {
   snrLabel,
   latencyBands,
   latencyMethodLabel,
+  latencyMethodNote,
+  isPingLatency,
 } from "../../src/reporter/render-helpers.js";
 
 // Strip ANSI escape codes for plain-text assertions
@@ -196,5 +198,22 @@ describe("latencyMethodLabel", () => {
     assert.equal(latencyMethodLabel("https-rtt"), "HTTPS round-trip");
     assert.equal(latencyMethodLabel("icmp-ping"), undefined);
     assert.equal(latencyMethodLabel(undefined), undefined);
+  });
+});
+
+describe("isPingLatency / latencyMethodNote", () => {
+  it("treats absent method as ping and any other method as non-ping", () => {
+    assert.equal(isPingLatency(undefined), true);
+    assert.equal(isPingLatency("icmp-ping"), true);
+    assert.equal(isPingLatency("https-rtt"), false);
+  });
+
+  it("derives the https-rtt note from the shared label and bands", () => {
+    assert.equal(
+      latencyMethodNote("https-rtt"),
+      " (HTTPS round-trip — healthy is ~100–400 ms)"
+    );
+    assert.equal(latencyMethodNote("icmp-ping"), "");
+    assert.equal(latencyMethodNote(undefined), "");
   });
 });
