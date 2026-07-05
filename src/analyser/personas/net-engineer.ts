@@ -65,11 +65,16 @@ export function analyseAsNetEngineer(
   if (result.speed) {
     const s = result.speed;
 
-    // The latency figures below feed the technicalDetail strings; require the
-    // full pair the CLI scanner measures (a partial source like the Android
-    // import carries internetMs alone) once, instead of re-checking per insight.
+    // The latency figures below feed threshold comparisons and technicalDetail
+    // strings written for ICMP ping semantics ("gateway latency should be
+    // under 5 ms"). Require the full pair the CLI scanner measures (a partial
+    // source like the Android import carries internetMs alone) AND ping
+    // semantics (an HTTPS HEAD round-trip reads ~100–400 ms healthy, which
+    // would trip every ping threshold) once, instead of re-checking per insight.
     const fullLatency =
-      s.latency?.gatewayMs !== undefined && s.latency.internetMs !== undefined
+      s.latency?.gatewayMs !== undefined &&
+      s.latency.internetMs !== undefined &&
+      (s.latency.method ?? "icmp-ping") === "icmp-ping"
         ? { gatewayMs: s.latency.gatewayMs, internetMs: s.latency.internetMs }
         : undefined;
 

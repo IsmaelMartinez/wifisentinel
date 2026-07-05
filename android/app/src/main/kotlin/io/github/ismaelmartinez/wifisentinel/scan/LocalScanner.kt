@@ -109,6 +109,24 @@ class LocalScanner(private val context: Context) {
             band = WifiMapping.frequencyToBand(frequencyMhz),
             signal = info.rssi,
             txRate = info.linkSpeed,
+            nearbyNetworks = WifiMapping.mapNearbyNetworks(
+                raw = scanResults.map { scan ->
+                    // `ScanResult.SSID` is deprecated on API 33+ in favour of
+                    // `wifiSsid`, but the replacement needs a UTF-8 decode
+                    // dance and minSdk is 29 — the deprecated field is fine
+                    // for a display string.
+                    @Suppress("DEPRECATION")
+                    val rawSsid = scan.SSID
+                    WifiMapping.RawNearbyNetwork(
+                        ssid = rawSsid,
+                        bssid = scan.BSSID,
+                        capabilities = scan.capabilities,
+                        frequencyMhz = scan.frequency,
+                        signalDbm = scan.level,
+                    )
+                },
+                connectedBssid = bssid,
+            ),
         )
     }
 

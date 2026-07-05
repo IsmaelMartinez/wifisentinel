@@ -1,6 +1,7 @@
 import chalk, { type ChalkInstance } from "chalk";
 import figures from "figures";
 import terminalLink from "terminal-link";
+import type { LatencyMethod } from "../collector/schema/scan-result.js";
 
 // Accessible colour constants — distinguishable under all common CVD types
 export const TEAL = chalk.hex("#4ec9b0");
@@ -87,6 +88,24 @@ export function signalBar(signal: number): string {
   const empty = "░".repeat(10 - bars);
   const color = pct > 70 ? TEAL : pct > 40 ? AMBER : RED;
   return color(filled) + chalk.gray(empty) + chalk.dim(` ${signal} dBm`);
+}
+
+/**
+ * Green/amber thresholds (ms) for a latency figure, keyed by how it was
+ * measured. An HTTPS HEAD round-trip carries TCP+TLS handshakes on top of
+ * the network path, so a healthy figure sits around 100–400 ms where an
+ * ICMP ping would read ~15 ms. Absent method means "icmp-ping" (all data
+ * predating `speed.latency.method` came from the CLI's ping path).
+ */
+export function latencyBands(method?: LatencyMethod): { goodMs: number; warnMs: number } {
+  return method === "https-rtt"
+    ? { goodMs: 400, warnMs: 1000 }
+    : { goodMs: 20, warnMs: 50 };
+}
+
+/** Human label for a non-ping latency method; undefined when no annotation is needed. */
+export function latencyMethodLabel(method?: LatencyMethod): string | undefined {
+  return method === "https-rtt" ? "HTTPS round-trip" : undefined;
 }
 
 export function snrLabel(snr: number): string {

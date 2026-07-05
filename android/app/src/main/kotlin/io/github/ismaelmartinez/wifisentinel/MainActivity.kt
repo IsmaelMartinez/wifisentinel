@@ -161,6 +161,15 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         result.analysis?.let { AnalysisSummary(it) }
 
+        // Honest count, zero included — the emulator (and a phone that was
+        // denied a fresh scan) may legitimately see no other networks.
+        result.wifi?.let { wifi ->
+            Text(
+                text = stringResource(R.string.nearby_networks_count, wifi.nearbyNetworks.size),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
         result.speed?.let { speed ->
             Text(
                 text = stringResource(R.string.speed_download_result, speed.download.speedMbps),

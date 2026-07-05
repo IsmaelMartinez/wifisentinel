@@ -10,6 +10,16 @@ export const ResolvedTool = z.object({
 });
 export type ResolvedTool = z.infer<typeof ResolvedTool>;
 
+/**
+ * How the latency figures were measured. An ICMP echo (the CLI's ping path)
+ * and an HTTPS HEAD round-trip (the Android companion's probe) have very
+ * different healthy baselines (~15 ms vs ~100–400 ms), so consumers must
+ * threshold and colour by method. Absent means "icmp-ping" — every record
+ * predating this field came from the CLI's ping path.
+ */
+export const LatencyMethod = z.enum(["icmp-ping", "https-rtt"]);
+export type LatencyMethod = z.infer<typeof LatencyMethod>;
+
 const NearbyNetwork = z.object({
   ssid: z.string().nullable(),
   bssid: z.string().optional(),
@@ -228,12 +238,20 @@ export const NetworkScanResult = z.object({
           gatewayMs: z.number().optional(),
           internetMs: z.number().optional(),
           dnsResolutionMs: z.number().optional(),
+          method: LatencyMethod.optional(),
         })
         // An empty latency object would defeat the degrade-to-absent
         // convention (sections are omitted, never left as empty husks).
-        .refine((l) => Object.values(l).some((v) => v !== undefined), {
-          message: "latency must carry at least one measurement",
-        })
+        // `method` is an annotation, not a measurement — it doesn't count.
+        .refine(
+          (l) =>
+            l.gatewayMs !== undefined ||
+            l.internetMs !== undefined ||
+            l.dnsResolutionMs !== undefined,
+          {
+            message: "latency must carry at least one measurement",
+          }
+        )
         .optional(),
       jitter: z
         .object({

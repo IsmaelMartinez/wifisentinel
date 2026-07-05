@@ -59,4 +59,53 @@ internal object WifiMapping {
     /** Format a little-endian `DhcpInfo` IPv4 int as a dotted quad. */
     fun formatIpv4(value: Int): String =
         "${value and 0xFF}.${(value shr 8) and 0xFF}.${(value shr 16) and 0xFF}.${(value shr 24) and 0xFF}"
+
+    /**
+     * Keep the export bounded: a dense block of flats can surface 50+ APs,
+     * and each entry costs JSON size on every export and Room row. 25 keeps
+     * every network that could plausibly matter for congestion analysis.
+     */
+    const val NEARBY_NETWORKS_CAP = 25
+
+    /**
+     * Framework-free projection of the `ScanResult` fields the mapping needs,
+     * so [mapNearbyNetworks] stays JVM-testable (same rationale as the rest
+     * of this object).
+     */
+    data class RawNearbyNetwork(
+        val ssid: String?,
+        val bssid: String?,
+        val capabilities: String?,
+        val frequencyMhz: Int,
+        val signalDbm: Int,
+    )
+
+    /**
+     * Map raw scan results to the export's nearby-network list: normalise
+     * SSIDs/BSSIDs, derive security/channel/band, exclude the connected AP,
+     * dedupe by BSSID keeping the strongest sighting, sort strongest-first,
+     * and cap at [cap]. Entries without a usable BSSID are dropped — they
+     * can't be deduped or told apart from the connected AP.
+     */
+    fun mapNearbyNetworks(
+        raw: List<RawNearbyNetwork>,
+        connectedBssid: String?,
+        cap: Int = NEARBY_NETWORKS_CAP,
+    ): List<LocalScanResult.NearbyNetwork> =
+        raw.mapNotNull { entry ->
+            val bssid = normaliseBssid(entry.bssid) ?: return@mapNotNull null
+            if (bssid.equals(connectedBssid, ignoreCase = true)) return@mapNotNull null
+            LocalScanResult.NearbyNetwork(
+                ssid = normaliseSsid(entry.ssid),
+                bssid = bssid,
+                security = securityFromCapabilities(entry.capabilities),
+                channel = frequencyToChannel(entry.frequencyMhz),
+                band = frequencyToBand(entry.frequencyMhz),
+                signal = entry.signalDbm,
+            )
+        }
+            .groupBy { it.bssid.lowercase() }
+            .map { (_, sightings) -> sightings.maxBy { it.signal } }
+            .sortedByDescending { it.signal }
+            .take(cap)
 }

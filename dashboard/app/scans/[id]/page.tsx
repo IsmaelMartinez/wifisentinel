@@ -112,7 +112,12 @@ export default async function ScanDetailPage({
                       <p className="mt-2">Download: {scan.speed.download.speedMbps} Mbps</p>
                     )}
                     {scan.speed.latency?.internetMs !== undefined && (
-                      <p>Latency: {scan.speed.latency.internetMs} ms</p>
+                      <p>
+                        Latency: {scan.speed.latency.internetMs} ms
+                        {scan.speed.latency.method === "https-rtt"
+                          ? " (HTTPS round-trip — healthy is ~100–400 ms)"
+                          : ""}
+                      </p>
                     )}
                   </>
                 )}

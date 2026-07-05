@@ -5,8 +5,10 @@
 > [`docs/android-companion.md`](../docs/android-companion.md) for the design.
 
 This directory contains a minimal Kotlin + Jetpack Compose skeleton for an
-on-the-go WiFi analyser that runs entirely on the phone. It does not talk
-to the Mac CLI or the dashboard.
+on-the-go WiFi analyser that runs entirely on the phone. It has no live
+connection to the Mac CLI or the dashboard — sync is manual and file-based:
+export a scan as JSON on the phone, then feed it to `wifisentinel import`
+(see [Getting scans into the CLI](#getting-scans-into-the-cli)).
 
 ## What's here
 
@@ -36,8 +38,15 @@ android/
 
 - Requests `ACCESS_FINE_LOCATION` / `NEARBY_WIFI_DEVICES` at runtime.
 - Reads the current WiFi connection via `WifiManager`.
+- Captures nearby networks from the same `WifiManager` scan (deduped by
+  BSSID, connected AP excluded, capped at 25, strongest first) — the count
+  shows in the result view and the full list rides the JSON export so the
+  CLI's channel-congestion analysis works on imported scans.
 - Host discovery (NSD mDNS sweep + bounded TCP connect sweep, merged by IP).
-- Latency probe (HTTPS `HEAD` timing).
+- Latency probe (HTTPS `HEAD` timing). Note this is an HTTPS round-trip,
+  not an ICMP ping — the CLI import stamps it `speed.latency.method:
+  "https-rtt"` so reports threshold it against HTTPS-appropriate bands
+  (~100–400 ms healthy) instead of ping bands.
 - Opt-in speed test (download throughput) — off by default to spare mobile
   data; toggle it on the Scan screen. Bounded to a fixed-size Cloudflare
   fetch with a hard time cap; the result appears in the report, the Detail
@@ -47,6 +56,39 @@ android/
 - On-device scan history via Room — every completed scan is auto-saved and
   listed newest-first; tap a row to re-view and re-export it.
 - JSON export via `ActivityResultContracts.CreateDocument`.
+
+## Getting scans into the CLI
+
+The phone→CLI flow is manual and file-based (no LAN server, no cloud sync —
+see [`docs/android-companion.md` §6](../docs/android-companion.md#6-sync-story-no-lan)):
+
+1. **On the phone:** run a scan, then tap **Export as JSON** (on the Scan
+   screen right after a scan, or from any stored scan's Detail screen).
+   Android's document picker asks where to save `wifisentinel-scan.json` —
+   Drive, Downloads, anywhere the Storage Access Framework reaches.
+2. **Move the file** to the machine that runs the CLI (AirDrop, cloud drive,
+   USB, email to yourself — anything).
+3. **On the CLI host:**
+
+   ```bash
+   wifisentinel import path/to/wifisentinel-scan.json
+   # (or during development: npm run dev -- import path/to/wifisentinel-scan.json)
+   ```
+
+   The import validates the export against a relaxed schema
+   (`src/collector/android-import.ts`), expands it into a full
+   `NetworkScanResult` with `meta.platform: "android"` and
+   `meta.partial: true`, runs the persona/standards analysis, and stores it
+   in `~/.wifisentinel/scans/` alongside CLI scans — so it shows up in
+   `history`, `trend`, `diff`, `devices`, and the dashboard.
+
+What carries across: WiFi link details (SSID/BSSID/security/channel/band/
+signal/txRate), nearby networks, IP/gateway/DNS, discovered hosts with open
+ports, VPN state, the latency figure (stamped `https-rtt` so it isn't judged
+against ICMP ping thresholds), and the opt-in download speed result.
+Everything the phone can't observe stays absent or carries a documented
+sentinel — imported records are flagged partial rather than pretending to be
+full audits.
 
 ## Testing
 

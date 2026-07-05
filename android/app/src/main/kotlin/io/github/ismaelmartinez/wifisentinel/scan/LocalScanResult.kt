@@ -47,8 +47,7 @@ data class LocalScanResult(
      * 802.11 channel number, same semantics as the CLI.
      *
      * Deliberately omitted (not observable from an unprivileged Android app):
-     * `protocol`, `width`, `noise`, `snr`, `macRandomised`, `countryCode`,
-     * `nearbyNetworks` (for now — will land with the host-discovery stage).
+     * `protocol`, `width`, `noise`, `snr`, `macRandomised`, `countryCode`.
      */
     @Serializable
     data class Wifi(
@@ -59,6 +58,28 @@ data class LocalScanResult(
         val band: String,
         val signal: Int,
         val txRate: Int,
+        /**
+         * Other APs visible in the WifiManager scan results, deduped by BSSID
+         * and excluding the connected AP (see [WifiMapping.mapNearbyNetworks]).
+         * Feeds the CLI's `wifi.nearbyNetworks` on import so channel-congestion
+         * analysis works on imported scans.
+         */
+        val nearbyNetworks: List<NearbyNetwork> = emptyList(),
+    )
+
+    /**
+     * A nearby AP from the scan results. `band` is phone-side colour for the
+     * UI/export; the CLI's `NearbyNetwork` shape has no band field and its
+     * import drops it. `ssid` is null for hidden networks.
+     */
+    @Serializable
+    data class NearbyNetwork(
+        val ssid: String?,
+        val bssid: String,
+        val security: String,
+        val channel: Int,
+        val band: String,
+        val signal: Int,
     )
 
     @Serializable

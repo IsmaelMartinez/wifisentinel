@@ -7,6 +7,8 @@ import {
   boolStatus,
   signalBar,
   snrLabel,
+  latencyBands,
+  latencyMethodLabel,
 } from "../../src/reporter/render-helpers.js";
 
 // Strip ANSI escape codes for plain-text assertions
@@ -172,5 +174,27 @@ describe("severityColor", () => {
   it("low returns a chalk instance", () => {
     const color = severityColor("low");
     assert.ok(typeof color === "function");
+  });
+});
+
+describe("latencyBands", () => {
+  it("defaults to ICMP ping thresholds when method is absent (pre-method data)", () => {
+    assert.deepEqual(latencyBands(undefined), { goodMs: 20, warnMs: 50 });
+    assert.deepEqual(latencyBands("icmp-ping"), { goodMs: 20, warnMs: 50 });
+  });
+
+  it("uses relaxed thresholds for an HTTPS HEAD round-trip", () => {
+    // A healthy HTTPS RTT is ~100-400 ms; ping thresholds would flag it red.
+    const { goodMs, warnMs } = latencyBands("https-rtt");
+    assert.ok(goodMs >= 400, "a healthy 350 ms HTTPS RTT must sit in the good band");
+    assert.ok(warnMs > goodMs);
+  });
+});
+
+describe("latencyMethodLabel", () => {
+  it("labels https-rtt and stays silent for ping", () => {
+    assert.equal(latencyMethodLabel("https-rtt"), "HTTPS round-trip");
+    assert.equal(latencyMethodLabel("icmp-ping"), undefined);
+    assert.equal(latencyMethodLabel(undefined), undefined);
   });
 });
