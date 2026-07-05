@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -49,6 +51,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -57,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
+import io.github.ismaelmartinez.wifisentinel.scan.SpeedProbe
 import io.github.ismaelmartinez.wifisentinel.store.ScanStore
 import io.github.ismaelmartinez.wifisentinel.store.ScanSummary
 import io.github.ismaelmartinez.wifisentinel.ui.theme.WifiSentinelTheme
@@ -155,6 +159,13 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         result.analysis?.let { AnalysisSummary(it) }
 
+        result.speed?.let { speed ->
+            Text(
+                text = stringResource(R.string.speed_download_result, speed.download.speedMbps),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
         OutlinedButton(
             enabled = exportEnabled,
             onClick = { exportLauncher.launch("wifisentinel-scan.json") },
@@ -231,6 +242,8 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
     var result by remember { mutableStateOf<LocalScanResult?>(null) }
     var permission by remember { mutableStateOf(PermissionState.UNKNOWN) }
     var showRationale by remember { mutableStateOf(false) }
+    // Off by default to spare mobile data — see docs/android-companion.md §3.
+    var includeSpeedTest by remember { mutableStateOf(false) }
 
     val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.NEARBY_WIFI_DEVICES
@@ -241,11 +254,19 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
     val runScan: () -> Unit = {
         scope.launch {
             scanning = true
-            val scanned = scanner.scan(appVersion = BuildConfig.VERSION_NAME)
-            result = scanned
-            // Persist every completed scan so it shows up in history.
-            store.save(scanned)
-            scanning = false
+            // The finally guarantees the spinner clears and the buttons
+            // re-enable even if the scan or the save throws.
+            try {
+                val scanned = scanner.scan(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    includeSpeedTest = includeSpeedTest,
+                )
+                result = scanned
+                // Persist every completed scan so it shows up in history.
+                store.save(scanned)
+            } finally {
+                scanning = false
+            }
         }
         Unit
     }
@@ -312,6 +333,24 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
                 },
             ) {
                 Text(stringResource(R.string.scan_now))
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Switch(
+                    checked = includeSpeedTest,
+                    onCheckedChange = { includeSpeedTest = it },
+                    enabled = !scanning,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.speed_test_toggle,
+                        SpeedProbe.DOWNLOAD_MEGABYTES,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
 
             if (scanning) {

@@ -36,6 +36,14 @@ const fullExport = {
     { ip: "192.168.1.20", openPorts: [] },
   ],
   latencyMs: 24,
+  speed: {
+    download: {
+      speedMbps: 87.5,
+      bytesTransferred: 26214400,
+      durationMs: 2396,
+      testUrl: "https://speed.cloudflare.com/__down?bytes=26214400",
+    },
+  },
 };
 
 describe("AndroidScanImport schema", () => {
@@ -98,6 +106,33 @@ describe("androidImportToScanResult", () => {
     assert.equal(printer.mac, "unknown");
     assert.deepEqual(printer.ports, [{ port: 631, service: "unknown", state: "open" }]);
     assert.deepEqual(result.network.hosts[1].ports, []);
+  });
+
+  it("carries the opt-in speed test across as a download-only speed section", () => {
+    const result = androidImportToScanResult(fullExport);
+    assert.deepEqual(result.speed?.download, fullExport.speed.download);
+    // The sub-sections the phone doesn't measure stay absent, not zero-filled
+    // (zeros would read as genuine "slow upload" persona findings).
+    assert.equal(result.speed?.upload, undefined);
+    assert.equal(result.speed?.rating, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("degrades a malformed speed section to absent instead of rejecting the scan", () => {
+    const trimmed = {
+      ...fullExport,
+      // Missing bytesTransferred/durationMs/testUrl — e.g. a hand-trimmed
+      // export or a future app version after field drift.
+      speed: { download: { speedMbps: 87.5 } },
+    };
+    const parsed = AndroidScanImport.safeParse(trimmed);
+    assert.equal(parsed.success, true);
+    if (parsed.success) {
+      assert.equal(parsed.data.speed, undefined);
+      const result = androidImportToScanResult(parsed.data);
+      assert.equal(result.speed, undefined);
+      assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    }
   });
 
   it("reflects VPN state into the security section", () => {

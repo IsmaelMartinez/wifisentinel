@@ -56,7 +56,7 @@ either omitted or set to a documented sentinel.
 | `deauthDetection` | — | **Requires monitor mode**; not viable |
 | `intrusionIndicators` | Partial — gateway change detection, duplicate-BSSID heuristics | Weak; useful as a trend signal only |
 | `speed.latency.internetMs` | HTTP `HEAD` to a known host | Reasonable; no need to hit a CDN speed test for MVP |
-| `speed.download.speedMbps` | HTTP `GET` of a sized blob | Optional — off by default to spare mobile data |
+| `speed.download.speedMbps` | HTTP `GET` of a sized blob | Implemented (`SpeedProbe`) — opt-in toggle, off by default to spare mobile data |
 
 ## 4. Architecture
 
@@ -203,6 +203,10 @@ The skeleton under `android/` has grown past the first spike. It ships:
     local /24 on common ports, merged by IP.
   - **Latency probe** (`LatencyProbe`) — single HTTPS `HEAD` to Cloudflare's
     trace endpoint.
+  - **Speed test** (`SpeedProbe`, opt-in) — bounded download throughput probe
+    against Cloudflare's speed endpoint: fixed-size fetch (~25 MB) with a hard
+    time cap, off by default and toggled on the Scan screen. The pure maths
+    lives in `SpeedMapping` so it is JVM-unit-tested.
   - **Analyse stage** (`LocalAnalyser`, package `analyse`) — the honest subset
     of persona/standards rules (WiFi link security, VPN posture, cleartext LAN
     services, latency), pure and JVM-unit-tested.
@@ -216,10 +220,26 @@ The skeleton under `android/` has grown past the first spike. It ships:
     little-endian `DhcpInfo` IPv4 formatting.
   - `HostMergeTest` — `HostProbe`'s merge-by-IP (hostname/serviceType/port
     union, numeric-IP ordering) and subnet-derivation helpers (`HostMerge`).
+  - `SpeedMappingTest` — the throughput maths (`SpeedMapping`) extracted from
+    `SpeedProbe`: bytes+duration→Mbps, rounding, and empty-measurement cases.
 
-  The mapping helpers were extracted into pure `WifiMapping`/`HostMerge` objects
-  precisely so they can be tested on the JVM without faking `WifiManager` /
-  `ConnectivityManager` or standing up an emulator.
+  The mapping helpers were extracted into pure
+  `WifiMapping`/`HostMerge`/`SpeedMapping` objects precisely so they can be
+  tested on the JVM without faking `WifiManager` / `ConnectivityManager` or
+  standing up an emulator.
+- Instrumented tests (`src/androidTest/kotlin`, run on an emulator/device):
+  - `MainActivitySmokeTest` — launches `MainActivity` via the Compose test
+    rule's `ActivityScenario` and asserts the Scan screen renders.
+  - `ScanDaoTest` — Room `ScanDao` insert/query/replace/clear against a real
+    on-device SQLite database.
+
+  CI runs these in a dedicated `android-instrumented` job on an API 35 x86_64
+  emulator (reactivecircus/android-emulator-runner with AVD snapshot caching),
+  separate from the `android` unit-test/APK job.
+
+  Neither instrumented test triggers an actual scan: the device-dependent
+  pipeline glue (`LocalScanner` / `HostProbe` / `WifiManager` interplay)
+  remains unexercised end-to-end in CI and is only verified on real devices.
 
 On the CLI side, `wifisentinel import <file>` (see `src/commands/import.ts` and
 `src/collector/android-import.ts`) validates the export against a relaxed Zod
@@ -227,17 +247,10 @@ schema, expands it into a full `NetworkScanResult` with `meta.platform:
 "android"` and `meta.partial: true`, and stores it so it appears in
 `history` / `trend` / `diff` / `devices`.
 
-It deliberately does **not** yet include:
-
-- An emulator instrumentation smoke test that exercises Room and the scan
-  pipeline end-to-end on a real device/emulator (the JVM tests cover the pure
-  logic; the device-dependent glue is still untested in CI).
-
-> **Build note.** This environment has Gradle + Java but no Android SDK, so the
-> Kotlin/Android module cannot be compiled or run here. The Room + KSP wiring,
-> the Compose screens, and the new tests were written against the documented
-> APIs and need an SDK-equipped machine (Android Studio, or `sdkmanager` +
-> `ANDROID_HOME`) to run `./gradlew assembleDebug` and `./gradlew test`.
+> **Build note.** The Gradle wrapper (8.11.1) is committed, so `./gradlew`
+> works anywhere with a JDK 17+ and an Android SDK (`ANDROID_HOME`). Both CI
+> jobs install the SDK with `android-actions/setup-android` — see
+> `.github/workflows/ci.yml` and `android/README.md` for the commands.
 
 ## 10. Open questions
 

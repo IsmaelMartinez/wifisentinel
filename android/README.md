@@ -23,10 +23,13 @@ android/
 │       │   └── ui/theme/         # Compose theme
 │       ├── res/values/           # strings + theme
 │       └── res/xml/              # backup exclusion rules
-│   └── src/test/kotlin/          # JVM unit tests (no emulator)
+│   ├── src/test/kotlin/          # JVM unit tests (no emulator)
+│   └── src/androidTest/kotlin/   # instrumented tests (emulator/device)
 ├── build.gradle.kts              # root build file
 ├── settings.gradle.kts
-└── gradle.properties
+├── gradle.properties
+├── gradlew / gradlew.bat         # committed Gradle wrapper (8.11.1)
+└── gradle/wrapper/
 ```
 
 ## What works (MVP)
@@ -35,36 +38,57 @@ android/
 - Reads the current WiFi connection via `WifiManager`.
 - Host discovery (NSD mDNS sweep + bounded TCP connect sweep, merged by IP).
 - Latency probe (HTTPS `HEAD` timing).
+- Opt-in speed test (download throughput) — off by default to spare mobile
+  data; toggle it on the Scan screen. Bounded to a fixed-size Cloudflare
+  fetch with a hard time cap; the result appears in the report, the Detail
+  screen, and the JSON export.
 - Rule-based local analyser (honest subset of the CLI's persona rules).
 - Scan / History / Detail screens (single activity, hand-rolled navigation).
 - On-device scan history via Room — every completed scan is auto-saved and
   listed newest-first; tap a row to re-view and re-export it.
 - JSON export via `ActivityResultContracts.CreateDocument`.
 
-## What's stubbed / pending
+## Testing
 
-- Speed test (download throughput) — off by default to spare mobile data.
-- Emulator instrumentation smoke test.
+Two layers, mirroring what CI runs:
 
-## Building without an Android SDK
+- **JVM unit tests** (`src/test/kotlin/`) — pure mapping/merge/analysis logic
+  (`WifiMapping`, `HostMerge`, `SpeedMapping`, `LocalAnalyser`), no emulator:
+  `./gradlew :app:testDebugUnitTest`.
+- **Instrumented tests** (`src/androidTest/kotlin/`) — a Compose smoke test
+  that launches `MainActivity` and asserts the Scan screen renders, plus a
+  Room `ScanDao` test against a real on-device database:
+  `./gradlew :app:connectedDebugAndroidTest` (needs an emulator or device;
+  `./gradlew :app:assembleDebugAndroidTest` just compiles them).
 
-The Kotlin/Android module needs the Android SDK to compile. On a machine with
-only Gradle + Java (e.g. some CI/sandbox environments) `./gradlew` cannot build
-the app or run the JVM unit tests — use Android Studio or install the SDK
-(`sdkmanager`, `ANDROID_HOME`) first.
+CI runs both: the `android` job covers unit tests and uploads a debug APK
+artifact; the separate `android-instrumented` job boots an API 35 x86_64
+emulator (reactivecircus/android-emulator-runner, with AVD snapshot caching)
+and runs the instrumented suite.
+
+**Known gap:** neither instrumented test triggers an actual scan, so the
+device-dependent pipeline glue (`LocalScanner` / `HostProbe` / `WifiManager`
+interplay) is still not exercised end-to-end in CI — regressions there only
+surface on a real device.
 
 ## Build
 
-Open the `android/` directory in Android Studio (Ladybug 2024.2.1+ or newer).
-Android Studio will materialise the Gradle wrapper on first sync.
-
-From the command line once the wrapper is in place:
+The Gradle wrapper (8.11.1) is committed, so `./gradlew` works out of the box —
+you only need a JDK (17+) and the Android SDK (`ANDROID_HOME` set, with
+`platforms;android-35` and `build-tools;35.0.0` installed — Android Studio
+sets this up for you, or use `sdkmanager` like the CI jobs do; see
+`.github/workflows/ci.yml`). Without an SDK the module cannot compile, even
+for the JVM unit tests.
 
 ```bash
 cd android
+./gradlew :app:testDebugUnitTest   # JVM unit tests
 ./gradlew assembleDebug            # produce app/build/outputs/apk/debug/app-debug.apk
 ./gradlew installDebug             # install on a connected device
 ```
+
+Or open the `android/` directory in Android Studio (Ladybug 2024.2.1+ or
+newer).
 
 Minimum runtime: Android 10 (API 29). `compileSdk` and `targetSdk` are 35.
 

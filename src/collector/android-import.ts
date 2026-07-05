@@ -53,6 +53,21 @@ export const AndroidScanImport = z.object({
     )
     .optional(),
   latencyMs: z.number().nullable().optional(),
+  // Opt-in download speed test. The `.catch(undefined)` keeps the schema's
+  // "relaxed" promise: a trimmed or drifted speed section degrades to absent
+  // instead of rejecting the whole scan.
+  speed: z
+    .object({
+      download: z.object({
+        speedMbps: z.number(),
+        bytesTransferred: z.number(),
+        durationMs: z.number(),
+        testUrl: z.string(),
+      }),
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
 });
 
 export type AndroidScanImport = z.infer<typeof AndroidScanImport>;
@@ -61,8 +76,9 @@ export type AndroidScanImport = z.infer<typeof AndroidScanImport>;
  * Expand an Android companion export into a full `NetworkScanResult`. Fields the
  * phone cannot measure are set to explicit sentinels ("unknown", 0, false, or
  * an empty collection) and the optional deep-scan sections (traffic, hidden
- * devices, intrusion, deauth, speed) are omitted entirely. `meta.partial` is
- * set so history/diff/trend/devices can render the record without treating the
+ * devices, intrusion, deauth) are omitted entirely. The opt-in speed test is
+ * carried across as a download-only `speed` section. `meta.partial` is set so
+ * history/diff/trend/devices can render the record without treating the
  * sentinels as genuine findings.
  */
 export function androidImportToScanResult(
@@ -150,5 +166,10 @@ export function androidImportToScanResult(
       timeWait: 0,
       topDestinations: [],
     },
+    // The phone's opt-in probe only measures the download; the other speed
+    // sub-sections (upload, jitter, packet loss, rating, …) are optional in
+    // the schema and stay absent rather than zero-filled — zeros would read
+    // as genuine "slow upload" findings to the personas.
+    ...(input.speed?.download ? { speed: { download: input.speed.download } } : {}),
   };
 }

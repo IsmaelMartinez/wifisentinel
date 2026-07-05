@@ -65,14 +65,14 @@ export function analyseAsNetEngineer(
   if (result.speed) {
     const s = result.speed;
 
-    if (s.rating === "poor" || s.rating === "unusable") {
+    if ((s.rating === "poor" || s.rating === "unusable") && s.upload) {
       insights.push({
         id: "ne-poor-speed",
         title: `Speed test rated "${s.rating}" — significant performance issue`,
         severity: "high",
         category: "bandwidth",
         description: `Download ${s.download.speedMbps.toFixed(1)} Mbps and upload ${s.upload.speedMbps.toFixed(1)} Mbps are far below acceptable thresholds. This level of throughput will impact video calls, large transfers, and interactive applications.`,
-        technicalDetail: `Download: ${s.download.speedMbps.toFixed(1)} Mbps (${s.download.bytesTransferred} bytes in ${s.download.durationMs} ms). Upload: ${s.upload.speedMbps.toFixed(1)} Mbps. Link rate: ${s.wifiLinkRate} Mbps. Effective utilisation: ${s.effectiveUtilisation.toFixed(1)}%.`,
+        technicalDetail: `Download: ${s.download.speedMbps.toFixed(1)} Mbps (${s.download.bytesTransferred} bytes in ${s.download.durationMs} ms). Upload: ${s.upload.speedMbps.toFixed(1)} Mbps. Link rate: ${s.wifiLinkRate ?? 0} Mbps. Effective utilisation: ${(s.effectiveUtilisation ?? 0).toFixed(1)}%.`,
         recommendation:
           "Check for bottlenecks: backhaul capacity, ISP plan limits, Wi-Fi interference, or congested uplinks. Run a wired speed test to isolate Wi-Fi vs backhaul issues.",
         affectedAssets: [result.meta.hostname, result.network.gateway.ip],
@@ -81,7 +81,12 @@ export function analyseAsNetEngineer(
     }
 
     // --- Low Wi-Fi utilisation ---
-    if (s.wifiLinkRate > 0 && s.effectiveUtilisation < 20) {
+    if (
+      s.wifiLinkRate !== undefined &&
+      s.wifiLinkRate > 0 &&
+      s.effectiveUtilisation !== undefined &&
+      s.effectiveUtilisation < 20
+    ) {
       insights.push({
         id: "ne-low-wifi-utilisation",
         title: `Only ${s.effectiveUtilisation.toFixed(1)}% of Wi-Fi link rate is utilised`,
@@ -97,7 +102,7 @@ export function analyseAsNetEngineer(
     }
 
     // --- Packet loss ---
-    if (s.packetLoss.gatewayPercent > 0 || s.packetLoss.internetPercent > 2) {
+    if (s.packetLoss && s.latency && (s.packetLoss.gatewayPercent > 0 || s.packetLoss.internetPercent > 2)) {
       const gw = s.packetLoss.gatewayPercent;
       const inet = s.packetLoss.internetPercent;
       const severity = gw > 5 || inet > 10 ? "high" : "medium";
@@ -116,7 +121,7 @@ export function analyseAsNetEngineer(
     }
 
     // --- High latency ---
-    if (s.latency.gatewayMs > 20) {
+    if (s.latency && s.jitter && s.latency.gatewayMs > 20) {
       insights.push({
         id: "ne-high-gateway-latency",
         title: `Gateway latency ${s.latency.gatewayMs.toFixed(1)} ms is above normal threshold`,
@@ -132,7 +137,7 @@ export function analyseAsNetEngineer(
     }
 
     // --- High jitter ---
-    if (s.jitter.internetMs > 30) {
+    if (s.jitter && s.jitter.internetMs > 30) {
       insights.push({
         id: "ne-high-jitter",
         title: `Internet jitter ${s.jitter.internetMs.toFixed(1)} ms will impact real-time applications`,
@@ -149,7 +154,7 @@ export function analyseAsNetEngineer(
   }
 
   // --- DNS resolution speed ---
-  if (result.speed && result.speed.latency.dnsResolutionMs > 100) {
+  if (result.speed?.latency && result.speed.latency.dnsResolutionMs > 100) {
     insights.push({
       id: "ne-slow-dns",
       title: `DNS resolution at ${result.speed.latency.dnsResolutionMs} ms is slowing page loads`,
