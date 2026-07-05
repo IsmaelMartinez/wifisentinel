@@ -109,7 +109,7 @@ export default async function ScanDetailPage({
                 {scan.speed && (
                   <>
                     <p className="mt-2">Download: {scan.speed.download.speedMbps} Mbps</p>
-                    <p>Latency: {scan.speed.latency.internetMs} ms</p>
+                    {scan.speed.latency && <p>Latency: {scan.speed.latency.internetMs} ms</p>}
                   </>
                 )}
               </CardContent>
