@@ -362,9 +362,11 @@ function renderSpeedTest(result: NetworkScanResult): string {
   const s = result.speed;
   if (!s) return "";
 
-  // Sub-sections other than `download` are optional (a partial source like an
-  // imported Android scan only measures the download) — render what's there.
-  const lines: string[] = [sectionHeader("SPEED TEST"), row("")];
+  // Every sub-section is optional (an imported Android scan may carry only a
+  // latency figure, only a download measurement, or both) — render what's
+  // there, and only claim a "speed test" in the header when one actually ran.
+  const ranSpeedTest = Boolean(s.download || s.upload || s.rating);
+  const lines: string[] = [sectionHeader(ranSpeedTest ? "SPEED TEST" : "LATENCY"), row("")];
 
   // Rating badge
   if (s.rating) {
@@ -380,23 +382,30 @@ function renderSpeedTest(result: NetworkScanResult): string {
     lines.push(row(""));
   }
 
-  // Download/Upload bars
-  const maxBar = 40;
+  // Download/Upload bars on a fixed 10-character track (the fill used to cap
+  // at 40 while the padding assumed 10, so fast links overflowed the track).
+  const barWidth = 10;
   if (s.download) {
-    const dlBar = Math.min(maxBar, Math.round(s.download.speedMbps / 5));
+    const dlBar = Math.min(barWidth, Math.round(s.download.speedMbps / 5));
     const dlColor = s.download.speedMbps >= 50 ? TEAL : s.download.speedMbps >= 10 ? AMBER : RED;
-    lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(Math.max(0, 10 - dlBar)))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
+    lines.push(row(`  Download  ${dlColor("█".repeat(dlBar) + "░".repeat(barWidth - dlBar))}  ${chalk.bold(s.download.speedMbps.toFixed(1) + " Mbps")}`));
   }
   if (s.upload) {
-    const ulBar = Math.min(maxBar, Math.round(s.upload.speedMbps / 5));
+    const ulBar = Math.min(barWidth, Math.round(s.upload.speedMbps / 5));
     const ulColor = s.upload.speedMbps >= 20 ? TEAL : s.upload.speedMbps >= 5 ? AMBER : RED;
-    lines.push(row(`  Upload    ${ulColor("█".repeat(ulBar) + "░".repeat(Math.max(0, 10 - ulBar)))}  ${chalk.bold(s.upload.speedMbps.toFixed(1) + " Mbps")}`));
+    lines.push(row(`  Upload    ${ulColor("█".repeat(ulBar) + "░".repeat(barWidth - ulBar))}  ${chalk.bold(s.upload.speedMbps.toFixed(1) + " Mbps")}`));
   }
   if (s.download || s.upload) lines.push(row(""));
 
   // Latency — each line renders only when its measurement exists (an imported
-  // Android scan carries just `internetMs`, with no jitter figures).
-  if (s.latency) {
+  // Android scan carries just `internetMs`, with no jitter figures). The
+  // header is gated on having at least one line to show.
+  const hasLatency =
+    s.latency &&
+    (s.latency.gatewayMs !== undefined ||
+      s.latency.internetMs !== undefined ||
+      s.latency.dnsResolutionMs !== undefined);
+  if (s.latency && hasLatency) {
     const latColor = (ms: number) => ms < 20 ? TEAL : ms < 50 ? AMBER : RED;
     lines.push(row(`  Latency`));
     if (s.latency.gatewayMs !== undefined) {

@@ -267,9 +267,9 @@ ${rfAnalysis ? `
   </table>` : ""}
 </div>
 
-<!-- Speed Test -->
+<!-- Speed Test (or latency-only, for partial sources with no download run) -->
 ${scan.speed ? `
-<h2>Speed Test</h2>
+<h2>${scan.speed.download || scan.speed.upload || scan.speed.rating ? "Speed Test" : "Latency"}</h2>
 <div class="card">
   <div class="grid2">
     <div>

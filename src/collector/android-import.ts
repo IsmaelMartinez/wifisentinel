@@ -88,11 +88,8 @@ export function androidImportToScanResult(
   const wifi = input.wifi ?? undefined;
   const network = input.network ?? undefined;
 
-  // The phone measures internet latency (a single HTTPS HEAD round-trip) on
-  // every scan, and the download throughput only when the user opts in. Both
-  // land in the `speed` section; the sub-fields the phone can't measure
-  // (gateway/DNS latency, upload, jitter, packet loss, rating, …) stay absent
-  // rather than zero-filled — zeros would read as genuine findings.
+  // Always-on latency probe + opt-in download → a partial `speed` section
+  // (see the docblock above for the degrade-to-absent rationale).
   const speed: NetworkScanResult["speed"] = {
     ...(typeof input.latencyMs === "number"
       ? { latency: { internetMs: input.latencyMs } }

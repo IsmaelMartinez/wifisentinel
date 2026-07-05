@@ -2,6 +2,7 @@ package io.github.ismaelmartinez.wifisentinel
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
 import io.github.ismaelmartinez.wifisentinel.scan.SpeedProbe
@@ -238,18 +240,31 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
     val scanner = remember { LocalScanner(context) }
     val scope = rememberCoroutineScope()
 
-    var scanning by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<LocalScanResult?>(null) }
-    var permission by remember { mutableStateOf(PermissionState.UNKNOWN) }
-    var showRationale by remember { mutableStateOf(false) }
-    // Off by default to spare mobile data — see docs/android-companion.md §3.
-    var includeSpeedTest by remember { mutableStateOf(false) }
-
     val scanPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.NEARBY_WIFI_DEVICES
     } else {
         Manifest.permission.ACCESS_FINE_LOCATION
     }
+
+    var scanning by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<LocalScanResult?>(null) }
+    // Seed from the framework so an already-granted permission (a previous
+    // launch, or a test's GrantPermissionRule) doesn't re-show the rationale
+    // dialog on the first tap of every session.
+    var permission by remember {
+        mutableStateOf(
+            if (ContextCompat.checkSelfPermission(context, scanPermission) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                PermissionState.GRANTED
+            } else {
+                PermissionState.UNKNOWN
+            },
+        )
+    }
+    var showRationale by remember { mutableStateOf(false) }
+    // Off by default to spare mobile data — see docs/android-companion.md §3.
+    var includeSpeedTest by remember { mutableStateOf(false) }
 
     val runScan: () -> Unit = {
         scope.launch {

@@ -229,6 +229,11 @@ export const NetworkScanResult = z.object({
           internetMs: z.number().optional(),
           dnsResolutionMs: z.number().optional(),
         })
+        // An empty latency object would defeat the degrade-to-absent
+        // convention (sections are omitted, never left as empty husks).
+        .refine((l) => Object.values(l).some((v) => v !== undefined), {
+          message: "latency must carry at least one measurement",
+        })
         .optional(),
       jitter: z
         .object({
@@ -261,6 +266,11 @@ export const NetworkScanResult = z.object({
       wifiLinkRate: z.number().optional(),
       effectiveUtilisation: z.number().optional(),
       rating: z.enum(["excellent", "good", "fair", "poor", "unusable"]).optional(),
+    })
+    // Same convention one level up: a `speed` section with no measurements at
+    // all should have been omitted by its producer, not left as `{}`.
+    .refine((sp) => Object.values(sp).some((v) => v !== undefined), {
+      message: "speed must carry at least one measurement",
     })
     .optional(),
 });

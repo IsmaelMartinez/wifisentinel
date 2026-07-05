@@ -1,6 +1,5 @@
 package io.github.ismaelmartinez.wifisentinel
 
-import androidx.annotation.StringRes
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -28,18 +27,15 @@ class MainActivitySmokeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
-    private fun str(@StringRes id: Int, vararg formatArgs: Any): String =
-        composeRule.activity.getString(id, *formatArgs)
-
     @Test
     fun scanScreenRenders() {
-        composeRule.onNodeWithText(str(R.string.scan_now)).assertIsDisplayed()
-        composeRule.onNodeWithText(str(R.string.scan_empty_state)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.str(R.string.scan_now)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.str(R.string.scan_empty_state)).assertIsDisplayed()
         composeRule
-            .onNodeWithText(str(R.string.speed_test_toggle, SpeedProbe.DOWNLOAD_MEGABYTES))
+            .onNodeWithText(composeRule.str(R.string.speed_test_toggle, SpeedProbe.DOWNLOAD_MEGABYTES))
             .assertIsDisplayed()
         composeRule
-            .onNodeWithContentDescription(str(R.string.view_history))
+            .onNodeWithContentDescription(composeRule.str(R.string.view_history))
             .assertIsDisplayed()
     }
 }

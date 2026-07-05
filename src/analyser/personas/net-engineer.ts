@@ -65,6 +65,14 @@ export function analyseAsNetEngineer(
   if (result.speed) {
     const s = result.speed;
 
+    // The latency figures below feed the technicalDetail strings; require the
+    // full pair the CLI scanner measures (a partial source like the Android
+    // import carries internetMs alone) once, instead of re-checking per insight.
+    const fullLatency =
+      s.latency?.gatewayMs !== undefined && s.latency.internetMs !== undefined
+        ? { gatewayMs: s.latency.gatewayMs, internetMs: s.latency.internetMs }
+        : undefined;
+
     if ((s.rating === "poor" || s.rating === "unusable") && s.download && s.upload) {
       insights.push({
         id: "ne-poor-speed",
@@ -105,8 +113,7 @@ export function analyseAsNetEngineer(
     // --- Packet loss ---
     if (
       s.packetLoss &&
-      s.latency?.gatewayMs !== undefined &&
-      s.latency.internetMs !== undefined &&
+      fullLatency &&
       (s.packetLoss.gatewayPercent > 0 || s.packetLoss.internetPercent > 2)
     ) {
       const gw = s.packetLoss.gatewayPercent;
@@ -118,7 +125,7 @@ export function analyseAsNetEngineer(
         severity,
         category: "reliability",
         description: `Packet loss on the gateway link indicates local network issues (interference, buffer overflow, or faulty hardware). Internet packet loss may indicate ISP congestion or routing problems. Either will cause TCP retransmissions and degrade interactive applications.`,
-        technicalDetail: `Gateway loss: ${gw}%, Internet loss: ${inet}%. Gateway latency: ${s.latency.gatewayMs.toFixed(1)} ms, Internet latency: ${s.latency.internetMs.toFixed(1)} ms.`,
+        technicalDetail: `Gateway loss: ${gw}%, Internet loss: ${inet}%. Gateway latency: ${fullLatency.gatewayMs.toFixed(1)} ms, Internet latency: ${fullLatency.internetMs.toFixed(1)} ms.`,
         recommendation:
           "If gateway loss is non-zero, check the local link (cables, AP, interference). For internet loss, contact the ISP or check routing via traceroute.",
         affectedAssets: [result.network.gateway.ip],
@@ -127,19 +134,14 @@ export function analyseAsNetEngineer(
     }
 
     // --- High latency ---
-    if (
-      s.jitter &&
-      s.latency?.gatewayMs !== undefined &&
-      s.latency.internetMs !== undefined &&
-      s.latency.gatewayMs > 20
-    ) {
+    if (s.jitter && fullLatency && fullLatency.gatewayMs > 20) {
       insights.push({
         id: "ne-high-gateway-latency",
-        title: `Gateway latency ${s.latency.gatewayMs.toFixed(1)} ms is above normal threshold`,
-        severity: s.latency.gatewayMs > 50 ? "high" : "medium",
+        title: `Gateway latency ${fullLatency.gatewayMs.toFixed(1)} ms is above normal threshold`,
+        severity: fullLatency.gatewayMs > 50 ? "high" : "medium",
         category: "reliability",
-        description: `Gateway latency should be under 5 ms on a healthy local network. ${s.latency.gatewayMs.toFixed(1)} ms indicates congestion, bufferbloat, or a heavily loaded access point. This adds latency to every single connection.`,
-        technicalDetail: `Gateway latency: ${s.latency.gatewayMs.toFixed(1)} ms, jitter: ${s.jitter.gatewayMs.toFixed(1)} ms. Internet latency: ${s.latency.internetMs.toFixed(1)} ms, jitter: ${s.jitter.internetMs.toFixed(1)} ms.`,
+        description: `Gateway latency should be under 5 ms on a healthy local network. ${fullLatency.gatewayMs.toFixed(1)} ms indicates congestion, bufferbloat, or a heavily loaded access point. This adds latency to every single connection.`,
+        technicalDetail: `Gateway latency: ${fullLatency.gatewayMs.toFixed(1)} ms, jitter: ${s.jitter.gatewayMs.toFixed(1)} ms. Internet latency: ${fullLatency.internetMs.toFixed(1)} ms, jitter: ${s.jitter.internetMs.toFixed(1)} ms.`,
         recommendation:
           "Check for bufferbloat (run a bufferbloat test). Reduce client contention. Consider enabling SQM/QoS on the router.",
         affectedAssets: [result.network.gateway.ip],
