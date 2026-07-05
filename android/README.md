@@ -56,8 +56,11 @@ Two layers, mirroring what CI runs:
   (`WifiMapping`, `HostMerge`, `SpeedMapping`, `LocalAnalyser`), no emulator:
   `./gradlew :app:testDebugUnitTest`.
 - **Instrumented tests** (`src/androidTest/kotlin/`) — a Compose smoke test
-  that launches `MainActivity` and asserts the Scan screen renders, plus a
-  Room `ScanDao` test against a real on-device database:
+  that launches `MainActivity` and asserts the Scan screen renders, a Room
+  `ScanDao` test against a real on-device database, and an end-to-end scan
+  test (`ScanEndToEndTest`) that grants the scan permission, taps "Scan now",
+  waits for the pipeline to finish, and asserts the result rendered and a row
+  landed in scan history:
   `./gradlew :app:connectedDebugAndroidTest` (needs an emulator or device;
   `./gradlew :app:assembleDebugAndroidTest` just compiles them).
 
@@ -66,10 +69,12 @@ artifact; the separate `android-instrumented` job boots an API 35 x86_64
 emulator (reactivecircus/android-emulator-runner, with AVD snapshot caching)
 and runs the instrumented suite.
 
-**Known gap:** neither instrumented test triggers an actual scan, so the
-device-dependent pipeline glue (`LocalScanner` / `HostProbe` / `WifiManager`
-interplay) is still not exercised end-to-end in CI — regressions there only
-surface on a real device.
+The end-to-end test exercises the device-dependent pipeline glue
+(`LocalScanner` / `HostProbe` / `WifiManager` interplay) that the JVM tests
+cannot reach. The CI emulator has no real WiFi, so it asserts the pipeline
+degrades honestly (the scan completes, the analysis runs, the record is
+saved) rather than asserting network specifics — `wifi` may legitimately be
+null there.
 
 ## Build
 
@@ -99,8 +104,3 @@ Minimum runtime: Android 10 (API 29). `compileSdk` and `targetSdk` are 35.
 - UK English in user-facing strings (`analyse`, `colour`).
 - No telemetry, no third-party analytics SDKs.
 - All scan data stays in app-private storage.
-
-## Status of the launcher icon
-
-The skeleton references `@android:drawable/sym_def_app_icon` as a
-placeholder. Swap it for a proper adaptive icon before any real release.

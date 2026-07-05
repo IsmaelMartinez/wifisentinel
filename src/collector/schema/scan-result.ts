@@ -215,18 +215,24 @@ export const NetworkScanResult = z.object({
     })
     .optional(),
 
-  // A speed section always carries at least a download measurement; the other
-  // sub-sections are optional so partial sources (the Android companion's
-  // opt-in download-only probe) can degrade to absent rather than zero-fill —
-  // the same convention as the optional top-level sections above. The CLI's
-  // own speed scanner still populates everything.
+  // Every sub-section of `speed` is optional so partial sources (the Android
+  // companion's always-on latency probe and its opt-in download-only speed
+  // test) can degrade to absent rather than zero-fill — the same convention
+  // as the optional top-level sections above. The latency sub-fields are
+  // individually optional for the same reason: the phone only measures
+  // `internetMs`. The CLI's own speed scanner still populates everything.
   speed: z
     .object({
       latency: z
         .object({
-          gatewayMs: z.number(),
-          internetMs: z.number(),
-          dnsResolutionMs: z.number(),
+          gatewayMs: z.number().optional(),
+          internetMs: z.number().optional(),
+          dnsResolutionMs: z.number().optional(),
+        })
+        // An empty latency object would defeat the degrade-to-absent
+        // convention (sections are omitted, never left as empty husks).
+        .refine((l) => Object.values(l).some((v) => v !== undefined), {
+          message: "latency must carry at least one measurement",
         })
         .optional(),
       jitter: z
@@ -235,12 +241,14 @@ export const NetworkScanResult = z.object({
           internetMs: z.number(),
         })
         .optional(),
-      download: z.object({
-        speedMbps: z.number(),
-        bytesTransferred: z.number(),
-        durationMs: z.number(),
-        testUrl: z.string(),
-      }),
+      download: z
+        .object({
+          speedMbps: z.number(),
+          bytesTransferred: z.number(),
+          durationMs: z.number(),
+          testUrl: z.string(),
+        })
+        .optional(),
       upload: z
         .object({
           speedMbps: z.number(),
@@ -258,6 +266,11 @@ export const NetworkScanResult = z.object({
       wifiLinkRate: z.number().optional(),
       effectiveUtilisation: z.number().optional(),
       rating: z.enum(["excellent", "good", "fair", "poor", "unusable"]).optional(),
+    })
+    // Same convention one level up: a `speed` section with no measurements at
+    // all should have been omitted by its producer, not left as `{}`.
+    .refine((sp) => Object.values(sp).some((v) => v !== undefined), {
+      message: "speed must carry at least one measurement",
     })
     .optional(),
 });

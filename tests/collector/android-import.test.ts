@@ -108,13 +108,16 @@ describe("androidImportToScanResult", () => {
     assert.deepEqual(result.network.hosts[1].ports, []);
   });
 
-  it("carries the opt-in speed test across as a download-only speed section", () => {
+  it("carries the opt-in speed test across without zero-filling unmeasured sub-sections", () => {
     const result = androidImportToScanResult(fullExport);
     assert.deepEqual(result.speed?.download, fullExport.speed.download);
     // The sub-sections the phone doesn't measure stay absent, not zero-filled
     // (zeros would read as genuine "slow upload" persona findings).
     assert.equal(result.speed?.upload, undefined);
     assert.equal(result.speed?.rating, undefined);
+    assert.equal(result.speed?.jitter, undefined);
+    assert.equal(result.speed?.packetLoss, undefined);
+    assert.equal(result.speed?.wifiLinkRate, undefined);
     assert.doesNotThrow(() => NetworkScanResult.parse(result));
   });
 
@@ -130,9 +133,51 @@ describe("androidImportToScanResult", () => {
     if (parsed.success) {
       assert.equal(parsed.data.speed, undefined);
       const result = androidImportToScanResult(parsed.data);
-      assert.equal(result.speed, undefined);
+      // The download section degrades to absent; the independently-measured
+      // latency figure still comes across.
+      assert.equal(result.speed?.download, undefined);
+      assert.equal(result.speed?.latency?.internetMs, 24);
       assert.doesNotThrow(() => NetworkScanResult.parse(result));
     }
+  });
+
+  it("maps the phone's latency figure into speed.latency.internetMs", () => {
+    const result = androidImportToScanResult(fullExport);
+    assert.equal(result.speed?.latency?.internetMs, 24);
+    // The latency sub-fields the phone can't measure stay absent — the same
+    // degrade-to-absent convention as the download-only speed section.
+    assert.equal(result.speed?.latency?.gatewayMs, undefined);
+    assert.equal(result.speed?.latency?.dnsResolutionMs, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("builds a latency-only speed section when the speed test was off", () => {
+    const result = androidImportToScanResult({ ...fullExport, speed: undefined });
+    assert.equal(result.speed?.latency?.internetMs, 24);
+    assert.equal(result.speed?.download, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    // Latency-only records must still flow through the analysis layer.
+    assert.doesNotThrow(() => scoreAllStandards(result));
+    assert.doesNotThrow(() => analyseAllPersonas(result));
+  });
+
+  it("omits the speed section entirely when neither latency nor download exist", () => {
+    const result = androidImportToScanResult({
+      ...fullExport,
+      speed: undefined,
+      latencyMs: undefined,
+    });
+    assert.equal(result.speed, undefined);
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("treats a null latencyMs (failed probe) as absent", () => {
+    const result = androidImportToScanResult({
+      ...fullExport,
+      speed: undefined,
+      latencyMs: null,
+    });
+    assert.equal(result.speed, undefined);
   });
 
   it("reflects VPN state into the security section", () => {
@@ -159,6 +204,16 @@ describe("androidImportToScanResult", () => {
     assert.equal(minimal.network.hosts.length, 0);
     assert.equal(minimal.traffic, undefined);
     assert.equal(minimal.speed, undefined);
+  });
+
+  it("rejects empty speed/latency husks at the schema level", () => {
+    const base = androidImportToScanResult(fullExport);
+    // Sections degrade to absent, never to empty objects — the schema
+    // enforces at least one measurement per (sub-)section.
+    assert.throws(() => NetworkScanResult.parse({ ...base, speed: {} }));
+    assert.throws(() =>
+      NetworkScanResult.parse({ ...base, speed: { latency: {} } })
+    );
   });
 
   it("produces a result the analyser and standards scorers accept", () => {

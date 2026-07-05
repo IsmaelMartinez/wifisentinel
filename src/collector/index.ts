@@ -355,7 +355,7 @@ export async function collectNetworkScan(
       : await withSpan("speed-test", {}, () =>
           scanSpeed(bootstrap.gateway.ip, wifi.txRate)
         );
-    emitter?.scannerComplete("speed-test", speed ? `${speed.download.speedMbps} Mbps down${speed.upload ? `, ${speed.upload.speedMbps} Mbps up` : ""}` : "skipped");
+    emitter?.scannerComplete("speed-test", speed?.download ? `${speed.download.speedMbps} Mbps down${speed.upload ? `, ${speed.upload.speedMbps} Mbps up` : ""}` : "skipped");
 
     // Step 7: Look up gateway vendor
     const gatewayVendor = options.skipVendorLookup

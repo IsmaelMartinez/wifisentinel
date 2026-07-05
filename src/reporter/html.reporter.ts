@@ -267,18 +267,18 @@ ${rfAnalysis ? `
   </table>` : ""}
 </div>
 
-<!-- Speed Test -->
+<!-- Speed Test (or latency-only, for partial sources with no download run) -->
 ${scan.speed ? `
-<h2>Speed Test</h2>
+<h2>${scan.speed.download || scan.speed.upload || scan.speed.rating ? "Speed Test" : "Latency"}</h2>
 <div class="card">
   <div class="grid2">
     <div>
-      <p>Download: ${scan.speed.download.speedMbps} Mbps</p>
+      ${scan.speed.download ? `<p>Download: ${scan.speed.download.speedMbps} Mbps</p>` : ""}
       ${scan.speed.upload ? `<p>Upload: ${scan.speed.upload.speedMbps} Mbps</p>` : ""}
       ${scan.speed.rating ? `<p>Rating: ${esc(scan.speed.rating)}</p>` : ""}
     </div>
     <div>
-      ${scan.speed.latency ? `<p>Latency: ${scan.speed.latency.internetMs} ms</p>` : ""}
+      ${scan.speed.latency?.internetMs !== undefined ? `<p>Latency: ${scan.speed.latency.internetMs} ms</p>` : ""}
       ${scan.speed.jitter ? `<p>Jitter: ${scan.speed.jitter.internetMs} ms</p>` : ""}
       ${scan.speed.packetLoss ? `<p>Packet Loss: ${scan.speed.packetLoss.internetPercent}%</p>` : ""}
     </div>

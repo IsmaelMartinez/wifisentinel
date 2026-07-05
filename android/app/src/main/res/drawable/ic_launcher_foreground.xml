@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher foreground: a shield (the sentinel) carrying a WiFi fan.
+  Everything sits inside the adaptive-icon safe zone (a 66 dp circle centred
+  in the 108 dp canvas), so no shape mask can clip it. Single-colour white,
+  which also makes it directly reusable as the monochrome (themed-icon) layer.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Shield outline -->
+    <path
+        android:pathData="M54,33 L71,40 L71,54 C71,64.8 64,72.6 54,76.8 C44,72.6 37,64.8 37,54 L37,40 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- WiFi fan: two arcs above a dot, centred inside the shield -->
+    <path
+        android:pathData="M43,52.5 A15.5,15.5 0 0 1 65,52.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M48,58 A8.5,8.5 0 0 1 60,58"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M54,63.4 m-3.2,0 a3.2,3.2 0 1 1 6.4,0 a3.2,3.2 0 1 1 -6.4,0"
+        android:fillColor="#FFFFFF" />
+</vector>
