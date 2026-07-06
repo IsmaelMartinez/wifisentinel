@@ -105,8 +105,12 @@ the JSON export drop-in for the CLI's future import path.
    `NEARBY_WIFI_DEVICES` on API 33+); prompt with a rationale dialog, remember
    the result across button taps within the same process.
 2. **WiFi stage** — `startScan()` → await `SCAN_RESULTS_AVAILABLE_ACTION`
-   broadcast (5 s timeout, fall back to cache) → `WifiInfo` via
-   `NetworkCapabilities.transportInfo` (the non-deprecated path on API 29+).
+   broadcast (5 s timeout, fall back to cache) → `WifiInfo` via a
+   `NetworkCallback` registered with `FLAG_INCLUDE_LOCATION_INFO` on API 31+
+   (the synchronous `getNetworkCapabilities().transportInfo` snapshot is
+   permanently location-redacted there — SSID/BSSID sanitised, `networkId`
+   -1), falling back to the synchronous snapshot (fine on API 29/30) and
+   then the deprecated `getConnectionInfo()` getter.
 3. **Network stage** — `DhcpInfo`, `LinkProperties`, VPN state.
 4. **Host discovery** — `NsdManager` service-type sweep (configurable list:
    `_http._tcp`, `_ipp._tcp`, `_airplay._tcp`, `_homekit._tcp`, `_ssh._tcp`,
@@ -144,7 +148,14 @@ Because the dashboard is not LAN-reachable, v1 sync is **manual, file-based**
   allowed, `meta.platform: "android"`), expands it with honest sentinels,
   recomputes the persona/standards analysis, and writes it into
   `~/.wifisentinel/scans/` so it shows up in history/trend/diff/devices and
-  the dashboard.
+  the dashboard. Trend consumers (`trend`, `rf --trend`, the dashboard
+  Trends page) are source-aware: rows/points from partial imports are
+  annotated, and summary/trend maths run over full CLI scans when a history
+  mixes sources — the phone's weaker radio and 25-AP nearby cap would
+  otherwise make the series oscillate with the source rather than the
+  network. The `devices` tracker skips imported hosts entirely (their MAC is
+  the `"unknown"` sentinel — the phone cannot read ARP — so they cannot be
+  identified across scans).
 
 End-to-end:
 
