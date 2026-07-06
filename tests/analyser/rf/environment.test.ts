@@ -53,9 +53,60 @@ describe("detectEnvironmentChanges", () => {
     const result = detectEnvironmentChanges(current, baseline, META);
     const secChange = result.changes.find(c => c.type === "security_change");
     assert.ok(secChange);
-    // "WEP".length < "WPA3 Personal".length => downgrade => high
+    // WEP is genuinely weaker than WPA3 => downgrade => high
     assert.equal(secChange.severity, "high");
     assert.ok(result.summary.includes("security change(s)"));
+  });
+
+  it("flags a security upgrade as medium severity", () => {
+    const baseline = makeWifi([
+      { ssid: "Net", bssid: "AA:BB:CC:DD:EE:01", security: "WPA2 Personal", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const current = makeWifi([
+      { ssid: "Net", bssid: "AA:BB:CC:DD:EE:01", security: "WPA3 Personal", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const result = detectEnvironmentChanges(current, baseline, META);
+    const secChange = result.changes.find(c => c.type === "security_change");
+    assert.ok(secChange);
+    assert.equal(secChange.severity, "medium");
+  });
+
+  it("stays quiet when an imported baseline's coarse label meets the CLI's mode-qualified one", () => {
+    // rf --compare against a phone-imported baseline: the phone says "WPA2",
+    // macOS says "WPA2 Personal" for the very same AP. Comparing raw strings
+    // used to emit a spurious security_change for every shared AP.
+    const baseline = makeWifi([
+      { ssid: "Net", bssid: "aa:bb:cc:dd:ee:01", security: "WPA2", channel: 6, signal: -50, noise: 0 },
+    ]);
+    const current = makeWifi([
+      { ssid: "Net", bssid: "aa:bb:cc:dd:ee:01", security: "WPA2 Personal", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const result = detectEnvironmentChanges(current, baseline, META);
+    assert.equal(result.changes.filter(c => c.type === "security_change").length, 0);
+  });
+
+  it("still reports a real family change against an imported baseline", () => {
+    const baseline = makeWifi([
+      { ssid: "Net", bssid: "aa:bb:cc:dd:ee:01", security: "WPA2", channel: 6, signal: -50, noise: 0 },
+    ]);
+    const current = makeWifi([
+      { ssid: "Net", bssid: "aa:bb:cc:dd:ee:01", security: "None", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const result = detectEnvironmentChanges(current, baseline, META);
+    const secChange = result.changes.find(c => c.type === "security_change");
+    assert.ok(secChange);
+    assert.equal(secChange.severity, "high");
+  });
+
+  it("never reports a security change against an unknown label", () => {
+    const baseline = makeWifi([
+      { ssid: "Net", bssid: "aa:bb:cc:dd:ee:01", security: "unknown", channel: 6, signal: -50, noise: 0 },
+    ]);
+    const current = makeWifi([
+      { ssid: "Net", bssid: "aa:bb:cc:dd:ee:01", security: "WPA2 Personal", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const result = detectEnvironmentChanges(current, baseline, META);
+    assert.equal(result.changes.filter(c => c.type === "security_change").length, 0);
   });
 
   it("detects signal anomaly >= 15 dB", () => {

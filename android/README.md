@@ -86,6 +86,11 @@ What carries across: WiFi link details (SSID/BSSID/security/channel/band/
 signal/txRate), nearby networks, IP/gateway/DNS, discovered hosts with open
 ports, VPN state, the latency figure (stamped `https-rtt` so it isn't judged
 against ICMP ping thresholds), and the opt-in download speed result.
+Security labels are normalised into the CLI's canonical vocabulary on
+import (`src/collector/schema/security.ts`), so the phone's coarse
+"Open"/"WPA2" labels feed the same rogue-AP, `rf --compare`, and standards
+rules as the macOS scanner's "WPA2 Personal"-style labels — an open evil
+twin of your WPA2 network is flagged high-severity on imported scans too.
 Everything the phone can't observe stays absent or carries a documented
 sentinel — imported records are flagged partial rather than pretending to be
 full audits.

@@ -82,6 +82,13 @@ object LocalAnalyser {
                     "This network uses modern WPA3 encryption.",
                 ),
             )
+            "ENHANCED OPEN" -> listOf(
+                Finding(
+                    Severity.LOW,
+                    "Enhanced Open (OWE) network",
+                    "Traffic is encrypted (OWE) but the network has no authentication — anyone can join. Fine for guest access; prefer WPA2/WPA3 for trusted use.",
+                ),
+            )
             else -> listOf(
                 Finding(
                     Severity.INFO,

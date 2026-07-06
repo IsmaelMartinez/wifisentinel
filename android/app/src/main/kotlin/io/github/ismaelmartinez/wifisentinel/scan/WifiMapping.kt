@@ -26,15 +26,25 @@ internal object WifiMapping {
     fun normaliseBssid(raw: String?): String? =
         raw?.lowercase()?.takeIf { it.isNotEmpty() && it != REDACTED_BSSID }
 
-    /** Map a `ScanResult.capabilities` string to a coarse security label. */
+    /**
+     * Map a `ScanResult.capabilities` string to a coarse security label.
+     * Modern supplicants often format WPA3/OWE networks with an RSN prefix
+     * and no "WPA" text at all ("[RSN-SAE-CCMP][ESS]"), so key-management
+     * tokens (SAE, OWE) and RSN are matched before falling back to "Open" —
+     * otherwise a WPA3 network reads as an open one and every downstream
+     * consumer (LocalAnalyser, the CLI import's rogue-AP/persona rules)
+     * raises critical unencrypted-network findings against it.
+     */
     fun securityFromCapabilities(capabilities: String?): String {
         val caps = capabilities ?: return "unknown"
         return when {
-            "WPA3" in caps -> "WPA3"
-            "WPA2" in caps -> "WPA2"
+            "WPA3" in caps || "SAE" in caps -> "WPA3"
+            // Before RSN: OWE capabilities read "[RSN-OWE-CCMP]".
+            "OWE" in caps -> "Enhanced Open"
+            "WPA2" in caps || "RSN" in caps -> "WPA2"
             "WPA" in caps -> "WPA"
             "WEP" in caps -> "WEP"
-            caps.contains("ESS") && !caps.contains("WPA") -> "Open"
+            "ESS" in caps -> "Open"
             else -> "unknown"
         }
     }

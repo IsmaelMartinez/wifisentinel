@@ -1,5 +1,6 @@
 // src/store/diff.ts
 import type { StoredScan } from "./types.js";
+import { securityChanged } from "../collector/schema/security.js";
 
 export interface FieldChange {
   field: string;
@@ -74,9 +75,16 @@ export function diffScans(a: StoredScan, b: StoredScan): ScanDiff {
   const aw = a.scan.wifi;
   const bw = b.scan.wifi;
 
+  // Security compares through the shared taxonomy so scans stored before
+  // label normalisation (or imported from a coarse source) don't report a
+  // vocabulary-only difference ("WPA3 Transitional" vs "WPA2/WPA3") as a
+  // configuration change. The raw labels are still what gets displayed.
+  if (securityChanged(aw.security, bw.security)) {
+    wifi.push({ field: "security", from: aw.security, to: bw.security, direction: "changed" });
+  }
+
   const wifiFields: Array<{ field: string; from: any; to: any; higherIsBetter?: boolean }> = [
     { field: "ssid", from: aw.ssid, to: bw.ssid },
-    { field: "security", from: aw.security, to: bw.security },
     { field: "channel", from: aw.channel, to: bw.channel },
     { field: "band", from: aw.band, to: bw.band },
     { field: "signal", from: aw.signal, to: bw.signal, higherIsBetter: true },

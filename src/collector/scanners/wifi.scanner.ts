@@ -1,5 +1,6 @@
 import { run } from "../exec.js";
 import type { NetworkScanResult, NearbyNetwork } from "../schema/scan-result.js";
+import { normaliseSecurity } from "../schema/security.js";
 
 type WifiResult = NetworkScanResult["wifi"];
 
@@ -84,7 +85,9 @@ function parseSystemProfiler(output: string): WifiResult {
   const protocol = getFromBlock(currentBlock, "PHY Mode") || get("PHY Mode") || "Unknown";
   const channelRaw = getFromBlock(currentBlock, "Channel") || get("Channel") || "0";
   const { channel, band, width } = parseChannel(channelRaw);
-  const security = getFromBlock(currentBlock, "Security") || get("Security") || "Unknown";
+  const security = normaliseSecurity(
+    getFromBlock(currentBlock, "Security") || get("Security") || "Unknown"
+  );
   const countryCode = getFromBlock(currentBlock, "Country Code") || get("Country Code") || "";
   const txRate = parseTxRate(getFromBlock(currentBlock, "Transmit Rate") || get("Transmit Rate") || "0");
   const macRandRaw = getFromBlock(currentBlock, "MAC Address Randomization") || get("MAC Address Randomization") || "";
@@ -136,7 +139,7 @@ function parseSystemProfiler(output: string): WifiResult {
       }
       nearbyNetworks.push({
         ssid: ssid === "<redacted>" ? "(hidden)" : ssid,
-        security: securityVal || "Unknown",
+        security: normaliseSecurity(securityVal || "Unknown"),
         protocol: phyMode || "Unknown",
         channel,
         signal: sig,
@@ -290,7 +293,12 @@ async function scanWifiLinux(): Promise<WifiResult> {
       const unescaped = line.replace(/\\:/g, "\uFFFF");
       const parts = unescaped.split(":");
       const netSsid = parts[0]?.replace(/\uFFFF/g, ":") || null;
-      const netSecurity = parts[1]?.replace(/\uFFFF/g, ":") || "Unknown";
+      // nmcli prints an empty SECURITY field for open networks \u2014 only a
+      // missing field (short line) is genuinely unknown.
+      const secRaw = parts[1]?.replace(/\uFFFF/g, ":");
+      const netSecurity = normaliseSecurity(
+        secRaw === undefined ? "Unknown" : secRaw === "" ? "Open" : secRaw
+      );
       const netSignal = parseInt(parts[2] ?? "0", 10);
       const netChannel = parseInt(parts[3] ?? "0", 10);
       const netBssid = parts[5]?.replace(/\uFFFF/g, ":").trim() || undefined;

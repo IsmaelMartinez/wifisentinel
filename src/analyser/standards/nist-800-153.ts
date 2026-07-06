@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { securityMode, supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
 import {
   type Finding,
   type StandardScore,
@@ -47,14 +48,12 @@ function checkClientIsolation(result: NetworkScanResult): Finding {
 }
 
 function checkEncryptionStrength(result: NetworkScanResult): Finding {
-  const sec = result.wifi.security.toLowerCase();
-  const isWpa3 = sec.includes("wpa3");
-  const isWpa2 = sec.includes("wpa2");
-  const isWep = sec.includes("wep");
+  const isWpa3 = supportsWpa3(result.wifi.security);
+  const isWpa2 = supportsWpa2(result.wifi.security);
 
   let status: Finding["status"];
   if (isWpa3) status = "pass";
-  else if (isWpa2 && !isWep) status = "partial";
+  else if (isWpa2) status = "partial";
   else status = "fail";
 
   return {
@@ -73,11 +72,9 @@ function checkEncryptionStrength(result: NetworkScanResult): Finding {
 }
 
 function checkKeyManagement(result: NetworkScanResult): Finding {
-  const sec = result.wifi.security.toLowerCase();
-  const hasEnterprise =
-    sec.includes("enterprise") || sec.includes("802.1x") || sec.includes("eap");
-  const hasPersonal =
-    sec.includes("personal") || sec.includes("psk") || sec.includes("sae");
+  const mode = securityMode(result.wifi.security);
+  const hasEnterprise = mode === "Enterprise";
+  const hasPersonal = mode === "Personal";
 
   return {
     id: "NIST-W-2.2",

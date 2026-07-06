@@ -44,8 +44,8 @@ either omitted or set to a documented sentinel.
 | Field | Source | Notes |
 |---|---|---|
 | `wifi.ssid`, `bssid`, `signal`, `band`, `channel`, `txRate` | `NetworkCapabilities.transportInfo as WifiInfo` (API 29+) | `ssid`/`bssid` require the runtime scan permission; redacted otherwise |
-| `wifi.security` | Matched `ScanResult.capabilities` for the current BSSID | Requires a fresh `startScan()` — we trigger and await the broadcast |
-| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Implemented — deduped by BSSID (strongest sighting wins), connected AP excluded, capped at 25, strongest first (`WifiMapping.mapNearbyNetworks`). Throttled to 4 per 2 min; same permission gate |
+| `wifi.security` | Matched `ScanResult.capabilities` for the current BSSID | Requires a fresh `startScan()` — we trigger and await the broadcast. The phone emits coarse labels ("Open", "WPA2", …) with no Personal/Enterprise distinction; the CLI import folds them into the canonical vocabulary (`src/collector/schema/security.ts`) so cross-source comparisons (rogue-AP weaker-security, `rf --compare`) work |
+| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Implemented — deduped by BSSID (strongest sighting wins), connected AP excluded, capped at 25, strongest first (`WifiMapping.mapNearbyNetworks`). Throttled to 4 per 2 min; same permission gate. **Known limitation:** the list is nested under `wifi`, so when the platform redacts `WifiInfo` (permission denied mid-flight, or scanning while disconnected) no nearby list is exported even if `getScanResults()` returned APs — see §10 |
 | `wifi.macRandomised` | — | **Not observable.** `WifiInfo.getMacAddress()` returns the sanitised `02:00:00:00:00:00` for all non-system callers; the real per-SSID randomisation flag lives in `WifiConfiguration.macRandomizationSetting` which requires a system permission. Omitted from the Android schema. |
 | `network.ip`, `subnet`, `gateway.ip`, `dns.servers` | `DhcpInfo` / `LinkProperties` | Available without extra permissions |
 | `network.gateway.mac` | ARP via `/proc/net/arp` | **Blocked** on modern Android; leave undefined |
@@ -263,7 +263,12 @@ On the CLI side, `wifisentinel import <file>` (see `src/commands/import.ts` and
 `src/collector/android-import.ts`) validates the export against a relaxed Zod
 schema, expands it into a full `NetworkScanResult` with `meta.platform:
 "android"` and `meta.partial: true`, and stores it so it appears in
-`history` / `trend` / `diff` / `devices`.
+`history` / `trend` / `diff` / `devices`. Security labels (connected AP and
+nearby networks) are normalised into the canonical vocabulary at this
+boundary — `src/collector/schema/security.ts` owns the taxonomy, and the
+rogue-AP, `rf --compare`, standards, and persona consumers all compare
+through it, so the phone's coarse "Open"/"WPA2" labels participate in the
+same rules as the CLI's "WPA2 Personal"-style labels.
 
 > **Build note.** The Gradle wrapper (8.11.1) is committed, so `./gradlew`
 > works anywhere with a JDK 17+ and an Android SDK (`ANDROID_HOME`). Both CI
@@ -284,6 +289,14 @@ schema, expands it into a full `NetworkScanResult` with `meta.platform:
 5. **Rule subset for `LocalAnalyser`.** Which of the five personas' rules
    are honest to evaluate from phone-only data? Red-team and privacy lean
    feasible; network-engineer and compliance lean misleading.
+6. **Disconnected-scan mode.** `nearbyNetworks` lives under
+   `LocalScanResult.Wifi`, so a scan taken while WiFi is disconnected (or
+   with `WifiInfo` redacted) exports no nearby list even when
+   `getScanResults()` surfaced APs. Restructuring the export so the nearby
+   list stands alone would enable a "survey mode" (walk around, collect RF
+   environment without associating), but it also changes the Room schema
+   and every consumer of `wifi == null`. Documented as a limitation for
+   now; revisit if survey mode becomes a real use case.
 
 ## 11. Suggested next steps
 

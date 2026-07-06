@@ -72,6 +72,17 @@ class WifiMappingTest {
     }
 
     @Test
+    fun mapsRsnOnlyCapabilities() {
+        // Modern supplicants can format WPA3/OWE/WPA2 with an RSN prefix and
+        // no "WPA" text; these must not fall through to "Open" — a WPA3
+        // network read as open raises critical false findings downstream.
+        assertEquals("WPA3", WifiMapping.securityFromCapabilities("[RSN-SAE-CCMP][ESS][MFPR][MFPC]"))
+        assertEquals("Enhanced Open", WifiMapping.securityFromCapabilities("[RSN-OWE-CCMP][ESS]"))
+        assertEquals("WPA2", WifiMapping.securityFromCapabilities("[RSN-PSK-CCMP][ESS]"))
+        assertEquals("WPA2", WifiMapping.securityFromCapabilities("[RSN-EAP-CCMP][ESS]"))
+    }
+
+    @Test
     fun unknownSecurityForNullOrUnrecognised() {
         assertEquals("unknown", WifiMapping.securityFromCapabilities(null))
         assertEquals("unknown", WifiMapping.securityFromCapabilities("[IBSS]"))

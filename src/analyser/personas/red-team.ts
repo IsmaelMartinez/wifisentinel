@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { isWeakSecurity, securityFamily } from "../../collector/schema/security.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
 import { riskFromInsights } from "./types.js";
 
@@ -49,11 +50,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
   }
 
   // --- Weak encryption / insecure wifi security ---
-  const weakSecurityPatterns = ["WEP", "WPA ", "Open", "None"];
-  const isWeak = weakSecurityPatterns.some((p) =>
-    result.wifi.security.toUpperCase().startsWith(p.toUpperCase()),
-  );
-  if (isWeak) {
+  if (isWeakSecurity(result.wifi.security)) {
     insights.push({
       id: "rt-weak-wifi-encryption",
       title: "Weak or absent Wi-Fi encryption enables passive interception",
@@ -237,7 +234,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
 
   // --- Nearby networks as targets ---
   const openNearby = result.wifi.nearbyNetworks.filter(
-    (n) => n.security === "Open" || n.security === "None",
+    (n) => securityFamily(n.security) === "open",
   );
   if (openNearby.length > 0) {
     insights.push({

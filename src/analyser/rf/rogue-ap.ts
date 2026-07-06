@@ -1,34 +1,7 @@
 // src/analyser/rf/rogue-ap.ts
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { isWeakerSecurity } from "../../collector/schema/security.js";
 import type { RogueAPFinding, RogueAPAnalysis } from "./types.js";
-
-/** Security strength ordering (lower index = weaker). */
-const SECURITY_STRENGTH = [
-  "None",
-  "WEP",
-  "WPA Personal",
-  "WPA2 Personal",
-  "WPA2/WPA3 Personal",
-  "WPA3 Personal",
-  "WPA Enterprise",
-  "WPA2 Enterprise",
-  "WPA3 Enterprise",
-];
-
-function securityIndex(security: string): number {
-  const normalised = security.trim();
-  const idx = SECURITY_STRENGTH.findIndex(s =>
-    normalised.toLowerCase().includes(s.toLowerCase())
-  );
-  return idx >= 0 ? idx : -1;
-}
-
-function isWeakerSecurity(suspect: string, current: string): boolean {
-  const si = securityIndex(suspect);
-  const ci = securityIndex(current);
-  if (si < 0 || ci < 0) return false;
-  return si < ci;
-}
 
 export function detectRogueAPs(wifi: NetworkScanResult["wifi"]): RogueAPAnalysis {
   const findings: RogueAPFinding[] = [];

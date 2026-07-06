@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
 import {
   type Finding,
   type StandardScore,
@@ -31,14 +32,12 @@ const DEFAULT_SSIDS = new Set([
 ]);
 
 function checkEncryption(result: NetworkScanResult): Finding {
-  const sec = result.wifi.security.toLowerCase();
-  const isWpa3 = sec.includes("wpa3");
-  const isWpa2 = sec.includes("wpa2");
-  const isWep = sec.includes("wep");
+  const isWpa3 = supportsWpa3(result.wifi.security);
+  const isWpa2 = supportsWpa2(result.wifi.security);
 
   let status: Finding["status"] = "fail";
   if (isWpa3) status = "pass";
-  else if (isWpa2 && !isWep) status = "partial";
+  else if (isWpa2) status = "partial";
 
   return {
     id: "CIS-W-1.1",
