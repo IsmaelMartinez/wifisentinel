@@ -45,7 +45,7 @@ either omitted or set to a documented sentinel.
 |---|---|---|
 | `wifi.ssid`, `bssid`, `signal`, `band`, `channel`, `txRate` | `NetworkCapabilities.transportInfo as WifiInfo` (API 29+) | `ssid`/`bssid` require the runtime scan permission; redacted otherwise |
 | `wifi.security` | Matched `ScanResult.capabilities` for the current BSSID | Requires a fresh `startScan()` — we trigger and await the broadcast. The phone emits coarse labels ("Open", "WPA2", …) with no Personal/Enterprise distinction; the CLI import folds them into the canonical vocabulary (`src/collector/schema/security.ts`) so cross-source comparisons (rogue-AP weaker-security, `rf --compare`) work |
-| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Implemented — deduped by BSSID (strongest sighting wins), connected AP excluded, capped at 25, strongest first (`WifiMapping.mapNearbyNetworks`). Throttled to 4 per 2 min; same permission gate. **Known limitation:** the list is nested under `wifi`, so when the platform redacts `WifiInfo` (permission denied mid-flight, or scanning while disconnected) no nearby list is exported even if `getScanResults()` returned APs — see §10 |
+| `nearbyNetworks` (top-level) | `WifiManager.getScanResults()` | Implemented — deduped by BSSID (strongest sighting wins), connected AP excluded, capped at 25, strongest first (`WifiMapping.mapNearbyNetworks`). Throttled to 4 per 2 min; same permission gate. **Decoupled** from the connected-AP capture (`LocalScanResult.nearbyNetworks`, not nested under `wifi`), so a survey taken while disconnected — or with `WifiInfo` redacted, so `wifi` is null — still exports the RF neighbourhood whenever `getScanResults()` returned APs. Null only when the scan permission is absent (nothing collected). See §10 |
 | `wifi.macRandomised` | — | **Not observable.** `WifiInfo.getMacAddress()` returns the sanitised `02:00:00:00:00:00` for all non-system callers; the real per-SSID randomisation flag lives in `WifiConfiguration.macRandomizationSetting` which requires a system permission. Omitted from the Android schema. |
 | `network.ip`, `subnet`, `gateway.ip`, `dns.servers` | `DhcpInfo` / `LinkProperties` | Available without extra permissions |
 | `network.gateway.mac` | ARP via `/proc/net/arp` | **Blocked** on modern Android; leave undefined |
@@ -110,15 +110,30 @@ the JSON export drop-in for the CLI's future import path.
    (the synchronous `getNetworkCapabilities().transportInfo` snapshot is
    permanently location-redacted there — SSID/BSSID sanitised, `networkId`
    -1), falling back to the synchronous snapshot (fine on API 29/30) and
-   then the deprecated `getConnectionInfo()` getter.
-3. **Network stage** — `DhcpInfo`, `LinkProperties`, VPN state.
-4. **Host discovery** — `NsdManager` service-type sweep (configurable list:
+   then the deprecated `getConnectionInfo()` getter. **Unidentifiable AP:**
+   when the API 31+ location-aware callback times out and we land on the
+   redacted synchronous snapshot, both SSID and BSSID normalise to null.
+   `captureWifi` early-returns null in that case rather than emit a
+   signal-only connected-AP section — without an identity it can't be
+   security-scored (no BSSID to match against the scan results), correlated
+   across scans (the import folds a null BSSID to the `"unknown"` sentinel),
+   or told apart from a nearby-list entry, so a signal-only section reads as
+   a real observation the tool can't actually attribute. The RF neighbourhood
+   is captured independently (below), so dropping it loses nothing the scan
+   didn't already record.
+3. **Nearby stage** — the fresh scan-result set is mapped into the top-level
+   `nearbyNetworks` list independently of the connected-AP capture
+   (`WifiMapping.mapNearbyNetworks` takes the nullable connected BSSID, which
+   is simply null when `wifi` is), so a disconnected/redacted scan still
+   surveys the RF environment.
+4. **Network stage** — `DhcpInfo`, `LinkProperties`, VPN state.
+5. **Host discovery** — `NsdManager` service-type sweep (configurable list:
    `_http._tcp`, `_ipp._tcp`, `_airplay._tcp`, `_homekit._tcp`, `_ssh._tcp`,
    `_printer._tcp`, `_googlecast._tcp`); TCP connect sweep to common ports
    (22, 80, 443, 53, 8080, 8443, 554) with a 300 ms timeout and a 32-way
    concurrency cap.
-5. **Latency stage** — single `HEAD` to `https://www.cloudflare.com/cdn-cgi/trace`.
-6. **Analyse stage** — rule-based local analyser.
+6. **Latency stage** — single `HEAD` to `https://www.cloudflare.com/cdn-cgi/trace`.
+7. **Analyse stage** — rule-based local analyser.
 
 ## 5. Permissions
 
@@ -221,9 +236,13 @@ The skeleton under `android/` has grown past the first spike. It ships:
   `wifisentinel-scans.db` (§7).
 - A `LocalScanner` that runs the full MVP pipeline:
   - **WiFi stage** — `startScan()` + broadcast-await so `security` is derived
-    from fresh data rather than a stale cache. The same scan-result set is
-    mapped into `wifi.nearbyNetworks` (deduped by BSSID, connected AP
-    excluded, capped — `WifiMapping.mapNearbyNetworks`, JVM-tested).
+    from fresh data rather than a stale cache. The connected-AP capture
+    early-returns null when the AP is unidentifiable (API 31+ redacted
+    fallback — see §4). The same scan-result set is mapped into the top-level
+    `nearbyNetworks` list (deduped by BSSID, connected AP excluded, capped —
+    `WifiMapping.mapNearbyNetworks`, JVM-tested), decoupled from the
+    connected-AP capture so a disconnected/redacted scan still surveys the RF
+    environment.
   - **Network stage** — `DhcpInfo` / `LinkProperties` / VPN state.
   - **Host discovery** (`HostProbe`) — `NsdManager` mDNS sweep across the
     service-type list in §4, plus a bounded (32-way) TCP connect sweep of the
@@ -300,14 +319,16 @@ same rules as the CLI's "WPA2 Personal"-style labels.
 5. **Rule subset for `LocalAnalyser`.** Which of the five personas' rules
    are honest to evaluate from phone-only data? Red-team and privacy lean
    feasible; network-engineer and compliance lean misleading.
-6. **Disconnected-scan mode.** `nearbyNetworks` lives under
-   `LocalScanResult.Wifi`, so a scan taken while WiFi is disconnected (or
-   with `WifiInfo` redacted) exports no nearby list even when
-   `getScanResults()` surfaced APs. Restructuring the export so the nearby
-   list stands alone would enable a "survey mode" (walk around, collect RF
-   environment without associating), but it also changes the Room schema
-   and every consumer of `wifi == null`. Documented as a limitation for
-   now; revisit if survey mode becomes a real use case.
+6. ~~**Disconnected-scan mode.**~~ Resolved — `nearbyNetworks` was lifted out
+   of `LocalScanResult.Wifi` to a top-level field (`WifiMapping.mapNearbyNetworks`
+   already took a nullable connected BSSID), so a scan taken while WiFi is
+   disconnected — or with `WifiInfo` redacted, so `wifi` is null — still
+   exports the RF neighbourhood whenever `getScanResults()` surfaced APs. The
+   CLI import accepts the top-level list (preferring it over the legacy
+   `wifi.nearbyNetworks` location, still read for back-compat) so a nearby-only
+   partial scan round-trips into `history`/`trend`/`rf`/`devices`. This is the
+   foundation for a future "survey mode" (walk around, collect the RF
+   environment without associating); the UI to drive it is not built yet.
 
 ## 11. Suggested next steps
 

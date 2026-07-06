@@ -2,6 +2,17 @@ import { z } from "zod";
 import type { NetworkScanResult } from "./schema/scan-result.js";
 import { normaliseSecurity } from "./schema/security.js";
 
+// A nearby AP as the phone exports it. `band` is phone-only colour — the CLI
+// `NearbyNetwork` shape has no band field, so the adapter drops it.
+const NearbyNetworkImport = z.object({
+  ssid: z.string().nullable().optional(),
+  bssid: z.string().nullable().optional(),
+  security: z.string().optional(),
+  channel: z.number().optional(),
+  band: z.string().optional(),
+  signal: z.number().optional(),
+});
+
 /**
  * Relaxed schema for the JSON the Android companion app exports. It mirrors
  * the Kotlin `LocalScanResult` data class
@@ -31,27 +42,19 @@ export const AndroidScanImport = z.object({
       band: z.string().optional(),
       signal: z.number().optional(),
       txRate: z.number().optional(),
-      // Nearby APs observed by the phone's WifiManager scan (deduped by
-      // BSSID and capped on-device). `band` is phone-only colour — the CLI
-      // `NearbyNetwork` shape has no band field, so the adapter drops it.
-      // Null when the scan predates the field (pre-upgrade Room records
-      // re-exported by a newer app version).
-      nearbyNetworks: z
-        .array(
-          z.object({
-            ssid: z.string().nullable().optional(),
-            bssid: z.string().nullable().optional(),
-            security: z.string().optional(),
-            channel: z.number().optional(),
-            band: z.string().optional(),
-            signal: z.number().optional(),
-          })
-        )
-        .nullable()
-        .optional(),
+      // Legacy location for the nearby list — exports from app versions before
+      // the capture was decoupled nested it under `wifi`. Still accepted so
+      // those exports round-trip; the adapter prefers the top-level field
+      // below when both are present. See docs/android-companion.md §10.
+      nearbyNetworks: z.array(NearbyNetworkImport).nullable().optional(),
     })
     .nullable()
     .optional(),
+  // Nearby APs observed by the phone's WifiManager scan (deduped by BSSID and
+  // capped on-device), decoupled from the connected-AP capture so a survey
+  // taken while disconnected — or with `wifi` redacted/absent — still carries
+  // the RF neighbourhood. Null when the scan predates the field.
+  nearbyNetworks: z.array(NearbyNetworkImport).nullable().optional(),
   network: z
     .object({
       ip: z.string().nullable().optional(),
@@ -106,6 +109,12 @@ export function androidImportToScanResult(
 ): NetworkScanResult {
   const wifi = input.wifi ?? undefined;
   const network = input.network ?? undefined;
+
+  // Nearby capture is decoupled from the connected AP, so it may arrive at the
+  // top level even when `wifi` is null (a survey taken while disconnected).
+  // Prefer the top-level field; fall back to the legacy `wifi.nearbyNetworks`
+  // location for exports that predate the decoupling.
+  const nearbyNetworks = input.nearbyNetworks ?? wifi?.nearbyNetworks ?? [];
 
   // Always-on latency probe + opt-in download → a partial `speed` section
   // (see the docblock above for the degrade-to-absent rationale). The phone's
@@ -162,7 +171,7 @@ export function androidImportToScanResult(
       // Channel 0 (the phone's own unknown-frequency sentinel) is dropped
       // too — RF consumers place channels numerically, so 0 would count as
       // 2.4 GHz overlap for channels 1–2 and fabricate congestion.
-      nearbyNetworks: (wifi?.nearbyNetworks ?? []).flatMap((n) =>
+      nearbyNetworks: nearbyNetworks.flatMap((n) =>
         n.bssid && n.channel !== undefined && n.channel > 0 && n.signal !== undefined
           ? [
               {

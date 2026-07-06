@@ -359,6 +359,67 @@ describe("androidImportToScanResult", () => {
     assert.ok(congestion, "expected ne-channel-congestion to fire on the imported scan");
   });
 
+  it("accepts and expands a top-level nearby list decoupled from wifi", () => {
+    const survey = {
+      ...fullExport,
+      wifi: { ...fullExport.wifi, nearbyNetworks: undefined },
+      nearbyNetworks: [
+        { ssid: "Roof", bssid: "ab:cd:ef:00:11:22", security: "WPA2", channel: 40, band: "5 GHz", signal: -65 },
+      ],
+    };
+    assert.equal(AndroidScanImport.safeParse(survey).success, true);
+    const result = androidImportToScanResult(survey);
+    assert.equal(result.wifi.nearbyNetworks.length, 1);
+    assert.equal(result.wifi.nearbyNetworks[0].bssid, "ab:cd:ef:00:11:22");
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("round-trips a nearby-only survey with the connected AP absent", () => {
+    // Scanned while disconnected (or with WifiInfo redacted): no `wifi`, but
+    // the RF neighbourhood still exports at the top level and survives import.
+    const survey = {
+      meta: {
+        scanId: "survey-1",
+        timestamp: "2026-07-01T10:00:00.000Z",
+        platform: "android" as const,
+      },
+      nearbyNetworks: [
+        { ssid: "CafeGuest", bssid: "00:11:22:33:44:55", security: "Open", channel: 6, band: "2.4 GHz", signal: -58 },
+        { ssid: "Office", bssid: "66:77:88:99:AA:BB", security: "WPA3", channel: 36, band: "5 GHz", signal: -72 },
+      ],
+    };
+    assert.equal(AndroidScanImport.safeParse(survey).success, true);
+    const result = androidImportToScanResult(survey);
+    // The connected-AP fields degrade to honest sentinels...
+    assert.equal(result.wifi.ssid, null);
+    assert.equal(result.wifi.bssid, "unknown");
+    assert.equal(result.wifi.security, "unknown");
+    // ...but the nearby survey is preserved (BSSIDs lowercased).
+    assert.deepEqual(
+      result.wifi.nearbyNetworks.map((n) => n.bssid),
+      ["00:11:22:33:44:55", "66:77:88:99:aa:bb"]
+    );
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    assert.doesNotThrow(() => scoreAllStandards(result));
+    assert.doesNotThrow(() => analyseAllPersonas(result));
+  });
+
+  it("prefers the top-level nearby list over the legacy nested one", () => {
+    // Both locations populated (a transitional export): the decoupled
+    // top-level field wins; the nested legacy list is ignored.
+    const both = {
+      ...fullExport,
+      nearbyNetworks: [
+        { ssid: "TopLevel", bssid: "aa:aa:aa:aa:aa:aa", security: "WPA2", channel: 1, band: "2.4 GHz", signal: -50 },
+      ],
+    };
+    const result = androidImportToScanResult(both);
+    assert.deepEqual(
+      result.wifi.nearbyNetworks.map((n) => n.ssid),
+      ["TopLevel"]
+    );
+  });
+
   it("fires the high-severity weaker-security rogue-AP rule on an Open evil twin of the WPA2 network", () => {
     // The core payoff of exporting nearby networks: the phone labels the
     // connected network "WPA2" and the evil twin "Open" — coarse labels the

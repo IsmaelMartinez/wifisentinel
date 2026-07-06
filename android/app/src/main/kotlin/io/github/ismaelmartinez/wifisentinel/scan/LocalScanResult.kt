@@ -17,6 +17,24 @@ import kotlinx.serialization.Serializable
 data class LocalScanResult(
     val meta: Meta,
     val wifi: Wifi?,
+    /**
+     * The RF neighbourhood observed by `WifiManager.getScanResults()`, deduped
+     * by BSSID and excluding the connected AP (see [WifiMapping.mapNearbyNetworks]).
+     * Feeds the CLI's `wifi.nearbyNetworks` on import so channel-congestion and
+     * rogue-AP analysis work on imported scans.
+     *
+     * Deliberately a top-level field rather than nested under [wifi]: nearby
+     * capture only needs the scan-result set and the (nullable) connected BSSID,
+     * so a survey taken while disconnected — or with `WifiInfo` redacted, so
+     * [wifi] is null — still exports the RF environment. See
+     * docs/android-companion.md §10.
+     *
+     * Null (never empty-defaulted) when nothing was collected — no scan
+     * permission, or a Room record from an app version that predates the field.
+     * The scanner sets a (possibly empty) list whenever the scan permission is
+     * held, so "not collected" stays distinguishable from "none seen".
+     */
+    val nearbyNetworks: List<NearbyNetwork>? = null,
     val network: Network?,
     val hosts: List<Host> = emptyList(),
     val latencyMs: Long? = null,
@@ -58,18 +76,6 @@ data class LocalScanResult(
         val band: String,
         val signal: Int,
         val txRate: Int,
-        /**
-         * Other APs visible in the WifiManager scan results, deduped by BSSID
-         * and excluding the connected AP (see [WifiMapping.mapNearbyNetworks]).
-         * Feeds the CLI's `wifi.nearbyNetworks` on import so channel-congestion
-         * analysis works on imported scans.
-         *
-         * Null (never empty-defaulted) when the scan predates this field —
-         * scans stored in Room by earlier app versions deserialise to null, so
-         * "not collected" stays distinguishable from a genuine zero-AP
-         * observation. The scanner always sets a (possibly empty) list.
-         */
-        val nearbyNetworks: List<NearbyNetwork>? = null,
     )
 
     /**

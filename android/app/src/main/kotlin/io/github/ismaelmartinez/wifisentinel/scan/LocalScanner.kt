@@ -63,6 +63,12 @@ class LocalScanner(private val context: Context) {
         val freshScan = requestFreshScanResults()
 
         val wifi = captureWifi(freshScan)
+        // Nearby capture is decoupled from the connected-AP capture: it only
+        // needs the scan-result set and the (nullable) connected BSSID, so a
+        // survey taken while disconnected — or with `WifiInfo` redacted, so
+        // `wifi` is null — still exports the RF neighbourhood. When `wifi` is
+        // null the connected BSSID is unknown, so nothing is excluded.
+        val nearbyNetworks = captureNearbyNetworks(freshScan, wifi?.bssid)
         val network = captureNetwork()
 
         // Host discovery (mDNS + bounded TCP sweep) and the latency probe are
@@ -85,6 +91,7 @@ class LocalScanner(private val context: Context) {
                 appVersion = appVersion,
             ),
             wifi = wifi,
+            nearbyNetworks = nearbyNetworks,
             network = network,
             hosts = hosts,
             latencyMs = latencyMs,
@@ -99,10 +106,24 @@ class LocalScanner(private val context: Context) {
 
         val info = currentWifiInfo() ?: return null
 
-        val frequencyMhz = info.frequency
         val bssid = WifiMapping.normaliseBssid(info.bssid)
+        val ssid = WifiMapping.normaliseSsid(info.ssid)
+        // On API 31+ the location-aware callback is the only route to an
+        // unredacted `WifiInfo`; when it times out we fall back to the
+        // synchronous snapshot, which stays redacted — SSID `<unknown ssid>`,
+        // BSSID `02:00:00:00:00:00`, both normalising to null. Without an
+        // identity the section is signal-only: it can't be security-scored (no
+        // BSSID to match against the scan results, so `security` is "unknown"),
+        // correlated across scans (the import folds a null BSSID to the
+        // "unknown" sentinel), or told apart from an entry in the nearby list.
+        // Drop it rather than emit a misleading connected-AP finding — the RF
+        // neighbourhood is captured independently now (see the top-level
+        // `nearbyNetworks` field and docs/android-companion.md §10).
+        if (bssid == null && ssid == null) return null
+
+        val frequencyMhz = info.frequency
         return LocalScanResult.Wifi(
-            ssid = WifiMapping.normaliseSsid(info.ssid),
+            ssid = ssid,
             bssid = bssid,
             // `WifiInfo` doesn't expose the security type directly — derive it
             // from the matching entry in the scan result set.
@@ -111,24 +132,43 @@ class LocalScanner(private val context: Context) {
             band = WifiMapping.frequencyToBand(frequencyMhz),
             signal = info.rssi,
             txRate = info.linkSpeed,
-            nearbyNetworks = WifiMapping.mapNearbyNetworks(
-                raw = scanResults.map { scan ->
-                    // `ScanResult.SSID` is deprecated on API 33+ in favour of
-                    // `wifiSsid`, but the replacement needs a UTF-8 decode
-                    // dance and minSdk is 29 — the deprecated field is fine
-                    // for a display string.
-                    @Suppress("DEPRECATION")
-                    val rawSsid = scan.SSID
-                    WifiMapping.RawNearbyNetwork(
-                        ssid = rawSsid,
-                        bssid = scan.BSSID,
-                        capabilities = scan.capabilities,
-                        frequencyMhz = scan.frequency,
-                        signalDbm = scan.level,
-                    )
-                },
-                connectedBssid = bssid,
-            ),
+        )
+    }
+
+    /**
+     * Map the fresh scan-result set into the export's nearby-network list.
+     * Decoupled from [captureWifi] so a survey taken while disconnected — or
+     * with the connected `WifiInfo` redacted — still exports the RF
+     * neighbourhood ([WifiMapping.mapNearbyNetworks] already takes a nullable
+     * `connectedBssid`, so a null connected AP simply excludes nothing).
+     *
+     * Returns null when nothing could be collected (no scan permission), so
+     * "not collected" stays distinguishable from a genuine "none seen" (an
+     * empty list). The connected AP, when known, is excluded so it isn't
+     * double-counted between [captureWifi] and this list.
+     */
+    private fun captureNearbyNetworks(
+        scanResults: List<ScanResult>,
+        connectedBssid: String?,
+    ): List<LocalScanResult.NearbyNetwork>? {
+        if (!hasScanPermission()) return null
+        return WifiMapping.mapNearbyNetworks(
+            raw = scanResults.map { scan ->
+                // `ScanResult.SSID` is deprecated on API 33+ in favour of
+                // `wifiSsid`, but the replacement needs a UTF-8 decode dance
+                // and minSdk is 29 — the deprecated field is fine for a
+                // display string.
+                @Suppress("DEPRECATION")
+                val rawSsid = scan.SSID
+                WifiMapping.RawNearbyNetwork(
+                    ssid = rawSsid,
+                    bssid = scan.BSSID,
+                    capabilities = scan.capabilities,
+                    frequencyMhz = scan.frequency,
+                    signalDbm = scan.level,
+                )
+            },
+            connectedBssid = connectedBssid,
         )
     }
 

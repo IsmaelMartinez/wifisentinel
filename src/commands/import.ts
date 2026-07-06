@@ -58,10 +58,19 @@ export function registerImportCommand(program: Command): void {
       const analysis = analyseAllPersonas(result);
       saveScan(result, compliance, analysis);
 
+      // A nearby-only survey (scanned while disconnected, or with the connected
+      // AP redacted) has no SSID — surface the nearby count instead so the
+      // import still reports something meaningful.
+      const nearbyCount = result.wifi.nearbyNetworks.length;
+      const label = result.wifi.ssid
+        ? ` (${result.wifi.ssid})`
+        : nearbyCount > 0
+          ? ` (${nearbyCount} nearby network${nearbyCount === 1 ? "" : "s"})`
+          : "";
       console.log(
         chalk.green("✓") +
           ` Imported Android scan ${chalk.bold(result.meta.scanId.slice(0, 8))}` +
-          (result.wifi.ssid ? ` (${result.wifi.ssid})` : "") +
+          label +
           "."
       );
       console.log(
