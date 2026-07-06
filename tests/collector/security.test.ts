@@ -7,7 +7,10 @@ import {
   securityStrength,
   isWeakerSecurity,
   isWeakSecurity,
+  isUnencrypted,
   securityChanged,
+  supportsWpa2,
+  supportsWpa3,
 } from "../../src/collector/schema/security.js";
 
 describe("securityFamily", () => {
@@ -49,6 +52,19 @@ describe("securityFamily", () => {
     assert.equal(securityFamily("Unknown"), "unknown");
     assert.equal(securityFamily(""), "unknown");
     assert.equal(securityFamily("FutureProto9000"), "unknown");
+  });
+
+  it("classifies mixed WEP transition labels as WEP (weakest link)", () => {
+    assert.equal(securityFamily("WPA2 WEP"), "wep");
+    assert.equal(securityFamily("WPA1 WPA2 WEP"), "wep");
+    assert.equal(securityFamily("Dynamic WEP"), "wep");
+  });
+
+  it("classifies qualified open/none labels by word prefix", () => {
+    assert.equal(securityFamily("Open System"), "open");
+    assert.equal(securityFamily("None (no encryption)"), "open");
+    // But not arbitrary words that merely start with the letters.
+    assert.equal(securityFamily("OpenVPN-Only"), "unknown");
   });
 });
 
@@ -98,6 +114,11 @@ describe("normaliseSecurity", () => {
     assert.equal(normaliseSecurity("unknown"), "unknown");
     assert.equal(normaliseSecurity("  FutureProto9000  "), "FutureProto9000");
   });
+
+  it("never emits a blank label — empty input becomes the unknown sentinel", () => {
+    assert.equal(normaliseSecurity(""), "unknown");
+    assert.equal(normaliseSecurity("   "), "unknown");
+  });
 });
 
 describe("securityStrength / isWeakerSecurity", () => {
@@ -124,6 +145,9 @@ describe("securityStrength / isWeakerSecurity", () => {
   it("treats an Enterprise -> Personal twin as weaker, but never infers a missing mode", () => {
     assert.equal(isWeakerSecurity("WPA2 Personal", "WPA2 Enterprise"), true);
     assert.equal(isWeakerSecurity("WPA2 Enterprise", "WPA2 Personal"), false);
+    // Even on a newer family: a "WPA3 Personal" twin of a corporate 802.1X
+    // network dodges server-cert validation — still a credential harvester.
+    assert.equal(isWeakerSecurity("WPA3 Personal", "WPA2 Enterprise"), true);
     // The phone's coarse "WPA2" doesn't know its mode — not a downgrade.
     assert.equal(isWeakerSecurity("WPA2", "WPA2 Enterprise"), false);
   });
@@ -146,6 +170,26 @@ describe("isWeakSecurity", () => {
     for (const s of ["WPA2", "WPA2 Personal", "WPA/WPA2", "WPA3", "unknown", "Unknown"]) {
       assert.equal(isWeakSecurity(s), false, `${s} should not be weak`);
     }
+  });
+});
+
+describe("supportsWpa3 / supportsWpa2 / isUnencrypted", () => {
+  it("counts mixed modes as supporting the newer protocol", () => {
+    assert.equal(supportsWpa3("WPA3 Personal"), true);
+    assert.equal(supportsWpa3("WPA2/WPA3 Personal"), true);
+    assert.equal(supportsWpa3("WPA2 Personal"), false);
+    assert.equal(supportsWpa2("WPA2"), true);
+    assert.equal(supportsWpa2("WPA1 WPA2"), true);
+    assert.equal(supportsWpa2("WPA"), false);
+  });
+
+  it("scores open and WEP (in any label) as unencrypted, but not OWE or unknown", () => {
+    assert.equal(isUnencrypted("None"), true);
+    assert.equal(isUnencrypted("Open"), true);
+    assert.equal(isUnencrypted("WEP"), true);
+    assert.equal(isUnencrypted("WPA2 WEP"), true);
+    assert.equal(isUnencrypted("Enhanced Open"), false);
+    assert.equal(isUnencrypted("unknown"), false);
   });
 });
 

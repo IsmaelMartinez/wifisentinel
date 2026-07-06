@@ -1,5 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { securityFamily } from "../../collector/schema/security.js";
+import { supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
 import {
   type Finding,
   type StandardScore,
@@ -177,9 +177,8 @@ function checkSignalStrength(result: NetworkScanResult): Finding {
 }
 
 function checkSecurityProtocol(result: NetworkScanResult): Finding {
-  const family = securityFamily(result.wifi.security);
-  const isWpa3 = family === "wpa3" || family === "wpa2/wpa3";
-  const isWpa2 = family === "wpa2" || family === "wpa/wpa2";
+  const isWpa3 = supportsWpa3(result.wifi.security);
+  const isWpa2 = supportsWpa2(result.wifi.security);
 
   return {
     id: "IEEE-4.1",

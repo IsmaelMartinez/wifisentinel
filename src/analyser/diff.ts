@@ -1,5 +1,6 @@
 // src/analyser/diff.ts — Lightweight change detection for watch mode
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
+import { securityChanged } from "../collector/schema/security.js";
 
 export type NetworkChange =
   | { type: "host:joined"; ip: string; mac: string; vendor?: string }
@@ -86,10 +87,19 @@ export function detectChanges(
     }
   }
 
-  // WiFi changes
+  // WiFi changes. Security compares through the shared taxonomy so watch
+  // alerts don't fire on vocabulary-only differences between scans from
+  // different sources (or from before label normalisation existed).
+  if (securityChanged(previous.wifi.security, current.wifi.security)) {
+    changes.push({
+      type: "wifi:changed",
+      field: "security",
+      from: previous.wifi.security,
+      to: current.wifi.security,
+    });
+  }
   const wifiFields: Array<{ field: string; prev: string; curr: string }> = [
     { field: "ssid", prev: previous.wifi.ssid ?? "", curr: current.wifi.ssid ?? "" },
-    { field: "security", prev: previous.wifi.security, curr: current.wifi.security },
     { field: "channel", prev: String(previous.wifi.channel), curr: String(current.wifi.channel) },
     { field: "band", prev: previous.wifi.band, curr: current.wifi.band },
   ];

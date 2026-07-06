@@ -6,9 +6,14 @@ import {
 } from "../../collector/schema/security.js";
 import type { EnvironmentChange, EnvironmentAnalysis } from "./types.js";
 
-/** Key for matching APs across scans. Uses BSSID if available, else SSID+channel. */
+/**
+ * Key for matching APs across scans. Uses BSSID if available, else
+ * SSID+channel. BSSIDs are case-insensitive hex and the sources disagree on
+ * case (nmcli emits uppercase, the Android import lowercases), so the key
+ * lowercases — otherwise cross-source comparisons never match a single AP.
+ */
 function apKey(n: NearbyNetwork): string {
-  if (n.bssid) return `bssid:${n.bssid}`;
+  if (n.bssid) return `bssid:${n.bssid.toLowerCase()}`;
   return `ssid:${n.ssid ?? "(hidden)"}:ch${n.channel}`;
 }
 

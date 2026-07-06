@@ -66,6 +66,12 @@ const FAMILY_LABEL: Record<Exclude<SecurityFamily, "unknown">, string> = {
 export function securityFamily(raw: string): SecurityFamily {
   const lower = raw.trim().toLowerCase();
 
+  // WEP first, before the WPA families: a mixed transition label like
+  // "WPA2 WEP" keeps the WEP handshake negotiable, so weakest-link
+  // classification is the honest reading (same rationale as ranking
+  // mixed WPA modes below the pure newer protocol).
+  if (lower.includes("wep")) return "wep";
+
   const hasWpa3 = lower.includes("wpa3");
   const hasWpa2 = lower.includes("wpa2");
   // WPA1 in any spelling: "wpa", "wpa1", "wpa personal", "wpa/wpa2",
@@ -79,10 +85,12 @@ export function securityFamily(raw: string): SecurityFamily {
   }
   if (hasWpa2) return hasWpa1 ? "wpa/wpa2" : "wpa2";
   if (hasWpa1) return "wpa";
-  if (lower.includes("wep")) return "wep";
   // OWE before plain open — "Enhanced Open" contains "open".
   if (lower.includes("enhanced open") || /\bowe\b/.test(lower)) return "owe";
-  if (lower === "open" || lower === "none" || lower === "--") return "open";
+  // Word-prefix rather than exact match so qualified labels from vendor
+  // tools or hand-fed scans ("Open System", "None (no encryption)") still
+  // classify; "--" is nmcli's table-mode spelling for no security.
+  if (/^(open|none)\b/.test(lower) || lower === "--") return "open";
   return "unknown";
 }
 
@@ -119,11 +127,16 @@ export function securityMode(raw: string): SecurityMode | undefined {
  */
 export function normaliseSecurity(raw: string): string {
   const family = securityFamily(raw);
-  if (family === "unknown") return raw.trim();
+  if (family === "unknown") {
+    // Never emit a blank label into stored scans; a whitespace-only input
+    // becomes the same sentinel the Android importer uses.
+    const trimmed = raw.trim();
+    return trimmed === "" ? "unknown" : trimmed;
+  }
   const mode = securityMode(raw);
   const label = FAMILY_LABEL[family];
   // Mode is only meaningful for the WPA families.
-  if (mode && family !== "open" && family !== "wep" && family !== "owe") {
+  if (mode && family.startsWith("wpa")) {
     return `${label} ${mode}`;
   }
   return label;
@@ -140,19 +153,19 @@ export function securityStrength(raw: string): number {
 
 /**
  * Whether `suspect` is genuinely weaker than `current`, across vocabularies.
- * Families compare by strength; within the same family an Enterprise →
- * Personal downgrade counts as weaker (a PSK evil twin of an 802.1X network
- * dodges server-certificate validation), but a missing mode on either side
+ * Weaker means a lower family strength, or an Enterprise → Personal mode
+ * downgrade in any family combination — a PSK evil twin of an 802.1X
+ * network dodges server-certificate validation even when its protocol
+ * family is newer (a "WPA3 Personal" twin of a "WPA2 Enterprise" corporate
+ * SSID is still a credential-harvest setup). A missing mode on either side
  * is never treated as a downgrade — coarse sources simply don't know it.
  */
 export function isWeakerSecurity(suspect: string, current: string): boolean {
   const ss = securityStrength(suspect);
   const cs = securityStrength(current);
   if (ss < 0 || cs < 0) return false;
-  if (ss !== cs) return ss < cs;
-  const sm = securityMode(suspect);
-  const cm = securityMode(current);
-  return sm === "Personal" && cm === "Enterprise";
+  if (ss < cs) return true;
+  return securityMode(suspect) === "Personal" && securityMode(current) === "Enterprise";
 }
 
 /**
@@ -164,6 +177,36 @@ export function isWeakerSecurity(suspect: string, current: string): boolean {
 export function isWeakSecurity(raw: string): boolean {
   const family = securityFamily(raw);
   return family === "open" || family === "wep" || family === "wpa";
+}
+
+/**
+ * Whether a label offers no meaningful encryption at all (open or WEP) —
+ * the "legacy/insecure" set the standards checks score as failing outright.
+ * OWE doesn't qualify: open-auth but encrypted.
+ */
+export function isUnencrypted(raw: string): boolean {
+  const family = securityFamily(raw);
+  return family === "open" || family === "wep";
+}
+
+/**
+ * Whether a label satisfies a "requires WPA3" check. Mixed WPA2/WPA3
+ * counts: the network offers WPA3 even though the WPA2 handshake stays
+ * negotiable (which is why `securityStrength` still ranks it lower).
+ */
+export function supportsWpa3(raw: string): boolean {
+  const family = securityFamily(raw);
+  return family === "wpa3" || family === "wpa2/wpa3";
+}
+
+/**
+ * Whether a label satisfies a "requires at least WPA2" check when
+ * `supportsWpa3` already failed. Mixed WPA/WPA2 counts for the same
+ * offers-the-protocol reason as `supportsWpa3`.
+ */
+export function supportsWpa2(raw: string): boolean {
+  const family = securityFamily(raw);
+  return family === "wpa2" || family === "wpa/wpa2";
 }
 
 /**
