@@ -143,7 +143,10 @@ class LocalScanner(private val context: Context) {
      * the deprecated `getConnectionInfo()` getter as fallbacks.
      */
     private suspend fun currentWifiInfo(): WifiInfo? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        // Only pay for the location-aware callback (and its timeout) when there
+        // is actually a WiFi network to read — otherwise a scan on cellular
+        // would block for the full timeout before falling through to null.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isWifiAvailable()) {
             wifiInfoViaLocationAwareCallback()?.let { return it }
         }
         // `transportInfo` is only a `WifiInfo` when the active network is
@@ -160,6 +163,23 @@ class LocalScanner(private val context: Context) {
         // API 31+ it is redacted to -1, so this deep fallback yields no WiFi
         // section there — the callback above is the real API 31+ path).
         return legacy?.takeIf { it.networkId != -1 }
+    }
+
+    /**
+     * True when any network currently carries the WiFi transport — the active
+     * one, or (when a VPN is up) the underlying WiFi network, which is why we
+     * scan `allNetworks` rather than only `activeNetwork`. Lets [currentWifiInfo]
+     * skip the location-aware callback when there is no WiFi to read.
+     */
+    private fun isWifiAvailable(): Boolean {
+        val active = connectivityManager.activeNetwork
+        val activeCaps = active?.let { connectivityManager.getNetworkCapabilities(it) }
+        if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) return true
+        @Suppress("DEPRECATION")
+        return connectivityManager.allNetworks.any { net ->
+            connectivityManager.getNetworkCapabilities(net)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
     }
 
     /**

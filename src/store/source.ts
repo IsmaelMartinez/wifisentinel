@@ -40,7 +40,8 @@ export function partialTrendNote(fullCount: number, partialCount: number): strin
 }
 
 /**
- * Split a chronological series into full-scan and partial-import halves.
+ * Partition a series into full-scan and partial-import halves. Order-agnostic:
+ * each half preserves the input order (the CLI passes newest-first arrays).
  * Trend maths should run on one side only: a phone import caps nearby APs at
  * 25 and observes them through a weaker radio, so a mixed series oscillates
  * with the source rather than the network. Convention: use `full` when it is
