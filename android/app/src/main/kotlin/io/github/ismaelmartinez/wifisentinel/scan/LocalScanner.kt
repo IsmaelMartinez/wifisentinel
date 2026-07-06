@@ -7,11 +7,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import io.github.ismaelmartinez.wifisentinel.analyse.LocalAnalyser
 import kotlinx.coroutines.Dispatchers
@@ -91,11 +94,10 @@ class LocalScanner(private val context: Context) {
         base.copy(analysis = LocalAnalyser.analyse(base))
     }
 
-    private fun captureWifi(scanResults: List<ScanResult>): LocalScanResult.Wifi? {
+    private suspend fun captureWifi(scanResults: List<ScanResult>): LocalScanResult.Wifi? {
         if (!hasScanPermission()) return null
 
         val info = currentWifiInfo() ?: return null
-        if (info.networkId == -1) return null
 
         val frequencyMhz = info.frequency
         val bssid = WifiMapping.normaliseBssid(info.bssid)
@@ -131,18 +133,110 @@ class LocalScanner(private val context: Context) {
     }
 
     /**
-     * On API 31+ the `WifiManager.getConnectionInfo()` path returns a
-     * redacted `WifiInfo` to non-system callers; the supported route is
-     * `NetworkCapabilities.getTransportInfo()`. `getTransportInfo()` exists
-     * since API 29, so we use it uniformly and only fall back to the
-     * deprecated getter if there is no active network.
+     * On API 31+ a `WifiInfo` obtained from the synchronous
+     * `getNetworkCapabilities()` snapshot is location-redacted for all
+     * non-system callers, no matter which permissions are held: SSID reads
+     * `<unknown ssid>`, BSSID reads `02:00:00:00:00:00`, and `networkId`
+     * reads -1. The only supported route to an unredacted copy is a
+     * `NetworkCallback` registered with `FLAG_INCLUDE_LOCATION_INFO`, so try
+     * that first and keep the synchronous snapshot (fine on API 29/30) and
+     * the deprecated `getConnectionInfo()` getter as fallbacks.
      */
-    private fun currentWifiInfo(): WifiInfo? {
+    private suspend fun currentWifiInfo(): WifiInfo? {
+        // Only pay for the location-aware callback (and its timeout) when there
+        // is actually a WiFi network to read — otherwise a scan on cellular
+        // would block for the full timeout before falling through to null.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isWifiAvailable()) {
+            wifiInfoViaLocationAwareCallback()?.let { return it }
+        }
+        // `transportInfo` is only a `WifiInfo` when the active network is
+        // actually WiFi, so the cast itself is the connection test — it's null
+        // on cellular and on a VPN network (whose caps carry TRANSPORT_VPN, not
+        // WIFI), and we fall through to the deprecated getter for those.
         val active = connectivityManager.activeNetwork
         val caps = active?.let { connectivityManager.getNetworkCapabilities(it) }
         (caps?.transportInfo as? WifiInfo)?.let { return it }
         @Suppress("DEPRECATION")
-        return wifiManager.connectionInfo
+        val legacy = wifiManager.connectionInfo
+        // The legacy getter returns a non-null shell even when disconnected;
+        // networkId -1 is its "not connected" signal (valid on API < 31; on
+        // API 31+ it is redacted to -1, so this deep fallback yields no WiFi
+        // section there — the callback above is the real API 31+ path).
+        return legacy?.takeIf { it.networkId != -1 }
+    }
+
+    /**
+     * True when any network currently carries the WiFi transport — the active
+     * one, or (when a VPN is up) the underlying WiFi network, which is why we
+     * scan `allNetworks` rather than only `activeNetwork`. Lets [currentWifiInfo]
+     * skip the location-aware callback when there is no WiFi to read.
+     */
+    private fun isWifiAvailable(): Boolean {
+        val active = connectivityManager.activeNetwork
+        val activeCaps = active?.let { connectivityManager.getNetworkCapabilities(it) }
+        if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) return true
+        @Suppress("DEPRECATION")
+        return connectivityManager.allNetworks.any { net ->
+            connectivityManager.getNetworkCapabilities(net)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
+    }
+
+    /**
+     * Fetch the current `WifiInfo` through a location-aware
+     * `NetworkCallback`. Registration immediately replays the capabilities
+     * of any network already satisfying the request, so when the device is
+     * on WiFi this resumes almost instantly; when it isn't, the timeout
+     * expires and the caller falls back. Note the unredacted fields still
+     * require the runtime scan permission ([hasScanPermission] gates the
+     * whole capture) — without it the platform just leaves them redacted.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private suspend fun wifiInfoViaLocationAwareCallback(
+        timeoutMs: Long = 3_000,
+    ): WifiInfo? = withTimeoutOrNull(timeoutMs) {
+        suspendCancellableCoroutine { cont ->
+            // Same double-resume hazard as requestFreshScanResults: the
+            // callback fires on the ConnectivityManager thread while the
+            // registration-failure branch runs on the caller's thread.
+            val resumed = AtomicBoolean(false)
+
+            val callback = object : ConnectivityManager.NetworkCallback(
+                ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO,
+            ) {
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    capabilities: NetworkCapabilities,
+                ) {
+                    val info = capabilities.transportInfo as? WifiInfo ?: return
+                    if (resumed.compareAndSet(false, true)) {
+                        runCatching { connectivityManager.unregisterNetworkCallback(this) }
+                        if (cont.isActive) cont.resume(info)
+                    }
+                }
+            }
+
+            cont.invokeOnCancellation {
+                // Timeout or caller cancellation — just tear down; the
+                // continuation is already dead so there is nothing to resume.
+                if (resumed.compareAndSet(false, true)) {
+                    runCatching { connectivityManager.unregisterNetworkCallback(callback) }
+                }
+            }
+
+            val request = NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .build()
+            try {
+                connectivityManager.registerNetworkCallback(request, callback)
+            } catch (_: RuntimeException) {
+                // Registration can fail if the process has hit the callback
+                // limit — degrade to the synchronous fallback path.
+                if (resumed.compareAndSet(false, true) && cont.isActive) {
+                    cont.resume(null)
+                }
+            }
+        }
     }
 
     private fun captureNetwork(): LocalScanResult.Network {

@@ -7,6 +7,31 @@ export function normaliseMac(mac: string): string {
   return mac.toLowerCase().replace(/-/g, ":").trim();
 }
 
+const MAC_OCTET = /^[0-9a-f]{1,2}$/;
+
+/**
+ * True when a normalised MAC identifies a single real device. Rejects
+ * placeholder values that would otherwise be keyed as one bogus device —
+ * notably the "unknown" sentinel every Android-import host carries (the
+ * phone cannot read ARP), arp's "(incomplete)", and the broadcast/all-zero
+ * addresses.
+ *
+ * Octets are allowed 1–2 hex digits: macOS/BSD `arp` prints them with the
+ * leading zero stripped (e.g. `48:22:54:b:d0:90`) and `normaliseMac` doesn't
+ * zero-pad, so a strict two-digit form would drop ~a third of real devices.
+ * Broadcast/all-zero are rejected by value, independent of padding.
+ */
+export function isTrackableMac(mac: string): boolean {
+  const octets = mac.split(":");
+  if (octets.length !== 6 || !octets.every((o) => MAC_OCTET.test(o))) {
+    return false;
+  }
+  const values = octets.map((o) => parseInt(o, 16));
+  if (values.every((v) => v === 0x00)) return false; // all-zero / incomplete
+  if (values.every((v) => v === 0xff)) return false; // broadcast
+  return true;
+}
+
 interface DeviceAccumulator {
   mac: string;
   firstSeen: string;
@@ -71,7 +96,7 @@ export function buildPresenceReport(
     for (const host of stored.scan.network.hosts) {
       if (!host.mac) continue;
       const mac = normaliseMac(host.mac);
-      if (!mac) continue;
+      if (!isTrackableMac(mac)) continue;
       presentMacs.add(mac);
 
       let device = deviceMap.get(mac);

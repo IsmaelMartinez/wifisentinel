@@ -2,6 +2,7 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { listScans, type IndexEntry } from "../store/index.js";
+import { partialTrendNote, sourceCell, splitBySource } from "../store/source.js";
 import { pad } from "../reporter/render-helpers.js";
 
 function riskColor(risk: string): (s: string) => string {
@@ -61,9 +62,10 @@ export function registerTrendCommand(program: Command): void {
         pad(chalk.bold("SCORE"), 8) +
         pad(chalk.bold("GRADE"), 8) +
         pad(chalk.bold("RISK"), 12) +
-        chalk.bold("HOSTS");
+        pad(chalk.bold("HOSTS"), 8) +
+        chalk.bold("SOURCE");
       console.log(header);
-      console.log(chalk.dim("─".repeat(50)));
+      console.log(chalk.dim("─".repeat(60)));
 
       // Render newest-first (already sorted that way)
       const chronological = [...entries].reverse();
@@ -82,18 +84,26 @@ export function registerTrendCommand(program: Command): void {
           pad(e.securityScore.toFixed(1), 8) +
           pad(gc(e.complianceGrade), 8) +
           pad(rc(e.consensusRisk.toUpperCase()), 12) +
-          String(e.hostCount),
+          pad(String(e.hostCount), 8) +
+          chalk.dim(sourceCell(e)),
         );
       }
 
-      // Summary line
-      const scores = entries.map(e => e.securityScore);
+      // Summary line — a partial import (Android companion) scores against
+      // sentinel-filled data, so a mixed history would oscillate with the
+      // source rather than the network. Compute over full scans when both are
+      // present; an all-partial history is still self-consistent.
+      const { full, partial } = splitBySource(entries, (e) => e);
+      const scored = full.length > 0 ? full : entries;
+      const scores = scored.map(e => e.securityScore);
       const avg = (scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1);
       const best = Math.max(...scores).toFixed(1);
       const worst = Math.min(...scores).toFixed(1);
-      const trend = computeTrendDirection(entries);
+      const trend = computeTrendDirection(scored);
 
-      console.log(chalk.dim("─".repeat(50)));
+      console.log(chalk.dim("─".repeat(60)));
       console.log(`Avg: ${chalk.bold(avg)}  Best: ${chalk.green(best)}  Worst: ${chalk.red(worst)}  Trend: ${trend}`);
+      const note = partialTrendNote(full.length, partial.length);
+      if (note) console.log(chalk.dim(note));
     });
 }

@@ -5,9 +5,15 @@ import { scanWifi } from "../collector/scanners/wifi.scanner.js";
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFReport } from "../reporter/rf.reporter.js";
 import { loadScan, listScans, type IndexEntry } from "../store/index.js";
+import { partialTrendNote, sourceCell, splitBySource } from "../store/source.js";
 import { pad } from "../reporter/render-helpers.js";
 
-function renderSignalTrend(entries: IndexEntry[], scans: Array<{ wifi: { signal: number; snr: number; txRate: number; channel: number; nearbyNetworks: { length: number } } }>): string {
+interface TrendScan {
+  meta: { platform: string; partial?: boolean };
+  wifi: { signal: number; snr: number; txRate: number; channel: number; nearbyNetworks: { length: number } };
+}
+
+function renderSignalTrend(entries: IndexEntry[], scans: TrendScan[]): string {
   const lines: string[] = [];
 
   lines.push(chalk.bold("  WiFi Signal Trends"));
@@ -19,39 +25,56 @@ function renderSignalTrend(entries: IndexEntry[], scans: Array<{ wifi: { signal:
     pad(chalk.bold("SNR"), 6) +
     pad(chalk.bold("TX RATE"), 10) +
     pad(chalk.bold("CH"), 5) +
-    chalk.bold("NEARBY");
+    pad(chalk.bold("NEARBY"), 9) +
+    chalk.bold("SOURCE");
   lines.push("  " + header);
-  lines.push("  " + chalk.dim("─".repeat(55)));
+  lines.push("  " + chalk.dim("─".repeat(66)));
 
   // Render oldest first
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
-    const w = scans[i].wifi;
+    const s = scans[i];
+    const w = s.wifi;
     const date = new Date(e.timestamp).toLocaleDateString("en-GB", {
       month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
     });
+    const source = sourceCell(s.meta);
     lines.push("  " +
       pad(chalk.dim(date), 16) +
       pad(String(w.signal), 9) +
       pad(String(w.snr), 6) +
       pad(w.txRate + " Mbps", 10) +
       pad(String(w.channel), 5) +
-      String(w.nearbyNetworks.length),
+      pad(String(w.nearbyNetworks.length), 9) +
+      chalk.dim(source),
     );
   }
 
-  // Summary line
-  if (scans.length >= 2) {
-    const first = scans[scans.length - 1].wifi;
-    const last = scans[0].wifi;
+  // Summary — compare only scans from the same kind of source. A partial
+  // import (Android companion) sees the RF environment through a weaker
+  // radio and caps its nearby-AP list at 25, so first/last deltas across a
+  // mixed history would measure the source swap, not the network.
+  const { full, partial } = splitBySource(scans, (s) => s.meta);
+  const comparable = full.length > 0 ? full : scans;
+  if (comparable.length >= 2) {
+    // Both `entries` and `scans` are newest-first here.
+    const first = comparable[comparable.length - 1].wifi;
+    const last = comparable[0].wifi;
     const signalDir = last.signal > first.signal ? chalk.green("improving") : last.signal < first.signal ? chalk.red("declining") : chalk.yellow("stable");
     const snrDir = last.snr > first.snr ? chalk.green("improving") : last.snr < first.snr ? chalk.red("declining") : chalk.yellow("stable");
-    const nearbyFirst = scans[scans.length - 1].wifi.nearbyNetworks.length;
-    const nearbyLast = scans[0].wifi.nearbyNetworks.length;
-    const nearbyDir = nearbyLast > nearbyFirst ? chalk.yellow("growing") : nearbyLast < nearbyFirst ? chalk.green("shrinking") : chalk.dim("stable");
+    const nearbyDir = last.nearbyNetworks.length > first.nearbyNetworks.length
+      ? chalk.yellow("growing")
+      : last.nearbyNetworks.length < first.nearbyNetworks.length
+        ? chalk.green("shrinking")
+        : chalk.dim("stable");
 
-    lines.push("  " + chalk.dim("─".repeat(55)));
+    lines.push("  " + chalk.dim("─".repeat(66)));
     lines.push(`  Signal: ${signalDir}  SNR: ${snrDir}  Nearby APs: ${nearbyDir}`);
+    const note = partialTrendNote(full.length, partial.length);
+    if (note) lines.push(chalk.dim("  " + note));
+  } else if (scans.length >= 2 && partial.length > 0) {
+    lines.push("  " + chalk.dim("─".repeat(66)));
+    lines.push(chalk.dim("  * partial scan (imported) — too few comparable scans for a summary"));
   }
 
   return lines.join("\n");
@@ -83,6 +106,8 @@ export function registerRFCommand(program: Command): void {
             const data = entries.map((e, i) => ({
               scanId: e.scanId,
               timestamp: e.timestamp,
+              platform: scans[i].meta.platform,
+              partial: scans[i].meta.partial ?? false,
               signal: scans[i].wifi.signal,
               snr: scans[i].wifi.snr,
               txRate: scans[i].wifi.txRate,

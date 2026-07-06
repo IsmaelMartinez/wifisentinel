@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendChart } from "@/components/trend-chart";
 import { EmptyState } from "@/components/empty-state";
 import { getScans, getScan } from "@/lib/store";
+import { isPartialSource, splitBySource } from "@wifisentinel/store/source.js";
 
 export const revalidate = 60;
 
@@ -20,47 +21,77 @@ export default function TrendsPage() {
 
   // Load full scans for detailed metrics (newest first, reverse for chronological)
   const chronological = [...entries].reverse();
-  const scans = chronological.map((e) => {
+  const loaded = chronological.flatMap((e) => {
     try {
-      return getScan(e.scanId);
+      return [{ entry: e, stored: getScan(e.scanId) }];
     } catch {
-      return null;
+      return [];
     }
-  }).filter(Boolean) as Exclude<ReturnType<typeof getScan>, null>[];
+  });
 
-  const securityData = chronological.map((e) => ({
-    date: e.timestamp,
-    value: e.securityScore,
+  // A partial import (Android companion) observes the network through a
+  // weaker radio and caps nearby APs at 25, so blending sources makes every
+  // series oscillate with the source rather than the network. Never blend:
+  // plot the full CLI scans when there are enough to chart, otherwise the
+  // partial imports on their own (an all-phone history is self-consistent).
+  const { full, partial } = splitBySource(loaded, (p) => p.stored.scan.meta);
+  const plotted = full.length >= 2 ? full : partial;
+  const excluded = loaded.length - plotted.length;
+  const showingPartial =
+    plotted.length > 0 && isPartialSource(plotted[0].stored.scan.meta);
+  const sourceNote =
+    excluded > 0
+      ? `${excluded} scan${excluded === 1 ? "" : "s"} from a different source excluded to keep the series comparable.`
+      : showingPartial
+        ? "Series are partial Android imports — points reflect the phone's limited view (weaker radio, nearby APs capped at 25)."
+        : null;
+
+  const securityData = plotted.map(({ entry }) => ({
+    date: entry.timestamp,
+    value: entry.securityScore,
   }));
 
-  const complianceData = scans.map((s) => ({
-    date: s.scan.meta.timestamp,
-    value: s.compliance.overallScore,
+  const complianceData = plotted.map(({ stored }) => ({
+    date: stored.scan.meta.timestamp,
+    value: stored.compliance.overallScore,
   }));
 
-  const hostData = chronological.map((e) => ({
-    date: e.timestamp,
-    value: e.hostCount,
+  const hostData = plotted.map(({ entry }) => ({
+    date: entry.timestamp,
+    value: entry.hostCount,
   }));
 
-  const signalData = scans.map((s) => ({
-    date: s.scan.meta.timestamp,
-    value: s.scan.wifi.signal,
+  const signalData = plotted.map(({ stored }) => ({
+    date: stored.scan.meta.timestamp,
+    value: stored.scan.wifi.signal,
   }));
 
-  const snrData = scans.map((s) => ({
-    date: s.scan.meta.timestamp,
-    value: s.scan.wifi.snr,
+  const snrData = plotted.map(({ stored }) => ({
+    date: stored.scan.meta.timestamp,
+    value: stored.scan.wifi.snr,
   }));
 
-  const nearbyData = scans.map((s) => ({
-    date: s.scan.meta.timestamp,
-    value: s.scan.wifi.nearbyNetworks.length,
+  const nearbyData = plotted.map(({ stored }) => ({
+    date: stored.scan.meta.timestamp,
+    value: stored.scan.wifi.nearbyNetworks.length,
   }));
+
+  if (plotted.length < 2) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Trends</h1>
+        <EmptyState />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Trends</h1>
+
+      {sourceNote && (
+        <p className="text-sm text-zinc-400">{sourceNote}</p>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
         <Card>

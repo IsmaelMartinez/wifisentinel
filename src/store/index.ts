@@ -72,6 +72,8 @@ export function saveScan(
     consensusRisk: analysis.consensusRating,
     hostCount: result.network.hosts.length,
     filename,
+    platform: result.meta.platform,
+    ...(result.meta.partial !== undefined ? { partial: result.meta.partial } : {}),
   };
 
   const index = readIndex();
@@ -141,6 +143,8 @@ export function rebuildIndex(): IndexEntry[] {
         consensusRisk: raw.analysis.consensusRating,
         hostCount: raw.scan.network.hosts.length,
         filename,
+        platform: raw.scan.meta.platform,
+        ...(raw.scan.meta.partial !== undefined ? { partial: raw.scan.meta.partial } : {}),
       });
     } catch {
       // skip corrupt files

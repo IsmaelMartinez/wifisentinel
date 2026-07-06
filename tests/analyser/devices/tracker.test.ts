@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildPresenceReport, normaliseMac } from "../../../src/analyser/devices/tracker.js";
+import { buildPresenceReport, isTrackableMac, normaliseMac } from "../../../src/analyser/devices/tracker.js";
 import type { StoredScan } from "../../../src/store/types.js";
 
 interface HostInput {
@@ -219,5 +219,59 @@ describe("buildPresenceReport", () => {
     const report = buildPresenceReport(scans);
     assert.equal(report.devices[0].mac, "aa:bb:cc:dd:ee:12");
     assert.equal(report.devices[1].mac, "aa:bb:cc:dd:ee:11");
+  });
+
+  it("does not collapse imported hosts with sentinel MACs into one device", () => {
+    // Android-import hosts all carry mac "unknown" (the phone cannot read
+    // ARP) — without filtering they'd be keyed as one bogus device.
+    const scans = [
+      makeScan("s1", "2025-01-01T10:00:00Z", [
+        { ip: "192.168.1.10", mac: "unknown", hostname: "printer.local" },
+        { ip: "192.168.1.20", mac: "unknown" },
+        { ip: "192.168.1.30", mac: "aa:bb:cc:dd:ee:20" },
+      ]),
+    ];
+    const report = buildPresenceReport(scans);
+    assert.equal(report.devices.length, 1);
+    assert.equal(report.devices[0].mac, "aa:bb:cc:dd:ee:20");
+  });
+
+  it("ignores incomplete, broadcast, and all-zero MACs", () => {
+    const scans = [
+      makeScan("s1", "2025-01-01T10:00:00Z", [
+        { ip: "192.168.1.255", mac: "ff:ff:ff:ff:ff:ff" },
+        { ip: "192.168.1.40", mac: "00:00:00:00:00:00" },
+        { ip: "192.168.1.50", mac: "(incomplete)" },
+      ]),
+    ];
+    const report = buildPresenceReport(scans);
+    assert.equal(report.devices.length, 0);
+  });
+});
+
+describe("isTrackableMac", () => {
+  it("accepts normalised unicast MACs", () => {
+    assert.equal(isTrackableMac("aa:bb:cc:dd:ee:01"), true);
+    assert.equal(isTrackableMac("02:00:5e:10:00:01"), true);
+  });
+
+  it("accepts leading-zero-stripped octets from macOS/BSD arp", () => {
+    // `arp -a` prints octets < 0x10 without the leading zero, e.g.
+    // "48:22:54:b:d0:90"; normaliseMac does not zero-pad.
+    assert.equal(isTrackableMac("48:22:54:b:d0:90"), true);
+    assert.equal(isTrackableMac("0:c:29:1:2:3"), true);
+  });
+
+  it("rejects sentinels and malformed values", () => {
+    assert.equal(isTrackableMac("unknown"), false);
+    assert.equal(isTrackableMac("(incomplete)"), false);
+    assert.equal(isTrackableMac(""), false);
+    assert.equal(isTrackableMac("ff:ff:ff:ff:ff:ff"), false);
+    assert.equal(isTrackableMac("00:00:00:00:00:00"), false);
+    // All-zero / broadcast are rejected by value, so the stripped forms too.
+    assert.equal(isTrackableMac("0:0:0:0:0:0"), false);
+    assert.equal(isTrackableMac("f:f:f:f:f:f"), true); // 0f:0f:… is a real unicast MAC, not broadcast
+    assert.equal(isTrackableMac("aa:bb:cc:dd:ee"), false);
+    assert.equal(isTrackableMac("aa:bb:cc:dd:ee:gg"), false);
   });
 });

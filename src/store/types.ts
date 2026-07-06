@@ -13,6 +13,11 @@ export const IndexEntry = z.object({
   consensusRisk: z.string(),
   hostCount: z.number(),
   filename: z.string(),
+  // Scan source, so trend consumers can gate or annotate series without
+  // loading every scan file. Optional: entries written before these fields
+  // existed stay valid (`wifisentinel rebuild-index` backfills them).
+  platform: z.string().optional(),
+  partial: z.boolean().optional(),
 });
 export type IndexEntry = z.infer<typeof IndexEntry>;
 
