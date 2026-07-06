@@ -7,6 +7,7 @@ import {
 import { NetworkScanResult } from "../../src/collector/schema/scan-result.js";
 import { scoreAllStandards } from "../../src/analyser/standards/index.js";
 import { analyseAllPersonas } from "../../src/analyser/personas/index.js";
+import { detectRogueAPs } from "../../src/analyser/rf/rogue-ap.js";
 
 const fullExport = {
   meta: {
@@ -356,6 +357,57 @@ describe("androidImportToScanResult", () => {
     const netEngineer = analysis.analyses.find((a) => a.persona === "net-engineer");
     const congestion = netEngineer?.insights.find((i) => i.id === "ne-channel-congestion");
     assert.ok(congestion, "expected ne-channel-congestion to fire on the imported scan");
+  });
+
+  it("fires the high-severity weaker-security rogue-AP rule on an Open evil twin of the WPA2 network", () => {
+    // The core payoff of exporting nearby networks: the phone labels the
+    // connected network "WPA2" and the evil twin "Open" — coarse labels the
+    // rogue-AP rule used to score as unknown (index -1), so the rule could
+    // never fire on imported scans.
+    const withEvilTwin = androidImportToScanResult({
+      ...fullExport,
+      wifi: {
+        ...fullExport.wifi,
+        nearbyNetworks: [
+          {
+            ssid: "HomeNet", // same SSID as the connected AP
+            bssid: "de:ad:be:ef:00:01",
+            security: "Open",
+            channel: 36,
+            band: "5 GHz",
+            signal: -48,
+          },
+        ],
+      },
+    });
+    const rogue = detectRogueAPs(withEvilTwin.wifi);
+    assert.equal(rogue.findings.length, 1);
+    assert.equal(rogue.findings[0].severity, "high");
+    assert.ok(rogue.findings[0].indicators.includes("weaker_security"));
+    assert.ok(rogue.findings[0].indicators.includes("different_bssid"));
+    assert.equal(rogue.riskLevel, "danger");
+  });
+
+  it("normalises security labels into the canonical vocabulary on import", () => {
+    const result = androidImportToScanResult({
+      ...fullExport,
+      wifi: {
+        ...fullExport.wifi,
+        security: "WPA2",
+        nearbyNetworks: [
+          { ssid: "Cafe", bssid: "de:ad:be:ef:00:02", security: "Open", channel: 1, band: "2.4 GHz", signal: -60 },
+        ],
+      },
+    });
+    // Coarse phone labels are already canonical — they pass through
+    // unchanged rather than gaining a fabricated Personal/Enterprise mode.
+    assert.equal(result.wifi.security, "WPA2");
+    assert.equal(result.wifi.nearbyNetworks[0].security, "Open");
+    // The "unknown" sentinel survives normalisation.
+    const minimal = androidImportToScanResult({
+      meta: { scanId: "abc", timestamp: "2026-07-01T10:00:00.000Z", platform: "android" },
+    });
+    assert.equal(minimal.wifi.security, "unknown");
   });
 
   it("produces a result the analyser and standards scorers accept", () => {

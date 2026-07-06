@@ -91,6 +91,36 @@ describe("detectRogueAPs", () => {
     assert.equal(result.riskLevel, "danger");
   });
 
+  it("fires weaker-security on the Android companion's coarse labels", () => {
+    // An imported phone scan labels the connected network "WPA2" and an open
+    // evil twin "Open" — neither string exists in the macOS vocabulary, so
+    // this only works through the shared taxonomy.
+    const wifi = baseWifi({
+      security: "WPA2",
+      nearbyNetworks: [
+        { ssid: "HomeNetwork", bssid: "11:22:33:44:55:66", security: "Open", channel: 6, signal: -50 },
+      ],
+    });
+    const result = detectRogueAPs(wifi);
+    assert.equal(result.findings.length, 1);
+    assert.equal(result.findings[0].severity, "high");
+    assert.ok(result.findings[0].indicators.includes("weaker_security"));
+    assert.equal(result.riskLevel, "danger");
+  });
+
+  it("does not read a coarse same-family label as weaker than a mode-qualified one", () => {
+    // Phone "WPA2" vs macOS "WPA2 Personal" describe the same protocol —
+    // the missing mode must not fabricate a downgrade.
+    const wifi = baseWifi({
+      security: "WPA2 Personal",
+      nearbyNetworks: [
+        { ssid: "HomeNetwork", bssid: "AA:BB:CC:DD:EE:FF", security: "WPA2", channel: 6, signal: -50 },
+      ],
+    });
+    const result = detectRogueAPs(wifi);
+    assert.equal(result.findings.length, 0);
+  });
+
   it("does not flag nearby network with same SSID, same BSSID, same security, same channel", () => {
     const wifi = baseWifi({
       nearbyNetworks: [

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { NetworkScanResult } from "./schema/scan-result.js";
+import { normaliseSecurity } from "./schema/security.js";
 
 /**
  * Relaxed schema for the JSON the Android companion app exports. It mirrors
@@ -138,7 +139,11 @@ export function androidImportToScanResult(
       channel: wifi?.channel ?? 0,
       band: wifi?.band ?? "unknown",
       width: "unknown",
-      security: wifi?.security ?? "unknown",
+      // The phone's coarse labels ("Open", "WPA2", …) are folded into the
+      // same canonical vocabulary the CLI scanner emits so cross-source
+      // comparisons (rogue-AP weaker-security, rf --compare) work — see
+      // schema/security.ts. The "unknown" sentinel passes through unchanged.
+      security: normaliseSecurity(wifi?.security ?? "unknown"),
       signal: wifi?.signal ?? 0,
       noise: 0,
       snr: 0,
@@ -163,7 +168,7 @@ export function androidImportToScanResult(
               {
                 ssid: n.ssid ?? null,
                 bssid: n.bssid.toLowerCase(),
-                security: n.security ?? "unknown",
+                security: normaliseSecurity(n.security ?? "unknown"),
                 protocol: "unknown",
                 channel: n.channel,
                 signal: n.signal,

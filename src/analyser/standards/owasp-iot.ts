@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { securityFamily } from "../../collector/schema/security.js";
 import {
   type Finding,
   type StandardScore,
@@ -102,9 +103,8 @@ function checkInsecureInterfaces(result: NetworkScanResult): Finding {
 
 function checkUpdateMechanism(result: NetworkScanResult): Finding {
   // Infer from protocol version — older protocols suggest unmaintained firmware
-  const sec = result.wifi.security.toLowerCase();
-  const isWep = sec.includes("wep");
-  const isLegacy = isWep || sec === "none" || sec === "open";
+  const family = securityFamily(result.wifi.security);
+  const isLegacy = family === "wep" || family === "open";
   const proto = result.wifi.protocol.toLowerCase();
   const isOldProto =
     proto.includes("802.11b") ||
@@ -129,14 +129,14 @@ function checkUpdateMechanism(result: NetworkScanResult): Finding {
 }
 
 function checkOutdatedComponents(result: NetworkScanResult): Finding {
-  const sec = result.wifi.security.toLowerCase();
-  const isWep = sec.includes("wep");
-  const isWpa1 = sec.includes("wpa") && !sec.includes("wpa2") && !sec.includes("wpa3");
+  const family = securityFamily(result.wifi.security);
+  const isWep = family === "wep";
+  const isWpa1 = family === "wpa";
 
   const nearby = result.wifi.nearbyNetworks;
   const insecureNearby = nearby.filter((n) => {
-    const s = n.security.toLowerCase();
-    return s.includes("wep") || s === "none" || s === "open";
+    const f = securityFamily(n.security);
+    return f === "wep" || f === "open";
   });
 
   return {

@@ -1,5 +1,9 @@
 // src/analyser/rf/environment.ts
 import type { NetworkScanResult, NearbyNetwork } from "../../collector/schema/scan-result.js";
+import {
+  securityChanged,
+  isWeakerSecurity,
+} from "../../collector/schema/security.js";
 import type { EnvironmentChange, EnvironmentAnalysis } from "./types.js";
 
 /** Key for matching APs across scans. Uses BSSID if available, else SSID+channel. */
@@ -51,9 +55,12 @@ export function detectEnvironmentChanges(
     const baseline_net = baselineMap.get(key);
     if (!baseline_net) continue;
 
-    // Security change
-    if (current_net.security !== baseline_net.security) {
-      const isDowngrade = current_net.security.length < baseline_net.security.length;
+    // Security change. securityChanged compares at the coarsest granularity
+    // both sides support, so a phone-imported "WPA2" baseline matched against
+    // a macOS "WPA2 Personal" reading of the same AP stays quiet instead of
+    // flagging every shared AP.
+    if (securityChanged(current_net.security, baseline_net.security)) {
+      const isDowngrade = isWeakerSecurity(current_net.security, baseline_net.security);
       changes.push({
         type: "security_change",
         ssid: current_net.ssid,

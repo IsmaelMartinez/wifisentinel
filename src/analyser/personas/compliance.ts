@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { isWeakSecurity } from "../../collector/schema/security.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
 import { riskFromInsights } from "./types.js";
 
@@ -13,11 +14,7 @@ export function analyseAsCompliance(
   const insights: Insight[] = [];
 
   // --- Encryption controls ---
-  const weakPatterns = ["WEP", "WPA ", "Open", "None"];
-  const isWeak = weakPatterns.some((p) =>
-    result.wifi.security.toUpperCase().startsWith(p.toUpperCase()),
-  );
-  if (isWeak) {
+  if (isWeakSecurity(result.wifi.security)) {
     insights.push({
       id: "co-weak-encryption",
       title:
