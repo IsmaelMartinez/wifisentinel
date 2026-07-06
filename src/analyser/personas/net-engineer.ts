@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
+import { isPingLatency } from "../../collector/schema/latency.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
 import { riskFromInsights } from "./types.js";
 
@@ -43,9 +44,15 @@ export function analyseAsNetEngineer(
   }
 
   // --- Channel congestion ---
-  const sameChannel = result.wifi.nearbyNetworks.filter(
-    (n) => n.channel === result.wifi.channel,
-  );
+  // Channel 0 is the "unknown" sentinel (partial imports, frequencies the
+  // mapper can't place) — matching on it would fabricate congestion between
+  // networks whose channels were never actually observed.
+  const sameChannel =
+    result.wifi.channel !== 0
+      ? result.wifi.nearbyNetworks.filter(
+          (n) => n.channel === result.wifi.channel,
+        )
+      : [];
   if (sameChannel.length >= 3) {
     insights.push({
       id: "ne-channel-congestion",
@@ -65,11 +72,16 @@ export function analyseAsNetEngineer(
   if (result.speed) {
     const s = result.speed;
 
-    // The latency figures below feed the technicalDetail strings; require the
-    // full pair the CLI scanner measures (a partial source like the Android
-    // import carries internetMs alone) once, instead of re-checking per insight.
+    // The latency figures below feed threshold comparisons and technicalDetail
+    // strings written for ICMP ping semantics ("gateway latency should be
+    // under 5 ms"). Require the full pair the CLI scanner measures (a partial
+    // source like the Android import carries internetMs alone) AND ping
+    // semantics (an HTTPS HEAD round-trip reads ~100–400 ms healthy, which
+    // would trip every ping threshold) once, instead of re-checking per insight.
     const fullLatency =
-      s.latency?.gatewayMs !== undefined && s.latency.internetMs !== undefined
+      s.latency?.gatewayMs !== undefined &&
+      s.latency.internetMs !== undefined &&
+      isPingLatency(s.latency.method)
         ? { gatewayMs: s.latency.gatewayMs, internetMs: s.latency.internetMs }
         : undefined;
 
@@ -111,9 +123,10 @@ export function analyseAsNetEngineer(
     }
 
     // --- Packet loss ---
+    // Loss percentages are method-independent facts — the ping-semantics
+    // latency figures only enrich the technicalDetail when available.
     if (
       s.packetLoss &&
-      fullLatency &&
       (s.packetLoss.gatewayPercent > 0 || s.packetLoss.internetPercent > 2)
     ) {
       const gw = s.packetLoss.gatewayPercent;
@@ -125,7 +138,7 @@ export function analyseAsNetEngineer(
         severity,
         category: "reliability",
         description: `Packet loss on the gateway link indicates local network issues (interference, buffer overflow, or faulty hardware). Internet packet loss may indicate ISP congestion or routing problems. Either will cause TCP retransmissions and degrade interactive applications.`,
-        technicalDetail: `Gateway loss: ${gw}%, Internet loss: ${inet}%. Gateway latency: ${fullLatency.gatewayMs.toFixed(1)} ms, Internet latency: ${fullLatency.internetMs.toFixed(1)} ms.`,
+        technicalDetail: `Gateway loss: ${gw}%, Internet loss: ${inet}%.${fullLatency ? ` Gateway latency: ${fullLatency.gatewayMs.toFixed(1)} ms, Internet latency: ${fullLatency.internetMs.toFixed(1)} ms.` : ""}`,
         recommendation:
           "If gateway loss is non-zero, check the local link (cables, AP, interference). For internet loss, contact the ISP or check routing via traceroute.",
         affectedAssets: [result.network.gateway.ip],
@@ -150,7 +163,9 @@ export function analyseAsNetEngineer(
     }
 
     // --- High jitter ---
-    if (s.jitter && s.jitter.internetMs > 30) {
+    // The 30 ms threshold is calibrated for ping-derived jitter; variance in
+    // HTTPS round-trips runs far higher on healthy connections.
+    if (s.jitter && s.jitter.internetMs > 30 && isPingLatency(s.latency?.method)) {
       insights.push({
         id: "ne-high-jitter",
         title: `Internet jitter ${s.jitter.internetMs.toFixed(1)} ms will impact real-time applications`,

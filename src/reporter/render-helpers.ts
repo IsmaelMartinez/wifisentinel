@@ -89,6 +89,16 @@ export function signalBar(signal: number): string {
   return color(filled) + chalk.gray(empty) + chalk.dim(` ${signal} dBm`);
 }
 
+// Method-aware latency helpers live next to the schema (they're pure and
+// shared with the dashboard and personas); re-exported here for the
+// terminal reporter and existing test imports.
+export {
+  isPingLatency,
+  latencyBands,
+  latencyMethodLabel,
+  latencyMethodNote,
+} from "../collector/schema/latency.js";
+
 export function snrLabel(snr: number): string {
   if (snr >= 25) return TEAL("Excellent");
   if (snr >= 15) return TEAL("Good");

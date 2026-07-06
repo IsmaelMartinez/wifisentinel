@@ -39,6 +39,13 @@ class WifiMappingTest {
     }
 
     @Test
+    fun lowercasesBssidToOneCanonicalForm() {
+        // BSSIDs are case-insensitive hex; a single canonical form keeps
+        // history/trend comparisons trivial.
+        assertEquals("aa:bb:cc:dd:ee:ff", WifiMapping.normaliseBssid("AA:BB:CC:DD:EE:FF"))
+    }
+
+    @Test
     fun dropsRedactedBssid() {
         assertNull(WifiMapping.normaliseBssid("02:00:00:00:00:00"))
         assertNull(WifiMapping.normaliseBssid(""))
@@ -87,6 +94,14 @@ class WifiMappingTest {
     }
 
     @Test
+    fun mapsUnii4Channels() {
+        // 5845/5865/5885 MHz are real APs (UNII-4), not the channel-0 sentinel.
+        assertEquals(169, WifiMapping.frequencyToChannel(5845))
+        assertEquals(173, WifiMapping.frequencyToChannel(5865))
+        assertEquals(177, WifiMapping.frequencyToChannel(5885))
+    }
+
+    @Test
     fun mapsSixGhzChannels() {
         assertEquals(1, WifiMapping.frequencyToChannel(5955))
         assertEquals(5, WifiMapping.frequencyToChannel(5975))
@@ -120,5 +135,98 @@ class WifiMappingTest {
     fun formatsIpv4WithHighOctets() {
         val packed = 10 or (0 shl 8) or (0 shl 16) or (255 shl 24)
         assertEquals("10.0.0.255", WifiMapping.formatIpv4(packed))
+    }
+
+    // ---- nearby-network mapping ----------------------------------------------
+
+    private fun raw(
+        bssid: String?,
+        ssid: String? = "Net",
+        capabilities: String? = "[WPA2-PSK-CCMP][ESS]",
+        frequencyMhz: Int = 5180,
+        signalDbm: Int = -60,
+    ) = WifiMapping.RawNearbyNetwork(ssid, bssid, capabilities, frequencyMhz, signalDbm)
+
+    @Test
+    fun mapsNearbyNetworkFields() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(raw(bssid = "11:22:33:44:55:66", ssid = "NextDoor", frequencyMhz = 2437, signalDbm = -70)),
+            connectedBssid = "aa:bb:cc:dd:ee:ff",
+        ).single()
+        assertEquals("NextDoor", mapped.ssid)
+        assertEquals("11:22:33:44:55:66", mapped.bssid)
+        assertEquals("WPA2", mapped.security)
+        assertEquals(6, mapped.channel)
+        assertEquals("2.4 GHz", mapped.band)
+        assertEquals(-70, mapped.signal)
+    }
+
+    @Test
+    fun excludesTheConnectedAp() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(
+                raw(bssid = "AA:BB:CC:DD:EE:FF"), // connected, different case
+                raw(bssid = "11:22:33:44:55:66"),
+            ),
+            connectedBssid = "aa:bb:cc:dd:ee:ff",
+        )
+        assertEquals(listOf("11:22:33:44:55:66"), mapped.map { it.bssid })
+    }
+
+    @Test
+    fun dedupesByBssidKeepingStrongestSighting() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(
+                raw(bssid = "11:22:33:44:55:66", signalDbm = -80),
+                raw(bssid = "11:22:33:44:55:66", signalDbm = -55),
+                raw(bssid = "11:22:33:44:55:66", signalDbm = -70),
+            ),
+            connectedBssid = null,
+        )
+        assertEquals(1, mapped.size)
+        assertEquals(-55, mapped.single().signal)
+    }
+
+    @Test
+    fun sortsStrongestFirstAndCapsTheList() {
+        val entries = (0 until 30).map { i ->
+            raw(bssid = "00:00:00:00:00:%02x".format(i), signalDbm = -30 - i)
+        }
+        val mapped = WifiMapping.mapNearbyNetworks(entries.shuffled(), connectedBssid = null)
+        assertEquals(WifiMapping.NEARBY_NETWORKS_CAP, mapped.size)
+        assertEquals(mapped.sortedByDescending { it.signal }, mapped)
+        // The cap keeps the strongest sightings, not an arbitrary subset.
+        assertEquals(-30, mapped.first().signal)
+    }
+
+    @Test
+    fun dropsEntriesWithoutAUsableBssid() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(
+                raw(bssid = null),
+                raw(bssid = ""),
+                raw(bssid = "02:00:00:00:00:00"), // redacted sentinel
+            ),
+            connectedBssid = null,
+        )
+        assertEquals(emptyList<LocalScanResult.NearbyNetwork>(), mapped)
+    }
+
+    @Test
+    fun hiddenNetworksKeepNullSsid() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(raw(bssid = "11:22:33:44:55:66", ssid = "")),
+            connectedBssid = null,
+        ).single()
+        assertNull(mapped.ssid)
+    }
+
+    @Test
+    fun mappedBssidsAreLowercased() {
+        val mapped = WifiMapping.mapNearbyNetworks(
+            listOf(raw(bssid = "11:22:33:44:55:AA")),
+            connectedBssid = null,
+        ).single()
+        assertEquals("11:22:33:44:55:aa", mapped.bssid)
     }
 }

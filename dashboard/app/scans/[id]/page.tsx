@@ -9,6 +9,7 @@ import { ComplianceCard } from "@/components/compliance-card";
 import { ChannelChart } from "@/components/channel-chart";
 import { getScan } from "@/lib/store";
 import { computeSecurityScore } from "@wifisentinel/analyser/score.js";
+import { latencyMethodNote } from "@wifisentinel/collector/schema/latency.js";
 
 export const dynamic = "force-dynamic";
 
@@ -112,7 +113,10 @@ export default async function ScanDetailPage({
                       <p className="mt-2">Download: {scan.speed.download.speedMbps} Mbps</p>
                     )}
                     {scan.speed.latency?.internetMs !== undefined && (
-                      <p>Latency: {scan.speed.latency.internetMs} ms</p>
+                      <p>
+                        Latency: {scan.speed.latency.internetMs} ms
+                        {latencyMethodNote(scan.speed.latency.method)}
+                      </p>
                     )}
                   </>
                 )}

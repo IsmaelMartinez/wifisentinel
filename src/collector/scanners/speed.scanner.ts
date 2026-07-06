@@ -184,6 +184,7 @@ export async function scanSpeed(
       gatewayMs: Math.round(gatewayPing.avgMs * 100) / 100,
       internetMs: Math.round(internetPing.avgMs * 100) / 100,
       dnsResolutionMs: dnsMs,
+      method: "icmp-ping",
     },
     jitter: {
       gatewayMs: Math.round(gatewayPing.jitterMs * 100) / 100,

@@ -14,6 +14,8 @@ import {
   scoreBar,
   severityColor,
   boolStatus,
+  latencyBands,
+  latencyMethodLabel,
   TEAL,
   AMBER,
   RED,
@@ -406,8 +408,13 @@ function renderSpeedTest(result: NetworkScanResult): string {
       s.latency.internetMs !== undefined ||
       s.latency.dnsResolutionMs !== undefined);
   if (s.latency && hasLatency) {
-    const latColor = (ms: number) => ms < 20 ? TEAL : ms < 50 ? AMBER : RED;
-    lines.push(row(`  Latency`));
+    // Colour by measurement method — a healthy HTTPS HEAD round-trip (the
+    // Android companion's probe) sits around 100–400 ms, which would read
+    // amber/red against ICMP ping thresholds.
+    const { goodMs, warnMs } = latencyBands(s.latency.method);
+    const latColor = (ms: number) => ms < goodMs ? TEAL : ms < warnMs ? AMBER : RED;
+    const methodLabel = latencyMethodLabel(s.latency.method);
+    lines.push(row(`  Latency${methodLabel ? chalk.dim(` (${methodLabel})`) : ""}`));
     if (s.latency.gatewayMs !== undefined) {
       const jitter = s.jitter ? `   jitter: ${s.jitter.gatewayMs.toFixed(1)} ms` : "";
       lines.push(row(`    Gateway:     ${latColor(s.latency.gatewayMs)(s.latency.gatewayMs.toFixed(1) + " ms")}${jitter}`));

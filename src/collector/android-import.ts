@@ -30,6 +30,24 @@ export const AndroidScanImport = z.object({
       band: z.string().optional(),
       signal: z.number().optional(),
       txRate: z.number().optional(),
+      // Nearby APs observed by the phone's WifiManager scan (deduped by
+      // BSSID and capped on-device). `band` is phone-only colour — the CLI
+      // `NearbyNetwork` shape has no band field, so the adapter drops it.
+      // Null when the scan predates the field (pre-upgrade Room records
+      // re-exported by a newer app version).
+      nearbyNetworks: z
+        .array(
+          z.object({
+            ssid: z.string().nullable().optional(),
+            bssid: z.string().nullable().optional(),
+            security: z.string().optional(),
+            channel: z.number().optional(),
+            band: z.string().optional(),
+            signal: z.number().optional(),
+          })
+        )
+        .nullable()
+        .optional(),
     })
     .nullable()
     .optional(),
@@ -89,10 +107,13 @@ export function androidImportToScanResult(
   const network = input.network ?? undefined;
 
   // Always-on latency probe + opt-in download → a partial `speed` section
-  // (see the docblock above for the degrade-to-absent rationale).
+  // (see the docblock above for the degrade-to-absent rationale). The phone's
+  // probe is an HTTPS HEAD round-trip, not an ICMP ping — a healthy figure is
+  // ~100–400 ms, not ~15 ms — so stamp the method to keep consumers from
+  // reading it against ping thresholds.
   const speed: NetworkScanResult["speed"] = {
     ...(typeof input.latencyMs === "number"
-      ? { latency: { internetMs: input.latencyMs } }
+      ? { latency: { internetMs: input.latencyMs, method: "https-rtt" as const } }
       : {}),
     ...(input.speed?.download ? { download: input.speed.download } : {}),
   };
@@ -126,7 +147,31 @@ export function androidImportToScanResult(
       // docs/android-companion.md §3.
       macRandomised: false,
       countryCode: "",
-      nearbyNetworks: [],
+      // `protocol` and `noise` aren't in the phone's scan results — the same
+      // sentinels ("unknown", 0) as the connected-AP fields above. Feeding
+      // these through lets the net-engineer channel-congestion insight work
+      // on imported scans. Entries missing bssid/channel/signal are dropped
+      // (the phone always emits all three — they're non-nullable in
+      // `LocalScanResult.NearbyNetwork`): sentinel-filling would misrepresent
+      // observable data, e.g. 0 dBm reads as the strongest possible signal.
+      // Channel 0 (the phone's own unknown-frequency sentinel) is dropped
+      // too — RF consumers place channels numerically, so 0 would count as
+      // 2.4 GHz overlap for channels 1–2 and fabricate congestion.
+      nearbyNetworks: (wifi?.nearbyNetworks ?? []).flatMap((n) =>
+        n.bssid && n.channel !== undefined && n.channel > 0 && n.signal !== undefined
+          ? [
+              {
+                ssid: n.ssid ?? null,
+                bssid: n.bssid.toLowerCase(),
+                security: n.security ?? "unknown",
+                protocol: "unknown",
+                channel: n.channel,
+                signal: n.signal,
+                noise: 0,
+              },
+            ]
+          : []
+      ),
     },
     network: {
       interface: "wlan0",

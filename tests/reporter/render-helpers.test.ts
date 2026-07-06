@@ -7,6 +7,10 @@ import {
   boolStatus,
   signalBar,
   snrLabel,
+  latencyBands,
+  latencyMethodLabel,
+  latencyMethodNote,
+  isPingLatency,
 } from "../../src/reporter/render-helpers.js";
 
 // Strip ANSI escape codes for plain-text assertions
@@ -172,5 +176,44 @@ describe("severityColor", () => {
   it("low returns a chalk instance", () => {
     const color = severityColor("low");
     assert.ok(typeof color === "function");
+  });
+});
+
+describe("latencyBands", () => {
+  it("defaults to ICMP ping thresholds when method is absent (pre-method data)", () => {
+    assert.deepEqual(latencyBands(undefined), { goodMs: 20, warnMs: 50 });
+    assert.deepEqual(latencyBands("icmp-ping"), { goodMs: 20, warnMs: 50 });
+  });
+
+  it("uses relaxed thresholds for an HTTPS HEAD round-trip", () => {
+    // A healthy HTTPS RTT is ~100-400 ms; ping thresholds would flag it red.
+    const { goodMs, warnMs } = latencyBands("https-rtt");
+    assert.ok(goodMs >= 400, "a healthy 350 ms HTTPS RTT must sit in the good band");
+    assert.ok(warnMs > goodMs);
+  });
+});
+
+describe("latencyMethodLabel", () => {
+  it("labels https-rtt and stays silent for ping", () => {
+    assert.equal(latencyMethodLabel("https-rtt"), "HTTPS round-trip");
+    assert.equal(latencyMethodLabel("icmp-ping"), undefined);
+    assert.equal(latencyMethodLabel(undefined), undefined);
+  });
+});
+
+describe("isPingLatency / latencyMethodNote", () => {
+  it("treats absent method as ping and any other method as non-ping", () => {
+    assert.equal(isPingLatency(undefined), true);
+    assert.equal(isPingLatency("icmp-ping"), true);
+    assert.equal(isPingLatency("https-rtt"), false);
+  });
+
+  it("derives the https-rtt note from the shared label and bands", () => {
+    assert.equal(
+      latencyMethodNote("https-rtt"),
+      " (HTTPS round-trip — healthy is ~100–400 ms)"
+    );
+    assert.equal(latencyMethodNote("icmp-ping"), "");
+    assert.equal(latencyMethodNote(undefined), "");
   });
 });

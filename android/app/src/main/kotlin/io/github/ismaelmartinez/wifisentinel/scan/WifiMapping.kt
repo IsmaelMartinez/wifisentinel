@@ -18,9 +18,13 @@ internal object WifiMapping {
     fun normaliseSsid(raw: String?): String? =
         raw?.trim('"')?.takeIf { it.isNotEmpty() && it != UNKNOWN_SSID }
 
-    /** Drop empty and the redacted `02:00:...` BSSID. */
+    /**
+     * Lowercase (BSSIDs are case-insensitive hex; one canonical form keeps
+     * history/trend comparisons trivial), drop empty and the redacted
+     * `02:00:...` BSSID.
+     */
     fun normaliseBssid(raw: String?): String? =
-        raw?.takeIf { it.isNotEmpty() && it != REDACTED_BSSID }
+        raw?.lowercase()?.takeIf { it.isNotEmpty() && it != REDACTED_BSSID }
 
     /** Map a `ScanResult.capabilities` string to a coarse security label. */
     fun securityFromCapabilities(capabilities: String?): String {
@@ -44,7 +48,10 @@ internal object WifiMapping {
     fun frequencyToChannel(freqMhz: Int): Int = when {
         freqMhz == 2484 -> 14
         freqMhz in 2412..2472 -> (freqMhz - 2407) / 5
-        freqMhz in 5170..5825 -> (freqMhz - 5000) / 5
+        // Upper bound 5895 includes UNII-4 (5845/5865/5885 MHz → channels
+        // 169/173/177) — stopping at 5825 mapped real APs to the channel-0
+        // "unknown" sentinel.
+        freqMhz in 5170..5895 -> (freqMhz - 5000) / 5
         freqMhz in 5955..7115 -> (freqMhz - 5950) / 5
         else -> 0
     }
@@ -59,4 +66,63 @@ internal object WifiMapping {
     /** Format a little-endian `DhcpInfo` IPv4 int as a dotted quad. */
     fun formatIpv4(value: Int): String =
         "${value and 0xFF}.${(value shr 8) and 0xFF}.${(value shr 16) and 0xFF}.${(value shr 24) and 0xFF}"
+
+    /**
+     * Keep the export bounded: a dense block of flats can surface 50+ APs,
+     * and each entry costs JSON size on every export and Room row. 25 keeps
+     * every network that could plausibly matter for congestion analysis.
+     */
+    const val NEARBY_NETWORKS_CAP = 25
+
+    /**
+     * Framework-free projection of the `ScanResult` fields the mapping needs,
+     * so [mapNearbyNetworks] stays JVM-testable (same rationale as the rest
+     * of this object).
+     */
+    data class RawNearbyNetwork(
+        val ssid: String?,
+        val bssid: String?,
+        val capabilities: String?,
+        val frequencyMhz: Int,
+        val signalDbm: Int,
+    )
+
+    /**
+     * Map raw scan results to the export's nearby-network list: normalise
+     * SSIDs/BSSIDs, derive security/channel/band, exclude the connected AP,
+     * dedupe by BSSID keeping the strongest sighting, sort strongest-first,
+     * and cap at [cap]. Entries without a usable BSSID are dropped — they
+     * can't be deduped or told apart from the connected AP. Dedupe happens
+     * on the raw entries so sightings discarded by it are never fully mapped.
+     */
+    fun mapNearbyNetworks(
+        raw: List<RawNearbyNetwork>,
+        connectedBssid: String?,
+        cap: Int = NEARBY_NETWORKS_CAP,
+    ): List<LocalScanResult.NearbyNetwork> {
+        // normaliseBssid lowercases, so plain equality is case-insensitive.
+        val connected = connectedBssid?.lowercase()
+        val strongestByBssid = LinkedHashMap<String, RawNearbyNetwork>()
+        for (entry in raw) {
+            val bssid = normaliseBssid(entry.bssid) ?: continue
+            if (bssid == connected) continue
+            val existing = strongestByBssid[bssid]
+            if (existing == null || entry.signalDbm > existing.signalDbm) {
+                strongestByBssid[bssid] = entry
+            }
+        }
+        return strongestByBssid.entries
+            .sortedByDescending { it.value.signalDbm }
+            .take(cap)
+            .map { (bssid, entry) ->
+                LocalScanResult.NearbyNetwork(
+                    ssid = normaliseSsid(entry.ssid),
+                    bssid = bssid,
+                    security = securityFromCapabilities(entry.capabilities),
+                    channel = frequencyToChannel(entry.frequencyMhz),
+                    band = frequencyToBand(entry.frequencyMhz),
+                    signal = entry.signalDbm,
+                )
+            }
+    }
 }

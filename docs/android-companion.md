@@ -45,7 +45,7 @@ either omitted or set to a documented sentinel.
 |---|---|---|
 | `wifi.ssid`, `bssid`, `signal`, `band`, `channel`, `txRate` | `NetworkCapabilities.transportInfo as WifiInfo` (API 29+) | `ssid`/`bssid` require the runtime scan permission; redacted otherwise |
 | `wifi.security` | Matched `ScanResult.capabilities` for the current BSSID | Requires a fresh `startScan()` — we trigger and await the broadcast |
-| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Throttled to 4 per 2 min; same permission gate |
+| `wifi.nearbyNetworks` | `WifiManager.getScanResults()` | Implemented — deduped by BSSID (strongest sighting wins), connected AP excluded, capped at 25, strongest first (`WifiMapping.mapNearbyNetworks`). Throttled to 4 per 2 min; same permission gate |
 | `wifi.macRandomised` | — | **Not observable.** `WifiInfo.getMacAddress()` returns the sanitised `02:00:00:00:00:00` for all non-system callers; the real per-SSID randomisation flag lives in `WifiConfiguration.macRandomizationSetting` which requires a system permission. Omitted from the Android schema. |
 | `network.ip`, `subnet`, `gateway.ip`, `dns.servers` | `DhcpInfo` / `LinkProperties` | Available without extra permissions |
 | `network.gateway.mac` | ARP via `/proc/net/arp` | **Blocked** on modern Android; leave undefined |
@@ -55,7 +55,7 @@ either omitted or set to a documented sentinel.
 | `traffic.*` | — | **Not observable** without VpnService interception; explicit follow-up |
 | `deauthDetection` | — | **Requires monitor mode**; not viable |
 | `intrusionIndicators` | Partial — gateway change detection, duplicate-BSSID heuristics | Weak; useful as a trend signal only |
-| `speed.latency.internetMs` | HTTP `HEAD` to a known host | Reasonable; no need to hit a CDN speed test for MVP |
+| `speed.latency.internetMs` | HTTP `HEAD` to a known host | An HTTPS round-trip (~100–400 ms healthy), not an ICMP ping (~15 ms) — the CLI import stamps `speed.latency.method: "https-rtt"` so reporters and personas threshold it accordingly |
 | `speed.download.speedMbps` | HTTP `GET` of a sized blob | Implemented (`SpeedProbe`) — opt-in toggle, off by default to spare mobile data |
 
 ## 4. Architecture
@@ -133,14 +133,28 @@ the system dialog appears. This is implemented in `MainActivity.ScanApp()`.
 
 ## 6. Sync story (no LAN)
 
-Because the dashboard is not LAN-reachable, v1 sync is **manual, file-based**:
+Because the dashboard is not LAN-reachable, v1 sync is **manual, file-based**
+(both halves are implemented):
 
-- **Export.** Android writes a `LocalScanResult` JSON file to the device's
-  Downloads folder (or shares it via Android's Share intent).
-- **Import (CLI, future).** A new `wifisentinel import <file>` command
-  validates the JSON against a relaxed variant of `NetworkScanResult`
-  (missing optional sections allowed, `meta.platform: "android"`) and writes
-  it into `~/.wifisentinel/scans/` so it shows up in history/trend/diff.
+- **Export.** The Scan and Detail screens write a `LocalScanResult` JSON
+  file via `ActivityResultContracts.CreateDocument` — the user picks the
+  destination (Downloads, Drive, …).
+- **Import (CLI).** `wifisentinel import <file>` validates the JSON against
+  a relaxed variant of `NetworkScanResult` (missing optional sections
+  allowed, `meta.platform: "android"`), expands it with honest sentinels,
+  recomputes the persona/standards analysis, and writes it into
+  `~/.wifisentinel/scans/` so it shows up in history/trend/diff/devices and
+  the dashboard.
+
+End-to-end:
+
+```bash
+# 1. On the phone: Scan → Export as JSON → save wifisentinel-scan.json
+# 2. Move the file to the CLI host (cloud drive, AirDrop, USB, …)
+# 3. Import it:
+wifisentinel import wifisentinel-scan.json
+wifisentinel history        # the imported scan appears, flagged partial
+```
 
 Explicit follow-ups we are **not** doing in the first pass:
 
@@ -196,7 +210,9 @@ The skeleton under `android/` has grown past the first spike. It ships:
   `wifisentinel-scans.db` (§7).
 - A `LocalScanner` that runs the full MVP pipeline:
   - **WiFi stage** — `startScan()` + broadcast-await so `security` is derived
-    from fresh data rather than a stale cache.
+    from fresh data rather than a stale cache. The same scan-result set is
+    mapped into `wifi.nearbyNetworks` (deduped by BSSID, connected AP
+    excluded, capped — `WifiMapping.mapNearbyNetworks`, JVM-tested).
   - **Network stage** — `DhcpInfo` / `LinkProperties` / VPN state.
   - **Host discovery** (`HostProbe`) — `NsdManager` mDNS sweep across the
     service-type list in §4, plus a bounded (32-way) TCP connect sweep of the
@@ -232,14 +248,16 @@ The skeleton under `android/` has grown past the first spike. It ships:
     rule's `ActivityScenario` and asserts the Scan screen renders.
   - `ScanDaoTest` — Room `ScanDao` insert/query/replace/clear against a real
     on-device SQLite database.
+  - `ScanEndToEndTest` — grants the scan permission, taps "Scan now", waits
+    for the pipeline (`LocalScanner` → probes → `LocalAnalyser` →
+    `ScanStore`) to finish, and asserts the result rendered and a row landed
+    in scan history. The CI emulator has no real WiFi, so it asserts honest
+    degradation (scan completes, analysis runs, record saved) rather than
+    network specifics — `wifi` may legitimately be null there.
 
   CI runs these in a dedicated `android-instrumented` job on an API 35 x86_64
   emulator (reactivecircus/android-emulator-runner with AVD snapshot caching),
   separate from the `android` unit-test/APK job.
-
-  Neither instrumented test triggers an actual scan: the device-dependent
-  pipeline glue (`LocalScanner` / `HostProbe` / `WifiManager` interplay)
-  remains unexercised end-to-end in CI and is only verified on real devices.
 
 On the CLI side, `wifisentinel import <file>` (see `src/commands/import.ts` and
 `src/collector/android-import.ts`) validates the export against a relaxed Zod
@@ -261,10 +279,8 @@ schema, expands it into a full `NetworkScanResult` with `meta.platform:
    forces a branch for the pre-10 WiFi API. Leaning 29.
 3. **Branding.** App icon, launcher label, dark-theme colours — copy from
    the dashboard's teal/dark palette or diverge for platform-native feel?
-4. **Import command on the CLI side.** Worth landing before the Android
-   app writes its first export, so we don't paint ourselves into a schema
-   corner. Proposed signature:
-   `wifisentinel import <path> [--source android]`.
+4. ~~**Import command on the CLI side.**~~ Resolved — landed as
+   `wifisentinel import <path> [--source android]` (§6).
 5. **Rule subset for `LocalAnalyser`.** Which of the five personas' rules
    are honest to evaluate from phone-only data? Red-team and privacy lean
    feasible; network-engineer and compliance lean misleading.

@@ -24,6 +24,17 @@ const fullExport = {
     band: "5 GHz",
     signal: -55,
     txRate: 866,
+    nearbyNetworks: [
+      {
+        ssid: "NextDoor",
+        bssid: "11:22:33:44:55:66",
+        security: "WPA3",
+        channel: 36,
+        band: "5 GHz",
+        signal: -70,
+      },
+      { ssid: null, bssid: "22:33:44:55:66:AA", security: "WPA2", channel: 149, band: "5 GHz", signal: -80 },
+    ],
   },
   network: {
     ip: "192.168.1.42",
@@ -151,6 +162,31 @@ describe("androidImportToScanResult", () => {
     assert.doesNotThrow(() => NetworkScanResult.parse(result));
   });
 
+  it("stamps the latency method as https-rtt so consumers don't read ping thresholds", () => {
+    // The phone's probe is an HTTPS HEAD round-trip (~100–400 ms healthy),
+    // not an ICMP ping (~15 ms) — without the method stamp a healthy phone
+    // import renders amber/red in the terminal/HTML latency sections.
+    const result = androidImportToScanResult(fullExport);
+    assert.equal(result.speed?.latency?.method, "https-rtt");
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("suppresses ping-semantics persona insights for https-rtt latency", () => {
+    // A healthy-for-HTTPS 350 ms figure must not fire the net-engineer's
+    // ICMP-calibrated latency insights, even when jitter/gateway fields are
+    // (hypothetically) present alongside it.
+    const result = androidImportToScanResult({ ...fullExport, latencyMs: 350 });
+    result.speed = {
+      ...result.speed,
+      latency: { gatewayMs: 350, internetMs: 350, method: "https-rtt" },
+      jitter: { gatewayMs: 5, internetMs: 5 },
+    };
+    const analysis = analyseAllPersonas(result);
+    const netEngineer = analysis.analyses.find((a) => a.persona === "net-engineer");
+    const ids = new Set(netEngineer?.insights.map((i) => i.id));
+    assert.equal(ids.has("ne-high-gateway-latency"), false);
+  });
+
   it("builds a latency-only speed section when the speed test was off", () => {
     const result = androidImportToScanResult({ ...fullExport, speed: undefined });
     assert.equal(result.speed?.latency?.internetMs, 24);
@@ -214,6 +250,112 @@ describe("androidImportToScanResult", () => {
     assert.throws(() =>
       NetworkScanResult.parse({ ...base, speed: { latency: {} } })
     );
+    // `method` is an annotation, not a measurement — it can't carry a
+    // latency section on its own.
+    assert.throws(() =>
+      NetworkScanResult.parse({
+        ...base,
+        speed: { latency: { method: "https-rtt" } },
+      })
+    );
+  });
+
+  it("carries nearby networks into wifi.nearbyNetworks with honest sentinels", () => {
+    const result = androidImportToScanResult(fullExport);
+    assert.equal(result.wifi.nearbyNetworks.length, 2);
+    const [first, hidden] = result.wifi.nearbyNetworks;
+    assert.equal(first.ssid, "NextDoor");
+    assert.equal(first.bssid, "11:22:33:44:55:66");
+    assert.equal(first.security, "WPA3");
+    assert.equal(first.channel, 36);
+    assert.equal(first.signal, -70);
+    // Not observable from the phone — sentinels, same as the connected AP.
+    assert.equal(first.protocol, "unknown");
+    assert.equal(first.noise, 0);
+    // Hidden networks keep their null SSID; BSSIDs normalise to lowercase.
+    assert.equal(hidden.ssid, null);
+    assert.equal(hidden.bssid, "22:33:44:55:66:aa");
+    assert.doesNotThrow(() => NetworkScanResult.parse(result));
+  });
+
+  it("defaults nearby networks to empty when the export predates the field", () => {
+    for (const legacy of [undefined, null]) {
+      const result = androidImportToScanResult({
+        ...fullExport,
+        wifi: { ...fullExport.wifi, nearbyNetworks: legacy },
+      });
+      assert.deepEqual(result.wifi.nearbyNetworks, []);
+      assert.doesNotThrow(() => NetworkScanResult.parse(result));
+    }
+  });
+
+  it("drops nearby entries missing bssid/channel/signal instead of sentinel-filling", () => {
+    // 0 dBm would read as the strongest possible signal and channel 0
+    // aliases with the unknown-channel sentinel — dropping is the honest
+    // degradation for hand-trimmed or drifted exports.
+    const result = androidImportToScanResult({
+      ...fullExport,
+      wifi: {
+        ...fullExport.wifi,
+        nearbyNetworks: [
+          { ssid: "NoBssid", channel: 6, signal: -60 },
+          { ssid: "NoChannel", bssid: "33:44:55:66:77:88", signal: -60 },
+          { ssid: "UnknownFreq", bssid: "44:55:66:77:88:99", channel: 0, signal: -60 },
+          { ssid: "NoSignal", bssid: "55:66:77:88:99:aa", channel: 6 },
+          { ssid: "Kept", bssid: "66:77:88:99:aa:bb", channel: 6, signal: -60 },
+        ],
+      },
+    });
+    assert.deepEqual(
+      result.wifi.nearbyNetworks.map((n) => n.ssid),
+      ["Kept"]
+    );
+  });
+
+  it("never fires channel congestion on the unknown-channel sentinel", () => {
+    // Connected channel unknown (absent → 0 sentinel) + nearby entries on
+    // channel 0 must not read as "channel 0 is congested". The import layer
+    // already drops channel-0 nearby entries, so build the sentinel state
+    // directly to exercise the persona's own guard.
+    const result = androidImportToScanResult({
+      ...fullExport,
+      wifi: { ...fullExport.wifi, channel: undefined },
+    });
+    result.wifi.nearbyNetworks = [1, 2, 3].map((i) => ({
+      ssid: `Mystery${i}`,
+      bssid: `00:00:00:00:01:0${i}`,
+      security: "unknown",
+      protocol: "unknown",
+      channel: 0,
+      signal: -60,
+      noise: 0,
+    }));
+    assert.equal(result.wifi.channel, 0);
+    const analysis = analyseAllPersonas(result);
+    const netEngineer = analysis.analyses.find((a) => a.persona === "net-engineer");
+    const ids = new Set(netEngineer?.insights.map((i) => i.id));
+    assert.equal(ids.has("ne-channel-congestion"), false);
+  });
+
+  it("feeds nearby networks into the net-engineer channel-congestion insight", () => {
+    const congested = androidImportToScanResult({
+      ...fullExport,
+      wifi: {
+        ...fullExport.wifi,
+        nearbyNetworks: [1, 2, 3].map((i) => ({
+          ssid: `Neighbour${i}`,
+          bssid: `00:00:00:00:00:0${i}`,
+          security: "WPA2",
+          channel: 36, // same channel as the connected AP in fullExport
+          band: "5 GHz",
+          signal: -60 - i,
+        })),
+      },
+    });
+    const analysis = analyseAllPersonas(congested);
+    const netEngineer = analysis.analyses.find((a) => a.persona === "net-engineer");
+    const congestion = netEngineer?.insights.find((i) => i.id === "ne-channel-congestion");
+    assert.ok(congestion, "expected ne-channel-congestion to fire on the imported scan");
   });
 
   it("produces a result the analyser and standards scorers accept", () => {
