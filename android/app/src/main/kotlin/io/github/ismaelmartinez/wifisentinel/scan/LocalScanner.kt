@@ -46,15 +46,24 @@ class LocalScanner(private val context: Context) {
     private val speedProbe = SpeedProbe()
 
     /**
-     * Run the full scan pipeline. Must be called from a coroutine scope —
-     * the work happens on `Dispatchers.IO`.
+     * Run the scan pipeline. Must be called from a coroutine scope — the work
+     * happens on `Dispatchers.IO`.
      *
      * @param includeSpeedTest run the opt-in download throughput probe
-     *   (~25 MB of data — see [SpeedProbe]). Off by default.
+     *   (~25 MB of data — see [SpeedProbe]). Off by default. Ignored in
+     *   [surveyOnly] mode.
+     * @param surveyOnly run a nearby-only RF survey: skip the connected-AP
+     *   capture (so `wifi` is null *by construction*, not because the read
+     *   failed) and the LAN / internet probes (host discovery, latency, speed),
+     *   which only mean anything against a joined network. The result carries
+     *   just the RF neighbourhood — a useful scan while disconnected or with
+     *   `WifiInfo` redacted, instead of an empty connected-AP card. See
+     *   docs/android-companion.md §10.
      */
     suspend fun scan(
         appVersion: String,
         includeSpeedTest: Boolean = false,
+        surveyOnly: Boolean = false,
     ): LocalScanResult = withContext(Dispatchers.IO) {
         // Kick off a fresh AP scan up front so `deriveSecurity` isn't reading
         // whatever stale cache the system last populated. The call is rate-
@@ -62,7 +71,10 @@ class LocalScanner(private val context: Context) {
         // fall back to whatever's in cache.
         val freshScan = requestFreshScanResults()
 
-        val wifi = captureWifi(freshScan)
+        // Survey mode deliberately skips the connected-AP capture. Outside it,
+        // the capture can still yield null on its own (the redacted API 31+
+        // fallback — see §4); either way the nearby capture below is decoupled.
+        val wifi = if (surveyOnly) null else captureWifi(freshScan)
         // Nearby capture is decoupled from the connected-AP capture: it only
         // needs the scan-result set and the (nullable) connected BSSID, so a
         // survey taken while disconnected — or with `WifiInfo` redacted, so
@@ -71,18 +83,29 @@ class LocalScanner(private val context: Context) {
         val nearbyNetworks = captureNearbyNetworks(freshScan, wifi?.bssid)
         val network = captureNetwork()
 
-        // Host discovery (mDNS + bounded TCP sweep) and the latency probe are
-        // independent, so run them concurrently. Both are best-effort and
-        // return empty/null on failure rather than aborting the scan.
-        val hostsDeferred = async { hostProbe.discover(network.ip) }
-        val latencyDeferred = async { latencyProbe.measure() }
-        val hosts = hostsDeferred.await()
-        val latencyMs = latencyDeferred.await()
+        // The LAN / internet probes only produce meaningful data against a
+        // joined network, so a survey skips them and stays a fast RF snapshot.
+        val hosts: List<LocalScanResult.Host>
+        val latencyMs: Long?
+        val speed: LocalScanResult.Speed?
+        if (surveyOnly) {
+            hosts = emptyList()
+            latencyMs = null
+            speed = null
+        } else {
+            // Host discovery (mDNS + bounded TCP sweep) and the latency probe
+            // are independent, so run them concurrently. Both are best-effort
+            // and return empty/null on failure rather than aborting the scan.
+            val hostsDeferred = async { hostProbe.discover(network.ip) }
+            val latencyDeferred = async { latencyProbe.measure() }
+            hosts = hostsDeferred.await()
+            latencyMs = latencyDeferred.await()
 
-        // Speed test runs last, after the latency probe has finished, so the
-        // bulk download can't inflate the latency figure (the CLI orders its
-        // stages the same way).
-        val speed = if (includeSpeedTest) speedProbe.measure() else null
+            // Speed test runs last, after the latency probe has finished, so the
+            // bulk download can't inflate the latency figure (the CLI orders its
+            // stages the same way).
+            speed = if (includeSpeedTest) speedProbe.measure() else null
+        }
 
         val base = LocalScanResult(
             meta = LocalScanResult.Meta(

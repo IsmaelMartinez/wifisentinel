@@ -17,6 +17,7 @@ class LocalAnalyserTest {
         vpnActive: Boolean = false,
         hosts: List<LocalScanResult.Host> = emptyList(),
         latencyMs: Long? = null,
+        nearbyNetworks: List<LocalScanResult.NearbyNetwork>? = null,
     ) = LocalScanResult(
         meta = LocalScanResult.Meta(
             scanId = "test",
@@ -32,6 +33,7 @@ class LocalAnalyserTest {
             signal = -50,
             txRate = 866,
         ),
+        nearbyNetworks = nearbyNetworks,
         network = LocalScanResult.Network(
             ip = "192.168.1.2",
             gatewayIp = "192.168.1.1",
@@ -41,6 +43,17 @@ class LocalAnalyserTest {
         hosts = hosts,
         latencyMs = latencyMs,
     )
+
+    private fun nearby(count: Int) = (1..count).map {
+        LocalScanResult.NearbyNetwork(
+            ssid = "AP$it",
+            bssid = "aa:bb:cc:dd:ee:0$it",
+            security = "WPA2",
+            channel = 36,
+            band = "5 GHz",
+            signal = -60,
+        )
+    }
 
     @Test
     fun openNetworkIsCritical() {
@@ -102,6 +115,27 @@ class LocalAnalyserTest {
         val base = result()
         val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
         assertTrue(analysis.findings.any { it.title.contains("unavailable", ignoreCase = true) })
+    }
+
+    @Test
+    fun nearbyOnlySurveyReportsSurveyNotFailure() {
+        // wifi null but the RF neighbourhood was captured: a deliberate survey,
+        // not a failed read — the finding must reflect that honestly.
+        val base = result(nearbyNetworks = nearby(3))
+        val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
+        assertEquals(Severity.INFO, analysis.overallRisk)
+        assertTrue(analysis.findings.any { it.title.contains("survey", ignoreCase = true) })
+        assertTrue(analysis.findings.none { it.title.contains("unavailable", ignoreCase = true) })
+    }
+
+    @Test
+    fun nearbyOnlySurveyRaisesNoInsecureLinkFindings() {
+        // A survey has no associated link, so no OPEN/WEP/VPN warnings should
+        // be fabricated from the absent connection.
+        val base = result(nearbyNetworks = nearby(2))
+        val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
+        assertTrue(analysis.findings.none { it.title.contains("VPN", ignoreCase = true) })
+        assertTrue(analysis.findings.none { it.title.contains("Open", ignoreCase = true) })
     }
 
     @Test

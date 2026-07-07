@@ -28,7 +28,7 @@ object LocalAnalyser {
 
     fun analyse(result: LocalScanResult): LocalScanResult.Analysis {
         val findings = buildList {
-            addAll(wifiFindings(result.wifi))
+            addAll(wifiFindings(result.wifi, result.nearbyNetworks))
             addAll(vpnFindings(result.wifi, result.network))
             addAll(hostFindings(result.hosts))
             latencyFinding(result.latencyMs)?.let { add(it) }
@@ -38,14 +38,34 @@ object LocalAnalyser {
         return LocalScanResult.Analysis(overallRisk = overall, findings = findings)
     }
 
-    private fun wifiFindings(wifi: LocalScanResult.Wifi?): List<Finding> {
-        if (wifi == null) return listOf(
-            Finding(
-                Severity.INFO,
-                "WiFi state unavailable",
-                "Could not read the current WiFi connection. Grant the scan permission and try again.",
-            ),
-        )
+    private fun wifiFindings(
+        wifi: LocalScanResult.Wifi?,
+        nearbyNetworks: List<LocalScanResult.NearbyNetwork>?,
+    ): List<Finding> {
+        if (wifi == null) {
+            // Distinguish a deliberate nearby-only survey (no AP joined, but the
+            // RF neighbourhood was captured) from a genuine failure to read the
+            // connection. Both leave `wifi` null, but the honest message — and
+            // the fix — differ: a survey is working as intended.
+            val surveyed = !nearbyNetworks.isNullOrEmpty()
+            return listOf(
+                if (surveyed) {
+                    Finding(
+                        Severity.INFO,
+                        "Nearby-only survey",
+                        "No network was joined for this scan, so only the RF neighbourhood " +
+                            "(${nearbyNetworks!!.size} nearby network(s)) was captured. Link " +
+                            "security, VPN posture, and LAN checks need an associated network.",
+                    )
+                } else {
+                    Finding(
+                        Severity.INFO,
+                        "WiFi state unavailable",
+                        "Could not read the current WiFi connection. Grant the scan permission and try again.",
+                    )
+                },
+            )
+        }
         return when (wifi.security.uppercase()) {
             "OPEN" -> listOf(
                 Finding(

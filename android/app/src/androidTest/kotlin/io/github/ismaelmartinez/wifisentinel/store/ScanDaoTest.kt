@@ -36,12 +36,19 @@ class ScanDaoTest {
         db.close()
     }
 
-    private fun entity(scanId: String, timestamp: String, json: String = """{"id":"$scanId"}""") =
+    private fun entity(
+        scanId: String,
+        timestamp: String,
+        json: String = """{"id":"$scanId"}""",
+        ssid: String? = "HomeNet",
+        nearbyCount: Int? = 3,
+    ) =
         ScanEntity(
             scanId = scanId,
             timestamp = timestamp,
-            ssid = "HomeNet",
+            ssid = ssid,
             overallRisk = "LOW",
+            nearbyCount = nearbyCount,
             json = json,
         )
 
@@ -55,9 +62,21 @@ class ScanDaoTest {
         assertEquals(listOf("newer", "older"), summaries.map { it.scanId })
         assertEquals("HomeNet", summaries.first().ssid)
         assertEquals("LOW", summaries.first().overallRisk)
+        assertEquals(3, summaries.first().nearbyCount)
 
         assertEquals("""{"id":"older"}""", dao.findJson("older"))
         assertNull(dao.findJson("missing"))
+    }
+
+    @Test
+    fun surveyRowRoundTripsNullSsidWithNearbyCount() = runBlocking {
+        // A nearby-only survey has no SSID but a captured RF count — both must
+        // survive the denormalised projection so history can render it.
+        dao.upsert(entity("survey", "2026-07-03T10:00:00Z", ssid = null, nearbyCount = 8))
+
+        val summary = dao.observeSummaries().first().single()
+        assertNull(summary.ssid)
+        assertEquals(8, summary.nearbyCount)
     }
 
     @Test

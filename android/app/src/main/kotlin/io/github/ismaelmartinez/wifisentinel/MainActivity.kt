@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
+import io.github.ismaelmartinez.wifisentinel.scan.ScanPresentation
 import io.github.ismaelmartinez.wifisentinel.scan.SpeedProbe
 import io.github.ismaelmartinez.wifisentinel.store.ScanStore
 import io.github.ismaelmartinez.wifisentinel.store.ScanSummary
@@ -97,6 +98,56 @@ private fun riskColour(risk: String?, scheme: ColorScheme): Color {
 /** Format an ISO-8601 instant as a local `yyyy-MM-dd HH:mm`, or echo it raw. */
 private fun formatTimestamp(iso: String): String =
     runCatching { timestampFormatter.format(Instant.parse(iso)) }.getOrDefault(iso)
+
+/**
+ * Resolve the display title for a scan from its (ssid, nearbyCount) — a
+ * connected SSID, a "nearby survey" label when there's no association but the
+ * RF neighbourhood was captured, or the unknown-network fallback. Keeps the
+ * survey copy out of the pure [ScanPresentation] helper (which stays testable).
+ */
+@Composable
+private fun scanTitleText(ssid: String?, nearbyCount: Int?): String =
+    when (val title = ScanPresentation.title(ssid, nearbyCount)) {
+        is ScanPresentation.Title.Named -> title.ssid
+        is ScanPresentation.Title.Survey ->
+            stringResource(R.string.history_survey_title, title.nearbyCount)
+        ScanPresentation.Title.Unnamed -> stringResource(R.string.history_unknown_ssid)
+    }
+
+/**
+ * The RF neighbourhood: an honest count (zero included) followed by a
+ * strongest-first list of the nearby APs. Rendered for every scan that
+ * collected the list, and the substantive content of a nearby-only survey.
+ */
+@Composable
+private fun NearbyNetworksSection(nearby: List<LocalScanResult.NearbyNetwork>) {
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(R.string.nearby_networks_count, nearby.size),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        nearby.forEach { network ->
+            Column {
+                Text(
+                    text = network.ssid ?: stringResource(R.string.nearby_hidden_ssid),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.nearby_network_detail,
+                        network.security,
+                        network.band,
+                        network.channel,
+                        network.signal,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun AnalysisSummary(analysis: LocalScanResult.Analysis) {
@@ -158,19 +209,34 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         }
     }
 
+    val scheme = MaterialTheme.colorScheme
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // A nearby-only survey (or a scan whose connected AP couldn't be read)
+        // has no associated-network card — say so plainly rather than leaving a
+        // blank where the SSID/security would be. The RF list below carries the
+        // useful content.
+        if (ScanPresentation.isNearbyOnly(result.wifi)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.no_associated_network),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = stringResource(R.string.survey_mode_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+
         result.analysis?.let { AnalysisSummary(it) }
 
-        // Honest count, zero included — the emulator (and a phone that was
-        // denied a fresh scan) may legitimately see no other networks. Hidden
-        // entirely for pre-upgrade stored scans, where the list is null
-        // ("not collected", not "none seen").
-        result.nearbyNetworks?.let { nearby ->
-            Text(
-                text = stringResource(R.string.nearby_networks_count, nearby.size),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
+        // Honest count + strongest-first list, zero included — the emulator (and
+        // a phone that was denied a fresh scan) may legitimately see no other
+        // networks. Hidden entirely for pre-upgrade stored scans, where the list
+        // is null ("not collected", not "none seen").
+        result.nearbyNetworks?.let { nearby -> NearbyNetworksSection(nearby) }
 
         result.speed?.let { speed ->
             Text(
@@ -276,8 +342,11 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
     var showRationale by remember { mutableStateOf(false) }
     // Off by default to spare mobile data — see docs/android-companion.md §3.
     var includeSpeedTest by remember { mutableStateOf(false) }
+    // Which mode the pending permission grant should launch, so the grant
+    // callback runs the scan the user actually tapped (full vs survey).
+    var pendingSurvey by remember { mutableStateOf(false) }
 
-    val runScan: () -> Unit = {
+    val runScan: (Boolean) -> Unit = { surveyOnly ->
         scope.launch {
             scanning = true
             // The finally guarantees the spinner clears and the buttons
@@ -285,7 +354,10 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
             try {
                 val scanned = scanner.scan(
                     appVersion = BuildConfig.VERSION_NAME,
-                    includeSpeedTest = includeSpeedTest,
+                    // A survey skips the speed test regardless of the toggle —
+                    // it's a pure RF snapshot (the scanner enforces this too).
+                    includeSpeedTest = includeSpeedTest && !surveyOnly,
+                    surveyOnly = surveyOnly,
                 )
                 result = scanned
                 // Persist every completed scan so it shows up in history.
@@ -301,7 +373,18 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         permission = if (granted) PermissionState.GRANTED else PermissionState.DENIED
-        if (granted) runScan()
+        if (granted) runScan(pendingSurvey)
+    }
+
+    // Route a scan request through the permission gate: run it straight away
+    // when granted, otherwise surface the rationale (first tap or after a
+    // denial) so the user knows why we're asking.
+    val requestScan: (Boolean) -> Unit = { surveyOnly ->
+        pendingSurvey = surveyOnly
+        when (permission) {
+            PermissionState.GRANTED -> runScan(surveyOnly)
+            PermissionState.UNKNOWN, PermissionState.DENIED -> showRationale = true
+        }
     }
 
     if (showRationale) {
@@ -348,18 +431,22 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
         ) {
             Button(
                 enabled = !scanning,
-                onClick = {
-                    when (permission) {
-                        PermissionState.GRANTED -> runScan()
-                        // Show rationale on first tap and after an explicit
-                        // denial so the user knows why we're asking again.
-                        PermissionState.UNKNOWN,
-                        PermissionState.DENIED -> showRationale = true
-                    }
-                },
+                onClick = { requestScan(false) },
             ) {
                 Text(stringResource(R.string.scan_now))
             }
+
+            OutlinedButton(
+                enabled = !scanning,
+                onClick = { requestScan(true) },
+            ) {
+                Text(stringResource(R.string.survey_now))
+            }
+            Text(
+                text = stringResource(R.string.survey_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -479,7 +566,7 @@ private fun HistoryRow(summary: ScanSummary, onClick: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = summary.ssid ?: stringResource(R.string.history_unknown_ssid),
+                text = scanTitleText(summary.ssid, summary.nearbyCount),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
@@ -512,7 +599,14 @@ private fun DetailScreen(store: ScanStore, scanId: String, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(result?.wifi?.ssid ?: stringResource(R.string.history_title)) },
+                title = {
+                    Text(
+                        // Survey-aware: a nearby-only scan shows its survey
+                        // label rather than falling through to "Scan history".
+                        result?.let { scanTitleText(it.wifi?.ssid, it.nearbyNetworks?.size) }
+                            ?: stringResource(R.string.history_title),
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
