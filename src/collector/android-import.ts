@@ -53,7 +53,9 @@ export const AndroidScanImport = z.object({
   // Nearby APs observed by the phone's WifiManager scan (deduped by BSSID and
   // capped on-device), decoupled from the connected-AP capture so a survey
   // taken while disconnected — or with `wifi` redacted/absent — still carries
-  // the RF neighbourhood. Null when the scan predates the field.
+  // the RF neighbourhood. Null means "not collected": either the scan
+  // permission was absent (the scanner returns null) or the export predates
+  // the field (a pre-upgrade Room record deserialises to the default null).
   nearbyNetworks: z.array(NearbyNetworkImport).nullable().optional(),
   network: z
     .object({
