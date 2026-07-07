@@ -2,7 +2,12 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { listScans, type IndexEntry } from "../store/index.js";
-import { partialTrendNote, sourceCell, splitBySource } from "../store/source.js";
+import {
+  isKnownSource,
+  partialTrendNote,
+  sourceCell,
+  splitBySource,
+} from "../store/source.js";
 import { pad } from "../reporter/render-helpers.js";
 
 function riskColor(risk: string): (s: string) => string {
@@ -93,8 +98,17 @@ export function registerTrendCommand(program: Command): void {
       // sentinel-filled data, so a mixed history would oscillate with the
       // source rather than the network. Compute over full scans when both are
       // present; an all-partial history is still self-consistent.
-      const { full, partial } = splitBySource(entries, (e) => e);
-      const scored = full.length > 0 ? full : entries;
+      //
+      // Pre-source index entries carry no provenance — assuming "full" for them
+      // would fold a phone import written before the source fields existed back
+      // into the maths. Gate them out once any sourced entries are present; if
+      // the whole history predates the fields, keep them (there is nothing
+      // better to summarise over, and it stays self-consistent).
+      const sourced = entries.filter((e) => isKnownSource(e));
+      const summarised = sourced.length > 0 ? sourced : entries;
+      const unsourcedExcluded = entries.length - summarised.length;
+      const { full, partial } = splitBySource(summarised, (e) => e);
+      const scored = full.length > 0 ? full : summarised;
       const scores = scored.map(e => e.securityScore);
       const avg = (scores.reduce((s, v) => s + v, 0) / scores.length).toFixed(1);
       const best = Math.max(...scores).toFixed(1);
@@ -105,5 +119,12 @@ export function registerTrendCommand(program: Command): void {
       console.log(`Avg: ${chalk.bold(avg)}  Best: ${chalk.green(best)}  Worst: ${chalk.red(worst)}  Trend: ${trend}`);
       const note = partialTrendNote(full.length, partial.length);
       if (note) console.log(chalk.dim(note));
+      if (unsourcedExcluded > 0) {
+        console.log(
+          chalk.dim(
+            `- ${unsourcedExcluded} unsourced scan${unsourcedExcluded === 1 ? "" : "s"} (pre-index-upgrade) excluded from the summary above`,
+          ),
+        );
+      }
     });
 }

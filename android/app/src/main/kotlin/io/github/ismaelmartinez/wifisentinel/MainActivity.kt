@@ -165,7 +165,7 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         // denied a fresh scan) may legitimately see no other networks. Hidden
         // entirely for pre-upgrade stored scans, where the list is null
         // ("not collected", not "none seen").
-        result.wifi?.nearbyNetworks?.let { nearby ->
+        result.nearbyNetworks?.let { nearby ->
             Text(
                 text = stringResource(R.string.nearby_networks_count, nearby.size),
                 style = MaterialTheme.typography.bodyMedium,

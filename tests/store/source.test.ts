@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isKnownSource,
   isPartialSource,
   partialTrendNote,
   sourceCell,
@@ -14,6 +15,21 @@ describe("isPartialSource", () => {
     assert.equal(isPartialSource({ platform: "darwin" }), false);
     // Pre-source index entries have neither field — treated as full scans.
     assert.equal(isPartialSource({}), false);
+  });
+});
+
+describe("isKnownSource", () => {
+  it("is true when the entry carries a platform", () => {
+    assert.equal(isKnownSource({ platform: "darwin" }), true);
+    assert.equal(isKnownSource({ platform: "android", partial: true }), true);
+    assert.equal(isKnownSource({ platform: "linux", partial: false }), true);
+  });
+
+  it("is false for pre-source index entries (no platform)", () => {
+    // These predate the source fields; their provenance is genuinely unknown,
+    // so trend summaries gate them out rather than assume "full".
+    assert.equal(isKnownSource({}), false);
+    assert.equal(isKnownSource({ partial: true }), false);
   });
 });
 

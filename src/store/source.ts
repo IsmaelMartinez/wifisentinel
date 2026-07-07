@@ -14,6 +14,20 @@ export function isPartialSource(source: ScanSource): boolean {
 }
 
 /**
+ * True when the scan carries source provenance — i.e. it was indexed after the
+ * `platform`/`partial` fields were added. Pre-source index entries have neither
+ * field, so their source is genuinely unknown: they could be full CLI scans or
+ * partial imports written before the fields existed. Trend summaries gate these
+ * out when any sourced entries are present, rather than assume "full" and risk
+ * folding a phone import's weaker radio back into the maths (that assumption is
+ * what {@link splitBySource} would otherwise make, since a missing `partial` is
+ * not `true`). `wifisentinel` backfills the fields when the index is rebuilt.
+ */
+export function isKnownSource(source: ScanSource): boolean {
+  return source.platform !== undefined;
+}
+
+/**
  * Compact source cell for the CLI trend tables: the bare platform, with a
  * trailing `*` marking a partial import (footnoted by {@link partialTrendNote}).
  * `-` when the scan predates the source fields in the index.
