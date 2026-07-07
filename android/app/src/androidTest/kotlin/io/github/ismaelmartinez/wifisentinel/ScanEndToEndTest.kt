@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
+import io.github.ismaelmartinez.wifisentinel.scan.ScanPresentation
 import io.github.ismaelmartinez.wifisentinel.store.ScanStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -92,7 +93,15 @@ class ScanEndToEndTest {
         // wait on Room's executor, so wait for the row rather than asserting
         // immediately after the click.
         composeRule.onNodeWithContentDescription(composeRule.str(R.string.view_history)).performClick()
-        val expectedTitle = summary.ssid ?: composeRule.str(R.string.history_unknown_ssid)
+        // Mirror the screen's title logic (survey-aware): on a WiFi-less
+        // emulator the scan may land as a nearby-only survey or an unknown
+        // network, so derive the expected row title the same way the UI does.
+        val expectedTitle = when (val title = ScanPresentation.title(summary.ssid, summary.nearbyCount)) {
+            is ScanPresentation.Title.Named -> title.ssid
+            is ScanPresentation.Title.Survey ->
+                composeRule.str(R.string.history_survey_title, title.nearbyCount)
+            ScanPresentation.Title.Unnamed -> composeRule.str(R.string.history_unknown_ssid)
+        }
         composeRule.waitUntil(timeoutMillis = SAVE_TIMEOUT_MS) {
             composeRule.onAllNodesWithText(expectedTitle).fetchSemanticsNodes().isNotEmpty()
         }

@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">WiFi Sentinel</string>
     <string name="scan_now">Scan now</string>
+    <string name="survey_now">Survey nearby</string>
+    <string name="survey_hint">A survey scans the RF neighbourhood without joining a network — useful when disconnected.</string>
     <string name="permission_rationale_title">Location permission needed</string>
     <string name="permission_rationale_body">
         Android requires the location permission to list nearby WiFi networks.
@@ -16,6 +18,10 @@
     <string name="speed_test_toggle">Include speed test (downloads ~%1$d MB)</string>
     <string name="speed_download_result">Download speed: %1$.1f Mbps</string>
     <string name="nearby_networks_count">Nearby networks: %1$d</string>
+    <string name="nearby_hidden_ssid">Hidden network</string>
+    <string name="nearby_network_detail">%1$s · %2$s · ch %3$d · %4$d dBm</string>
+    <string name="no_associated_network">No associated network</string>
+    <string name="survey_mode_note">Nearby-only survey — the RF neighbourhood, captured without joining a network.</string>
     <string name="overall_risk">Overall risk: %s</string>
     <string name="partial_analysis_note">Partial analysis — a phone can only see a subset of what the desktop scanner inspects.</string>
     <string name="view_history">Scan history</string>
@@ -23,6 +29,7 @@
     <string name="history_title">Scan history</string>
     <string name="history_empty">No saved scans yet. Run a scan to build history.</string>
     <string name="history_unknown_ssid">Unknown network</string>
+    <string name="history_survey_title">Nearby survey · %1$d networks</string>
     <string name="history_risk">Risk: %s</string>
     <string name="loading">Loading…</string>
     <string name="scan_not_found">This scan is no longer available.</string>

@@ -36,6 +36,9 @@ class ScanStore internal constructor(
                     timestamp = result.meta.timestamp,
                     ssid = result.wifi?.ssid,
                     overallRisk = result.analysis?.overallRisk?.name,
+                    // Denormalised so a nearby-only survey (ssid null) still
+                    // shows its RF density in history without loading the blob.
+                    nearbyCount = result.nearbyNetworks?.size,
                     json = json.encodeToString(result),
                 ),
             )
@@ -78,7 +81,7 @@ class ScanStore internal constructor(
                 context.applicationContext,
                 ScanDatabase::class.java,
                 DB_NAME,
-            ).build()
+            ).addMigrations(MIGRATION_1_2).build()
             return ScanStore(db.scanDao(), json)
         }
     }

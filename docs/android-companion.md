@@ -220,16 +220,25 @@ The skeleton under `android/` has grown past the first spike. It ships:
 - A single `MainActivity` hosting three Compose screens behind a tiny
   hand-rolled navigation state machine (no navigation-compose, no Hilt):
   - **Scan** — rationale dialog, "permission denied" state, rule-based
-    analysis summary, and a `CreateDocument` JSON export button.
+    analysis summary, a `CreateDocument` JSON export button, and two scan
+    affordances: **Scan now** (full pipeline) and **Survey nearby**, a
+    nearby-only RF survey that skips the connected-AP requirement (§10). A
+    survey — or any scan whose connected AP couldn't be read — renders a "no
+    associated network" note plus the RF list rather than a blank connected-AP
+    card, and still exports via the same `CreateDocument` flow.
   - **History** — a newest-first list of stored scans (SSID, timestamp,
-    overall risk), each row tappable.
+    overall risk), each row tappable. A nearby-only survey (no SSID) shows a
+    "Nearby survey · N networks" title from the denormalised `nearbyCount`
+    instead of a blank "unknown network".
   - **Detail** — re-views a stored scan and re-exports it via the same
-    `CreateDocument` flow.
+    `CreateDocument` flow; the app bar is survey-aware too.
 - On-device history via **Room** (`store/` package): a single `scans` table
   storing each completed `LocalScanResult` as a serialized
   `kotlinx.serialization` JSON blob keyed by `meta.scanId`, ordered by
-  `timestamp` descending, with denormalised `ssid`/`overallRisk` columns so
-  the list renders without deserialising every blob. `ScanStore` wraps the DAO,
+  `timestamp` descending, with denormalised `ssid`/`overallRisk`/`nearbyCount`
+  columns so the list renders without deserialising every blob. `nearbyCount`
+  (nullable, added in schema v2 via `MIGRATION_1_2`) lets a nearby-only survey
+  row show its RF density even though it has no SSID. `ScanStore` wraps the DAO,
   auto-persists every completed scan, and exposes the history as a reactive
   `Flow`. The table is excluded from auto-backup: `allowBackup=false` plus
   explicit `fullBackupContent`/`dataExtractionRules` that exclude
@@ -242,7 +251,10 @@ The skeleton under `android/` has grown past the first spike. It ships:
     `nearbyNetworks` list (deduped by BSSID, connected AP excluded, capped —
     `WifiMapping.mapNearbyNetworks`, JVM-tested), decoupled from the
     connected-AP capture so a disconnected/redacted scan still surveys the RF
-    environment.
+    environment. A `surveyOnly` flag on `LocalScanner.scan()` drives **survey
+    mode**: it skips the connected-AP capture (so `wifi` is null by
+    construction) and the LAN/internet probes, returning just the RF
+    neighbourhood.
   - **Network stage** — `DhcpInfo` / `LinkProperties` / VPN state.
   - **Host discovery** (`HostProbe`) — `NsdManager` mDNS sweep across the
     service-type list in §4, plus a bounded (32-way) TCP connect sweep of the
@@ -259,7 +271,11 @@ The skeleton under `android/` has grown past the first spike. It ships:
 - A `LocalScanResult` data class that matches the schema subset in §3, now
   including the on-device `Analysis` model.
 - JVM unit tests (`src/test/kotlin`, no emulator) covering the pure logic:
-  - `LocalAnalyserTest` — the rule-based analyser.
+  - `LocalAnalyserTest` — the rule-based analyser, including the nearby-only
+    survey path (an honest "survey" finding, no fabricated link warnings).
+  - `ScanPresentationTest` — the framework-free survey/title logic
+    (`ScanPresentation`) the Compose UI leans on: survey detection and the
+    connected-SSID / nearby-survey / unknown-network title descriptor.
   - `WifiMappingTest` — the WiFi/network mapping (`WifiMapping`) extracted from
     `LocalScanner`: SSID/BSSID normalisation and redaction, security derivation
     from `ScanResult.capabilities`, frequency→channel/band, and the
@@ -277,7 +293,8 @@ The skeleton under `android/` has grown past the first spike. It ships:
   - `MainActivitySmokeTest` — launches `MainActivity` via the Compose test
     rule's `ActivityScenario` and asserts the Scan screen renders.
   - `ScanDaoTest` — Room `ScanDao` insert/query/replace/clear against a real
-    on-device SQLite database.
+    on-device SQLite database, plus a nearby-only survey row (null SSID with a
+    `nearbyCount`) round-tripping through the denormalised projection.
   - `ScanEndToEndTest` — grants the scan permission, taps "Scan now", waits
     for the pipeline (`LocalScanner` → probes → `LocalAnalyser` →
     `ScanStore`) to finish, and asserts the result rendered and a row landed
@@ -319,16 +336,23 @@ same rules as the CLI's "WPA2 Personal"-style labels.
 5. **Rule subset for `LocalAnalyser`.** Which of the five personas' rules
    are honest to evaluate from phone-only data? Red-team and privacy lean
    feasible; network-engineer and compliance lean misleading.
-6. ~~**Disconnected-scan mode.**~~ Resolved — `nearbyNetworks` was lifted out
-   of `LocalScanResult.Wifi` to a top-level field (`WifiMapping.mapNearbyNetworks`
-   already took a nullable connected BSSID), so a scan taken while WiFi is
-   disconnected — or with `WifiInfo` redacted, so `wifi` is null — still
-   exports the RF neighbourhood whenever `getScanResults()` surfaced APs. The
-   CLI import accepts the top-level list (preferring it over the legacy
-   `wifi.nearbyNetworks` location, still read for back-compat) so a nearby-only
-   partial scan round-trips into `history`/`trend`/`rf`/`devices`. This is the
-   foundation for a future "survey mode" (walk around, collect the RF
-   environment without associating); the UI to drive it is not built yet.
+6. ~~**Disconnected-scan / survey mode.**~~ Resolved (data **and** UI).
+   `nearbyNetworks` was lifted out of `LocalScanResult.Wifi` to a top-level
+   field (`WifiMapping.mapNearbyNetworks` already took a nullable connected
+   BSSID), so a scan taken while WiFi is disconnected — or with `WifiInfo`
+   redacted, so `wifi` is null — still exports the RF neighbourhood whenever
+   `getScanResults()` surfaced APs. The CLI import accepts the top-level list
+   (preferring it over the legacy `wifi.nearbyNetworks` location, still read for
+   back-compat) so a nearby-only partial scan round-trips into
+   `history`/`trend`/`rf`/`devices`. **Survey mode** now drives this from the
+   app: a `surveyOnly` flag on `LocalScanner.scan()` (skips the connected-AP
+   capture and the LAN/internet probes), a **Survey nearby** button on the Scan
+   screen, and survey-aware rendering — a "no associated network" state with the
+   RF list in the result/detail views, a "Nearby survey · N networks" history
+   title (from the denormalised `nearbyCount`), and an honest survey finding in
+   `LocalAnalyser` instead of a "grant permission" failure. The pure decision
+   logic lives in `ScanPresentation` (JVM-tested); the JSON export works for a
+   survey unchanged.
 
 ## 11. Suggested next steps
 

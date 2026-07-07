@@ -30,6 +30,7 @@ class MainActivitySmokeTest {
     @Test
     fun scanScreenRenders() {
         composeRule.onNodeWithText(composeRule.str(R.string.scan_now)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.str(R.string.survey_now)).assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.str(R.string.scan_empty_state)).assertIsDisplayed()
         composeRule
             .onNodeWithText(composeRule.str(R.string.speed_test_toggle, SpeedProbe.DOWNLOAD_MEGABYTES))

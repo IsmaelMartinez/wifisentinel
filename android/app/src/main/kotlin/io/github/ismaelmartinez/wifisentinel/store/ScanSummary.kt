@@ -10,4 +10,5 @@ data class ScanSummary(
     val timestamp: String,
     val ssid: String?,
     val overallRisk: String?,
+    val nearbyCount: Int?,
 )

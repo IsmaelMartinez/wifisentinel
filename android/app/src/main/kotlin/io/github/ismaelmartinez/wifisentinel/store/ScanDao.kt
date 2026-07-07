@@ -13,7 +13,7 @@ interface ScanDao {
     suspend fun upsert(scan: ScanEntity)
 
     /** Newest-first stream of summaries; emits again whenever the table changes. */
-    @Query("SELECT scanId, timestamp, ssid, overallRisk FROM scans ORDER BY timestamp DESC")
+    @Query("SELECT scanId, timestamp, ssid, overallRisk, nearbyCount FROM scans ORDER BY timestamp DESC")
     fun observeSummaries(): Flow<List<ScanSummary>>
 
     /** The stored JSON blob for one scan, or null if the id is unknown. */
