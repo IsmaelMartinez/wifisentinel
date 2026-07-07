@@ -34,13 +34,18 @@ object ScanPresentation {
 
     /**
      * Title descriptor for a history row / detail bar. Prefers the connected
-     * SSID; failing that, a captured RF neighbourhood marks the scan as a
+     * SSID; failing that, a *collected* RF neighbourhood marks the scan as a
      * survey so it reads honestly. `ssid` and `nearbyCount` come straight off
      * the stored summary, so no full result needs deserialising.
+     *
+     * `nearbyCount` follows `LocalScanResult.nearbyNetworks`: null = not
+     * collected, a number (including 0) = collected. So a survey that saw no
+     * other APs (`nearbyCount == 0`) is still a [Survey], not [Unnamed] — only
+     * a nameless scan that collected nothing (null) falls through to [Unnamed].
      */
     fun title(ssid: String?, nearbyCount: Int?): Title = when {
         !ssid.isNullOrBlank() -> Title.Named(ssid)
-        (nearbyCount ?: 0) > 0 -> Title.Survey(nearbyCount!!)
+        nearbyCount != null -> Title.Survey(nearbyCount)
         else -> Title.Unnamed
     }
 }

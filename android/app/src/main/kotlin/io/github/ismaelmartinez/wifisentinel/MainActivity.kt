@@ -215,8 +215,10 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         // A nearby-only survey (or a scan whose connected AP couldn't be read)
         // has no associated-network card — say so plainly rather than leaving a
         // blank where the SSID/security would be. The RF list below carries the
-        // useful content.
-        if (ScanPresentation.isNearbyOnly(result.wifi)) {
+        // useful content. Gate on a *collected* RF list (non-null) so a total
+        // failure — no permission, so both wifi and nearbyNetworks are null —
+        // doesn't wear survey copy for a survey that never ran.
+        if (ScanPresentation.isNearbyOnly(result.wifi) && result.nearbyNetworks != null) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = stringResource(R.string.no_associated_network),

@@ -129,6 +129,18 @@ class LocalAnalyserTest {
     }
 
     @Test
+    fun emptyButCollectedSurveyReportsSurveyNotFailure() {
+        // A survey that ran with permission but saw no other APs (empty, non-null
+        // list) is a survey, not a failed read — it must not tell the user to
+        // grant a permission they already hold.
+        val base = result(nearbyNetworks = emptyList())
+        val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
+        assertEquals(Severity.INFO, analysis.overallRisk)
+        assertTrue(analysis.findings.any { it.title.contains("survey", ignoreCase = true) })
+        assertTrue(analysis.findings.none { it.title.contains("unavailable", ignoreCase = true) })
+    }
+
+    @Test
     fun nearbyOnlySurveyRaisesNoInsecureLinkFindings() {
         // A survey has no associated link, so no OPEN/WEP/VPN warnings should
         // be fabricated from the absent connection.

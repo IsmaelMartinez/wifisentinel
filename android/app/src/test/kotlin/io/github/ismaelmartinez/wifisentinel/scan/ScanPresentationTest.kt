@@ -38,20 +38,28 @@ class ScanPresentationTest {
     }
 
     @Test
-    fun titleFallsBackToSurveyWhenNoSsidButNearbySeen() {
+    fun titleFallsBackToSurveyWhenNoSsidButNearbyCollected() {
         assertEquals(ScanPresentation.Title.Survey(7), ScanPresentation.title(null, 7))
     }
 
     @Test
-    fun titleIsUnnamedWhenNoSsidAndNothingNearby() {
-        assertEquals(ScanPresentation.Title.Unnamed, ScanPresentation.title(null, 0))
+    fun emptyButCollectedSurveyIsStillASurvey() {
+        // nearbyCount 0 means "collected, none seen" (distinct from null = not
+        // collected), so a survey that saw no other APs stays a Survey — it
+        // must not fall through to the unknown-network title.
+        assertEquals(ScanPresentation.Title.Survey(0), ScanPresentation.title(null, 0))
+    }
+
+    @Test
+    fun titleIsUnnamedWhenNoSsidAndNothingCollected() {
+        // Only a nameless scan that collected no RF list (null) is unknown.
         assertEquals(ScanPresentation.Title.Unnamed, ScanPresentation.title(null, null))
     }
 
     @Test
     fun blankSsidIsTreatedAsNoName() {
         // A hidden AP surfaces as an empty/blank name — it must not win over a
-        // captured survey list, or the row renders a blank title.
+        // collected survey list, or the row renders a blank title.
         assertEquals(ScanPresentation.Title.Survey(3), ScanPresentation.title("", 3))
     }
 }

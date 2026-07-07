@@ -46,8 +46,11 @@ object LocalAnalyser {
             // Distinguish a deliberate nearby-only survey (no AP joined, but the
             // RF neighbourhood was captured) from a genuine failure to read the
             // connection. Both leave `wifi` null, but the honest message — and
-            // the fix — differ: a survey is working as intended.
-            val surveyed = !nearbyNetworks.isNullOrEmpty()
+            // the fix — differ: a survey is working as intended. "Captured" is a
+            // non-null list per `LocalScanResult.nearbyNetworks` (null = not
+            // collected); an empty-but-non-null list is still a survey that
+            // simply saw no other APs, so key off nullness, not emptiness.
+            val surveyed = nearbyNetworks != null
             return listOf(
                 if (surveyed) {
                     Finding(
