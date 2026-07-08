@@ -3,8 +3,8 @@
 > **Status:** investigation-stage spike. Not on the Play Store,
 > not feature-complete, not an official release target. A sideloadable APK
 > is attached to [GitHub releases](https://github.com/IsmaelMartinez/wifisentinel/releases)
-> — see [Install on your phone](#install-on-your-phone-no-laptop-needed). See
-> [`docs/android-companion.md`](../docs/android-companion.md) for the design.
+> — see [Install on your phone](#install-on-your-phone-no-laptop-needed).
+> [`docs/android-companion.md`](../docs/android-companion.md) has the design.
 
 This directory contains a minimal Kotlin + Jetpack Compose skeleton for an
 on-the-go WiFi analyser that runs entirely on the phone. It has no live
