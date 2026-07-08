@@ -267,12 +267,32 @@ The skeleton under `android/` has grown past the first spike. It ships:
     lives in `SpeedMapping` so it is JVM-unit-tested.
   - **Analyse stage** (`LocalAnalyser`, package `analyse`) — the honest subset
     of persona/standards rules (WiFi link security, VPN posture, cleartext LAN
-    services, latency), pure and JVM-unit-tested.
+    services, latency, and a 2.4 GHz channel-congestion nudge), pure and
+    JVM-unit-tested.
+- A `ChannelCongestion` helper (pure, framework-free, JVM-tested — same pattern
+  as `WifiMapping`/`HostMerge`/`ScanPresentation`) that reads the RF
+  neighbourhood a walk-around survey is actually for: it buckets
+  `nearbyNetworks` by band + 802.11 channel, counts occupancy per channel, and —
+  for the 2.4 GHz band, where 20 MHz channels overlap and 1/6/11 are the
+  non-overlapping set — picks the least-congested of those channels (ties
+  listed). The result/detail views render this below the nearby list for both a
+  survey and a normal scan: per-channel occupancy plus a "least congested: ch N"
+  line, hidden honestly when the list is null or empty. It also backs the
+  analyser's congested-channel finding. The summary is a *derived* view —
+  recomputed from `nearbyNetworks` on display and never stored or exported, so
+  the JSON export contract with the CLI import is unchanged.
 - A `LocalScanResult` data class that matches the schema subset in §3, now
   including the on-device `Analysis` model.
 - JVM unit tests (`src/test/kotlin`, no emulator) covering the pure logic:
   - `LocalAnalyserTest` — the rule-based analyser, including the nearby-only
-    survey path (an honest "survey" finding, no fabricated link warnings).
+    survey path (an honest "survey" finding, no fabricated link warnings) and
+    the 2.4 GHz congested-channel nudge (raised only for a connected 2.4 GHz AP
+    with a clearly-emptier non-overlapping channel; skipped in survey mode).
+  - `ChannelCongestionTest` — the pure bucketing and least-congested logic
+    (`ChannelCongestion`): per-(band, channel) occupancy and ordering, the
+    overlap-weighted 2.4 GHz pick across 1/6/11 (including ties and the
+    no-2.4-GHz-data case), and the connected-AP move suggestion (margin gate,
+    5 GHz skip, empty-list skip).
   - `ScanPresentationTest` — the framework-free survey/title logic
     (`ScanPresentation`) the Compose UI leans on: survey detection and the
     connected-SSID / nearby-survey / unknown-network title descriptor.
@@ -335,7 +355,18 @@ same rules as the CLI's "WPA2 Personal"-style labels.
    `wifisentinel import <path> [--source android]` (§6).
 5. **Rule subset for `LocalAnalyser`.** Which of the five personas' rules
    are honest to evaluate from phone-only data? Red-team and privacy lean
-   feasible; network-engineer and compliance lean misleading.
+   feasible; network-engineer and compliance lean misleading. The honest set
+   implemented so far: WiFi link security (open/WEP/WPA/WPA2/WPA3/OWE), VPN
+   posture on an insecure link, cleartext LAN services from the TCP sweep,
+   high internet latency, the nearby-only survey note, and — added with the
+   channel-congestion view — a 2.4 GHz congested-channel nudge (INFO) when the
+   connected AP shares a busy channel while a clearly-emptier non-overlapping
+   channel exists. That last one is a light network-engineer rule that stays
+   honest because it reads only phone-visible data (the connected channel and
+   the `getScanResults()` neighbourhood), is skipped in survey mode (no
+   associated AP to advise on) and off the 2.4 GHz band, and is framed as a
+   suggestion the router's own channel picker may already outrank. All findings
+   remain `partial = true`.
 6. ~~**Disconnected-scan / survey mode.**~~ Resolved (data **and** UI).
    `nearbyNetworks` was lifted out of `LocalScanResult.Wifi` to a top-level
    field (`WifiMapping.mapNearbyNetworks` already took a nullable connected

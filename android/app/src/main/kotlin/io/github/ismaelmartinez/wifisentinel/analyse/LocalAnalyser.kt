@@ -1,5 +1,6 @@
 package io.github.ismaelmartinez.wifisentinel.analyse
 
+import io.github.ismaelmartinez.wifisentinel.scan.ChannelCongestion
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult.Finding
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult.Severity
@@ -30,6 +31,7 @@ object LocalAnalyser {
         val findings = buildList {
             addAll(wifiFindings(result.wifi, result.nearbyNetworks))
             addAll(vpnFindings(result.wifi, result.network))
+            channelCongestionFinding(result.wifi, result.nearbyNetworks)?.let { add(it) }
             addAll(hostFindings(result.hosts))
             latencyFinding(result.latencyMs)?.let { add(it) }
         }.sortedBy { it.severity.ordinal }
@@ -139,6 +141,40 @@ object LocalAnalyser {
                 "No VPN on an insecure network",
                 "You are on a weakly-encrypted or open network with no active VPN. A VPN would protect your traffic from other users on this network.",
             ),
+        )
+    }
+
+    /**
+     * INFO-level nudge when the connected AP shares a congested 2.4 GHz channel
+     * with the RF neighbourhood while a clearly-emptier non-overlapping channel
+     * (1/6/11) exists. Honest and phone-visible: it reads only the connected
+     * channel and the nearby-network list `getScanResults()` already surfaced.
+     *
+     * Skipped in survey mode: with no associated AP (`wifi == null`) there is no
+     * channel to advise on, so no finding is fabricated. The
+     * [ChannelCongestion.suggestLessCongestedChannel] helper also gates on the
+     * 2.4 GHz band (5/6 GHz have ample non-overlapping channels, so overlap
+     * congestion doesn't bite there) and on a real occupancy gap.
+     */
+    private fun channelCongestionFinding(
+        wifi: LocalScanResult.Wifi?,
+        nearbyNetworks: List<LocalScanResult.NearbyNetwork>?,
+    ): Finding? {
+        if (wifi == null || nearbyNetworks.isNullOrEmpty()) return null
+        val suggestion = ChannelCongestion.suggestLessCongestedChannel(
+            connectedChannel = wifi.channel,
+            connectedBand = wifi.band,
+            nearby = nearbyNetworks,
+        ) ?: return null
+        return Finding(
+            Severity.INFO,
+            "Congested 2.4 GHz channel",
+            "This network's channel (${suggestion.connectedChannel}) overlaps " +
+                "${suggestion.connectedOccupancy} nearby network(s), while channel " +
+                "${suggestion.suggestedChannel} overlaps only ${suggestion.suggestedOccupancy}. " +
+                "Retuning the router to channel ${suggestion.suggestedChannel} may reduce " +
+                "interference — a suggestion only; the router's own channel picker may already " +
+                "account for factors a phone can't see.",
         )
     }
 
