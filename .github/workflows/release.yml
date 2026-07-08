@@ -1,0 +1,72 @@
+name: Release
+
+# Attaches the Android companion APK to GitHub releases so it can be
+# downloaded and sideloaded directly on a phone — no laptop required.
+# Release assets (unlike Actions artifacts) are direct, un-zipped downloads
+# that don't require a GitHub login.
+#
+# The app has no release signing key (it's a prototype — see
+# android/README.md), so this ships the debug-signed build, which Android
+# happily sideloads. The asset name says so explicitly.
+
+on:
+  release:
+    types: [published]
+  # Manual backfill for releases published before this workflow existed
+  # (e.g. v1.0.0): pass the existing release's tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach the APK to (e.g. v1.0.0)"
+        required: true
+        type: string
+
+env:
+  # Keep in sync with compileSdk in android/app/build.gradle.kts and
+  # ANDROID_API_LEVEL in ci.yml.
+  ANDROID_API_LEVEL: "35"
+
+permissions:
+  contents: write # upload release assets
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Build the code the release points at, not the default branch —
+          # matters for workflow_dispatch backfills of older tags.
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Job-scoped Gradle caching — see the note on the android job in ci.yml.
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platforms;android-${{ env.ANDROID_API_LEVEL }} build-tools;35.0.0 platform-tools
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Attach APK to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          # Tags can legally contain "/" — sanitize the filename, upload to
+          # the real tag.
+          apk="wifisentinel-${TAG//\//-}-android-debug.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$apk"
+          gh release upload "$TAG" "$apk" --clobber --repo "$GITHUB_REPOSITORY"
