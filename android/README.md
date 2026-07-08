@@ -1,9 +1,10 @@
 # WiFi Sentinel — Android companion (prototype)
 
 > **Status:** investigation-stage spike. Not on the Play Store,
-> not feature-complete, not an official release target. A sideloadable APK
-> is attached to [GitHub releases](https://github.com/IsmaelMartinez/wifisentinel/releases)
-> — see [Install on your phone](#install-on-your-phone-no-laptop-needed).
+> not feature-complete, not an official release target. New
+> [GitHub releases](https://github.com/IsmaelMartinez/wifisentinel/releases)
+> get a sideloadable APK attached — see
+> [Install on your phone](#install-on-your-phone-no-laptop-needed).
 > [`docs/android-companion.md`](../docs/android-companion.md) has the design.
 
 This directory contains a minimal Kotlin + Jetpack Compose skeleton for an
@@ -61,11 +62,12 @@ android/
 
 ## Install on your phone (no laptop needed)
 
-Every [GitHub release](https://github.com/IsmaelMartinez/wifisentinel/releases)
-carries a `wifisentinel-<tag>-android-debug.apk` asset (attached by
-`.github/workflows/release.yml`). Release assets are direct downloads — no
-GitHub login, no zip wrapper — so the whole flow works from the phone's
-browser:
+When a [GitHub release](https://github.com/IsmaelMartinez/wifisentinel/releases)
+is published, `.github/workflows/release.yml` attaches a
+`wifisentinel-<tag>-android-debug.apk` asset to it (releases that predate
+the workflow won't have one until it's backfilled via the workflow's
+manual dispatch). Release assets are direct downloads — no GitHub login,
+no zip wrapper — so the whole flow works from the phone's browser:
 
 1. Open the [releases page](https://github.com/IsmaelMartinez/wifisentinel/releases)
    on the phone and download the `.apk` asset from the latest release.
@@ -77,8 +79,9 @@ browser:
 The APK is **debug-signed** (the prototype has no release signing key yet),
 which is fine for sideloading. One consequence: when a release rotates to a
 build signed with a different debug key, Android will refuse to install it
-over the old one — uninstall the old app first. Exported scan JSON files
-live outside app storage, so they survive; on-device scan history does not.
+over the old one — uninstall the old app first. Uninstalling wipes the
+on-device scan history; JSON exports are unaffected, since they're saved
+wherever you chose in the document picker, not in the app's storage.
 
 If you'd rather not sideload from releases, the CI workflow also uploads an
 `app-debug-apk` artifact on every CI run — pushes to `main` and pull
