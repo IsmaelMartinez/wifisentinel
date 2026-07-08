@@ -65,6 +65,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          apk="wifisentinel-${TAG}-android-debug.apk"
+          # Tags can legally contain "/" — sanitize the filename, upload to
+          # the real tag.
+          apk="wifisentinel-${TAG//\//-}-android-debug.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$apk"
           gh release upload "$TAG" "$apk" --clobber --repo "$GITHUB_REPOSITORY"

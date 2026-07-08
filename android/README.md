@@ -81,8 +81,9 @@ over the old one — uninstall the old app first. Exported scan JSON files
 live outside app storage, so they survive; on-device scan history does not.
 
 If you'd rather not sideload from releases, the CI workflow also uploads an
-`app-debug-apk` artifact on every push to `main` (login required, arrives
-zipped, expires after 90 days) — or build it yourself, below.
+`app-debug-apk` artifact on every CI run — pushes to `main` and pull
+requests alike (login required, arrives zipped, expires after 90 days) — or
+build it yourself, below.
 
 ## Getting scans into the CLI
 
