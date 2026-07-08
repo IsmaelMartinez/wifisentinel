@@ -182,11 +182,13 @@ private fun ChannelCongestionSection(nearby: List<LocalScanResult.NearbyNetwork>
             )
         }
         if (summary.leastCongested2_4.isNotEmpty()) {
+            // Prefix each channel with its own "ch" so a tie reads naturally
+            // ("ch 1, ch 11") rather than "ch 1, 11". The token lives in
+            // strings.xml; resolve it once and format per channel.
+            val channelRef = stringResource(R.string.congestion_channel_ref)
+            val channels = summary.leastCongested2_4.joinToString(", ") { channelRef.format(it) }
             Text(
-                text = stringResource(
-                    R.string.congestion_least,
-                    summary.leastCongested2_4.joinToString(", "),
-                ),
+                text = stringResource(R.string.congestion_least, channels),
                 style = MaterialTheme.typography.bodySmall,
             )
         }

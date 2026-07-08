@@ -22,7 +22,8 @@
     <string name="nearby_network_detail">%1$s · %2$s · ch %3$d · %4$d dBm</string>
     <string name="congestion_title">Channel congestion</string>
     <string name="congestion_channel_row">%1$s · ch %2$d — %3$d network(s)</string>
-    <string name="congestion_least">Least congested (2.4 GHz): ch %1$s</string>
+    <string name="congestion_least">Least congested (2.4 GHz): %1$s</string>
+    <string name="congestion_channel_ref">ch %1$d</string>
     <string name="no_associated_network">No associated network</string>
     <string name="survey_mode_note">Nearby-only survey — the RF neighbourhood, captured without joining a network.</string>
     <string name="overall_risk">Overall risk: %s</string>
