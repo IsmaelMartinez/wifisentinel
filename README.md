@@ -55,6 +55,16 @@ Or run directly via `tsx` without building:
 npm run dev -- <command>
 ```
 
+### Android companion (prototype)
+
+An experimental on-the-go scanner for Android phones lives in
+[`android/`](android/README.md). A sideloadable APK is attached to each
+[GitHub release](https://github.com/IsmaelMartinez/wifisentinel/releases),
+so it can be installed straight from the phone's browser — no laptop
+needed. Scans exported from the phone feed back into the CLI via
+`wifisentinel import`; see [`android/README.md`](android/README.md) for
+details and caveats.
+
 ## Quick Start
 
 ```bash

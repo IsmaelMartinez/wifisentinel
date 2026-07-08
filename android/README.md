@@ -1,7 +1,9 @@
 # WiFi Sentinel — Android companion (prototype)
 
-> **Status:** investigation-stage spike. Not installable from the Play Store,
-> not feature-complete, not an official release target. See
+> **Status:** investigation-stage spike. Not on the Play Store,
+> not feature-complete, not an official release target. A sideloadable APK
+> is attached to [GitHub releases](https://github.com/IsmaelMartinez/wifisentinel/releases)
+> — see [Install on your phone](#install-on-your-phone-no-laptop-needed). See
 > [`docs/android-companion.md`](../docs/android-companion.md) for the design.
 
 This directory contains a minimal Kotlin + Jetpack Compose skeleton for an
@@ -56,6 +58,31 @@ android/
 - On-device scan history via Room — every completed scan is auto-saved and
   listed newest-first; tap a row to re-view and re-export it.
 - JSON export via `ActivityResultContracts.CreateDocument`.
+
+## Install on your phone (no laptop needed)
+
+Every [GitHub release](https://github.com/IsmaelMartinez/wifisentinel/releases)
+carries a `wifisentinel-<tag>-android-debug.apk` asset (attached by
+`.github/workflows/release.yml`). Release assets are direct downloads — no
+GitHub login, no zip wrapper — so the whole flow works from the phone's
+browser:
+
+1. Open the [releases page](https://github.com/IsmaelMartinez/wifisentinel/releases)
+   on the phone and download the `.apk` asset from the latest release.
+2. Open the downloaded file. Android will ask you to allow installs from
+   your browser ("install unknown apps") the first time — this is normal
+   for any app outside the Play Store.
+3. Done. Minimum Android version is 10 (API 29).
+
+The APK is **debug-signed** (the prototype has no release signing key yet),
+which is fine for sideloading. One consequence: when a release rotates to a
+build signed with a different debug key, Android will refuse to install it
+over the old one — uninstall the old app first. Exported scan JSON files
+live outside app storage, so they survive; on-device scan history does not.
+
+If you'd rather not sideload from releases, the CI workflow also uploads an
+`app-debug-apk` artifact on every push to `main` (login required, arrives
+zipped, expires after 90 days) — or build it yourself, below.
 
 ## Getting scans into the CLI
 
