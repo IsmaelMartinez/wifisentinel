@@ -38,9 +38,12 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          # Build the code the release points at, not the default branch —
-          # matters for workflow_dispatch backfills of older tags.
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          # On release publish, build the code the release points at. On
+          # manual backfill, build the dispatching branch (github.ref)
+          # instead — the target tag may predate the Android app entirely
+          # (v1.0.0 has no android/ directory), and the companion app is
+          # versioned independently of CLI releases anyway.
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
