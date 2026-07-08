@@ -27,6 +27,13 @@ internal object WifiMapping {
         raw?.lowercase()?.takeIf { it.isNotEmpty() && it != REDACTED_BSSID }
 
     /**
+     * WPA1 in any spelling — "WPA" not immediately followed by a 2 or 3
+     * ("[WPA-PSK-TKIP]", "[WPA]") — the same rule as the CLI's
+     * `securityFamily` regex, so mixed-mode detection agrees across sources.
+     */
+    private val WPA1_TOKEN = Regex("WPA(?![23])")
+
+    /**
      * Map a `ScanResult.capabilities` string to a coarse security label.
      * Modern supplicants often format WPA3/OWE networks with an RSN prefix
      * and no "WPA" text at all ("[RSN-SAE-CCMP][ESS]"), so key-management
@@ -34,15 +41,28 @@ internal object WifiMapping {
      * otherwise a WPA3 network reads as an open one and every downstream
      * consumer (LocalAnalyser, the CLI import's rogue-AP/persona rules)
      * raises critical unencrypted-network findings against it.
+     *
+     * Mixed/transition modes keep their own labels ("WPA/WPA2",
+     * "WPA2/WPA3") rather than collapsing to the newer protocol: the older
+     * handshake stays negotiable, which is precisely what the CLI's
+     * taxonomy ranks them below the pure newer protocol for — and what a
+     * mixed-mode evil twin of a pure-WPA2 network exploits. Collapsing to
+     * "WPA2"/"WPA3" here would make that downgrade invisible to
+     * [SsidAnomalies] and to the CLI import alike. The labels parse into
+     * the matching CLI families via `securityFamily`.
      */
     fun securityFromCapabilities(capabilities: String?): String {
         val caps = capabilities ?: return "unknown"
+        val hasWpa1 = WPA1_TOKEN.containsMatchIn(caps)
         return when {
-            "WPA3" in caps || "SAE" in caps -> "WPA3"
+            "WPA3" in caps || "SAE" in caps ->
+                // Transition mode still admits a PSK (WPA2) handshake —
+                // "[WPA2-PSK][RSN-SAE+PSK-CCMP]"-style capabilities.
+                if ("PSK" in caps || hasWpa1) "WPA2/WPA3" else "WPA3"
             // Before RSN: OWE capabilities read "[RSN-OWE-CCMP]".
             "OWE" in caps -> "Enhanced Open"
-            "WPA2" in caps || "RSN" in caps -> "WPA2"
-            "WPA" in caps -> "WPA"
+            "WPA2" in caps || "RSN" in caps -> if (hasWpa1) "WPA/WPA2" else "WPA2"
+            hasWpa1 -> "WPA"
             "WEP" in caps -> "WEP"
             "ESS" in caps -> "Open"
             else -> "unknown"

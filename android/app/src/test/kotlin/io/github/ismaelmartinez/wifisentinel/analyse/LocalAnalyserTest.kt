@@ -75,6 +75,22 @@ class LocalAnalyserTest {
     }
 
     @Test
+    fun mixedWpaWpa2IsLow() {
+        // Mixed mode is downgraded-but-encrypted — a LOW nudge, not the HIGH
+        // raised for WPA-only (mirrors the CLI's isWeakSecurity exclusion).
+        val analysis = LocalAnalyser.analyse(result(security = "WPA/WPA2"))
+        assertEquals(Severity.LOW, analysis.overallRisk)
+        assertTrue(analysis.findings.any { it.title.contains("Mixed WPA/WPA2") })
+    }
+
+    @Test
+    fun wpa3TransitionModeIsInfo() {
+        val analysis = LocalAnalyser.analyse(result(security = "WPA2/WPA3"))
+        assertEquals(Severity.INFO, analysis.overallRisk)
+        assertTrue(analysis.findings.any { it.title.contains("transition", ignoreCase = true) })
+    }
+
+    @Test
     fun wpa3WithVpnIsInfoOnly() {
         val analysis = LocalAnalyser.analyse(result(security = "WPA3", vpnActive = true))
         assertEquals(Severity.INFO, analysis.overallRisk)
@@ -207,6 +223,94 @@ class LocalAnalyserTest {
         val base = result(channel = 6, band = "2.4 GHz", nearbyNetworks = nearby2_4(6, 5))
         val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
         assertTrue(analysis.findings.none { it.title.contains("Congested", ignoreCase = true) })
+    }
+
+    /** A nearby AP advertising the connected SSID ("Net") — a potential twin. */
+    private fun twin(
+        security: String,
+        suffix: Int = 1,
+        channel: Int = 6,
+        band: String = "2.4 GHz",
+    ) = LocalScanResult.NearbyNetwork(
+        ssid = "Net",
+        bssid = "11:22:33:44:55:0$suffix",
+        security = security,
+        channel = channel,
+        band = band,
+        signal = -55,
+    )
+
+    @Test
+    fun weakerTwinOfConnectedSsidRaisesMediumFinding() {
+        // The connected WPA2 SSID also advertised nearby as Open — the classic
+        // evil-twin shape, flagged at MEDIUM with the suspect BSSID named.
+        val analysis = LocalAnalyser.analyse(
+            result(security = "WPA2", nearbyNetworks = listOf(twin("Open"))),
+        )
+        val finding = analysis.findings.single { it.title.contains("twin", ignoreCase = true) }
+        assertEquals(Severity.MEDIUM, finding.severity)
+        assertTrue(finding.detail.contains("11:22:33:44:55:01"))
+        assertTrue(finding.detail.contains("Open"))
+        assertEquals(Severity.MEDIUM, analysis.overallRisk)
+    }
+
+    @Test
+    fun strongerTwinOfConnectedSsidRaisesMediumFinding() {
+        // The already-compromised vantage point: the phone joined the open
+        // "Net" while a WPA2 "Net" is broadcasting nearby — the mismatch must
+        // surface even though the nearby side is the stronger one.
+        val analysis = LocalAnalyser.analyse(
+            result(security = "Open", nearbyNetworks = listOf(twin("WPA2"))),
+        )
+        val finding = analysis.findings.single { it.title.contains("weakest", ignoreCase = true) }
+        assertEquals(Severity.MEDIUM, finding.severity)
+        assertTrue(finding.detail.contains("11:22:33:44:55:01"))
+        assertTrue(finding.detail.contains("WPA2"))
+    }
+
+    @Test
+    fun sameSecurityRoamingPartnersRaiseNoTwinFinding() {
+        // Multi-BSSID alone is normal (mesh/roaming) — only a security
+        // mismatch is the signal, so same-security partners raise nothing.
+        val analysis = LocalAnalyser.analyse(
+            result(security = "WPA2", nearbyNetworks = listOf(twin("WPA2"), twin("WPA2", 2))),
+        )
+        assertTrue(analysis.findings.none { it.title.contains("twin", ignoreCase = true) })
+        assertTrue(analysis.findings.none { it.title.contains("weakest", ignoreCase = true) })
+    }
+
+    @Test
+    fun surveyModeRaisesNoTwinFinding() {
+        // No associated AP (survey mode): there is no joined link to be a twin
+        // of, so no finding is fabricated even with a weaker duplicate nearby.
+        val base = result(security = "WPA2", nearbyNetworks = listOf(twin("Open")))
+        val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
+        assertTrue(analysis.findings.none { it.title.contains("twin", ignoreCase = true) })
+        assertTrue(analysis.findings.none { it.title.contains("weakest", ignoreCase = true) })
+    }
+
+    @Test
+    fun unknownChannelSentinelIsOmittedFromTwinDetail() {
+        // A twin whose frequency couldn't be mapped carries the channel-0 /
+        // unknown-band sentinels — the finding copy must not render "ch 0".
+        val analysis = LocalAnalyser.analyse(
+            result(
+                security = "WPA2",
+                nearbyNetworks = listOf(twin("Open", channel = 0, band = "unknown")),
+            ),
+        )
+        val finding = analysis.findings.single { it.title.contains("twin", ignoreCase = true) }
+        assertTrue(finding.detail.contains("11:22:33:44:55:01"))
+        assertTrue(!finding.detail.contains("ch 0"))
+    }
+
+    @Test
+    fun unknownTwinSecurityRaisesNoTwinFinding() {
+        // An unknown label is not comparable — never claimed as a downgrade.
+        val analysis = LocalAnalyser.analyse(
+            result(security = "WPA2", nearbyNetworks = listOf(twin("unknown"))),
+        )
+        assertTrue(analysis.findings.none { it.title.contains("twin", ignoreCase = true) })
     }
 
     @Test

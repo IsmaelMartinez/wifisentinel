@@ -36,6 +36,9 @@ export type SecurityFamily =
 /** Authentication mode when the label carries one. */
 export type SecurityMode = "Personal" | "Enterprise";
 
+// Mirrored (same rungs, same order) by the Android companion's on-device
+// strength ladder in android/.../scan/SsidAnomalies.kt — keep the two in
+// sync when changing rungs or ordering.
 const FAMILY_STRENGTH: Record<Exclude<SecurityFamily, "unknown">, number> = {
   open: 0,
   wep: 1,

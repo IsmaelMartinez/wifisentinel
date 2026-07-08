@@ -66,6 +66,7 @@ import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
 import io.github.ismaelmartinez.wifisentinel.scan.ScanPresentation
 import io.github.ismaelmartinez.wifisentinel.scan.SpeedProbe
+import io.github.ismaelmartinez.wifisentinel.scan.SsidAnomalies
 import io.github.ismaelmartinez.wifisentinel.store.ScanStore
 import io.github.ismaelmartinez.wifisentinel.store.ScanSummary
 import io.github.ismaelmartinez.wifisentinel.ui.theme.WifiSentinelTheme
@@ -200,6 +201,58 @@ private fun ChannelCongestionSection(nearby: List<LocalScanResult.NearbyNetwork>
     }
 }
 
+/**
+ * SSIDs advertised by more than one BSSID: name, AP count, and — the
+ * actual signal — a "mixed security" marker listing the labels when the same
+ * SSID is seen with mismatched security. Multi-BSSID alone is normal
+ * (mesh/roaming), so plain rows carry no warning styling; the whole derived
+ * view comes from [SsidAnomalies.duplicates], a pure helper, so nothing here
+ * is stored or exported (it recomputes from the nearby list on both a survey
+ * and a normal scan — the connected AP, absent from the nearby list by
+ * construction, is handed to the helper so the joined SSID's own duplicates
+ * count honestly). Renders nothing when no SSID is multi-homed, so the
+ * section hides honestly.
+ */
+@Composable
+private fun DuplicateSsidSection(
+    nearby: List<LocalScanResult.NearbyNetwork>,
+    connected: LocalScanResult.Wifi?,
+) {
+    val duplicates = remember(nearby, connected) { SsidAnomalies.duplicates(nearby, connected) }
+    if (duplicates.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(R.string.duplicate_ssid_title),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        duplicates.forEach { duplicate ->
+            Column {
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.duplicate_ssid_row,
+                        duplicate.bssidCount,
+                        duplicate.ssid,
+                        duplicate.bssidCount,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+                if (duplicate.mixedSecurity) {
+                    Text(
+                        text = stringResource(
+                            R.string.duplicate_ssid_mixed,
+                            duplicate.securities.joinToString(", "),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.tertiary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AnalysisSummary(analysis: LocalScanResult.Analysis) {
     val scheme = MaterialTheme.colorScheme
@@ -290,10 +343,12 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         // networks. Hidden entirely for pre-upgrade stored scans, where the list
         // is null ("not collected", not "none seen"). The channel-congestion
         // summary sits below the list (both a survey and a normal scan get it)
-        // and hides itself when there's nothing to bucket.
+        // and hides itself when there's nothing to bucket, as does the
+        // duplicate-SSID view below it when no SSID is multi-homed.
         result.nearbyNetworks?.let { nearby ->
             NearbyNetworksSection(nearby)
             ChannelCongestionSection(nearby)
+            DuplicateSsidSection(nearby, result.wifi)
         }
 
         result.speed?.let { speed ->
