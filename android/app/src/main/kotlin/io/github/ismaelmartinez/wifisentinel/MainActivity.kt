@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -171,8 +172,9 @@ private fun ChannelCongestionSection(nearby: List<LocalScanResult.NearbyNetwork>
         )
         summary.occupancy.forEach { bucket ->
             Text(
-                text = stringResource(
-                    R.string.congestion_channel_row,
+                text = pluralStringResource(
+                    R.plurals.congestion_channel_row,
+                    bucket.count,
                     bucket.band,
                     bucket.channel,
                     bucket.count,

@@ -170,13 +170,17 @@ object LocalAnalyser {
             Severity.INFO,
             "Congested 2.4 GHz channel",
             "This network's channel (${suggestion.connectedChannel}) overlaps " +
-                "${suggestion.connectedOccupancy} nearby network(s), while channel " +
+                "${networks(suggestion.connectedOccupancy)}, while channel " +
                 "${suggestion.suggestedChannel} overlaps only ${suggestion.suggestedOccupancy}. " +
                 "Retuning the router to channel ${suggestion.suggestedChannel} may reduce " +
                 "interference — a suggestion only; the router's own channel picker may already " +
                 "account for factors a phone can't see.",
         )
     }
+
+    /** "1 nearby network" / "N nearby networks" — honest singular/plural. */
+    private fun networks(count: Int): String =
+        if (count == 1) "1 nearby network" else "$count nearby networks"
 
     private fun hostFindings(hosts: List<LocalScanResult.Host>): List<Finding> {
         val plaintext = hosts.flatMap { host ->
