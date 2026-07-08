@@ -49,7 +49,8 @@ object ChannelCongestion {
      *   no 2.4 GHz networks were seen (so the UI can hide the recommendation
      *   honestly rather than claim "ch 1" from no data).
      * - [overlapCounts2_4] — overlap-weighted occupancy for each of 1/6/11,
-     *   the basis for [leastCongested2_4] and the analyser's move suggestion.
+     *   the basis for [leastCongested2_4]. The analyser's move suggestion
+     *   ([suggestLessCongestedChannel]) applies the same overlap model.
      */
     data class Summary(
         val occupancy: List<ChannelOccupancy>,
@@ -75,14 +76,8 @@ object ChannelCongestion {
                 compareBy({ bandRank(it.band) }, { it.band }, { it.channel }),
             )
 
-        val channels2_4 = nearby.filter { it.band == BAND_2_4 }.map { it.channel }
-        val overlapCounts = if (channels2_4.isEmpty()) {
-            emptyMap()
-        } else {
-            NON_OVERLAPPING_2_4.associateWith { candidate ->
-                channels2_4.count { kotlin.math.abs(it - candidate) <= OVERLAP_RADIUS }
-            }
-        }
+        val channels2_4 = overlappable2_4Channels(nearby)
+        val overlapCounts = if (channels2_4.isEmpty()) emptyMap() else overlapCounts(channels2_4)
         val leastCongested = overlapCounts.minOfOrNull { it.value }?.let { min ->
             NON_OVERLAPPING_2_4.filter { overlapCounts[it] == min }
         } ?: emptyList()
@@ -106,14 +101,12 @@ object ChannelCongestion {
         nearby: List<LocalScanResult.NearbyNetwork>,
         margin: Int = DEFAULT_MARGIN,
     ): Suggestion? {
-        if (connectedBand != BAND_2_4) return null
-        val channels2_4 = nearby.filter { it.band == BAND_2_4 }.map { it.channel }
+        if (connectedBand != BAND_2_4 || connectedChannel <= 0) return null
+        val channels2_4 = overlappable2_4Channels(nearby)
         if (channels2_4.isEmpty()) return null
 
         val connectedOccupancy = channels2_4.count { kotlin.math.abs(it - connectedChannel) <= OVERLAP_RADIUS }
-        val overlapCounts = NON_OVERLAPPING_2_4.associateWith { candidate ->
-            channels2_4.count { kotlin.math.abs(it - candidate) <= OVERLAP_RADIUS }
-        }
+        val overlapCounts = overlapCounts(channels2_4)
         val best = overlapCounts.minByOrNull { it.value } ?: return null
         // Congested where it is, and a non-overlapping channel is clearly emptier.
         if (connectedOccupancy < margin) return null
@@ -139,4 +132,21 @@ object ChannelCongestion {
 
     private fun bandRank(band: String): Int =
         bandOrder.indexOf(band).let { if (it < 0) bandOrder.size else it }
+
+    /**
+     * The 2.4 GHz channels that can overlap a candidate — real channels only.
+     * Channel 0 is the [WifiMapping.frequencyToChannel] "unknown frequency"
+     * sentinel; a 2.4 GHz frequency outside the standard channel ranges maps to
+     * it, but it has no defined centre so it can't sensibly overlap 1/6/11 and
+     * would otherwise skew the pick toward the higher channels. It still counts
+     * toward [Summary.occupancy] (grouped separately), just not the overlap maths.
+     */
+    private fun overlappable2_4Channels(nearby: List<LocalScanResult.NearbyNetwork>): List<Int> =
+        nearby.filter { it.band == BAND_2_4 && it.channel > 0 }.map { it.channel }
+
+    /** Overlap-weighted occupancy of each non-overlapping channel over [channels2_4]. */
+    private fun overlapCounts(channels2_4: List<Int>): Map<Int, Int> =
+        NON_OVERLAPPING_2_4.associateWith { candidate ->
+            channels2_4.count { kotlin.math.abs(it - candidate) <= OVERLAP_RADIUS }
+        }
 }

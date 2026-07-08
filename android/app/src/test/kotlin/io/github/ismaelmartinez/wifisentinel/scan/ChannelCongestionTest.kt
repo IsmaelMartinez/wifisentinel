@@ -77,6 +77,39 @@ class ChannelCongestionTest {
         )
     }
 
+    @Test
+    fun channelZeroCountsInOccupancyButNotOverlapMaths() {
+        // A 2.4 GHz frequency outside the standard channel ranges maps to the
+        // channel-0 sentinel (WifiMapping). It's still a real network for the
+        // occupancy display, but has no centre to overlap 1/6/11 — it must not
+        // skew the pick.
+        val summary = ChannelCongestion.summarise(
+            listOf(
+                net(0, bssid = "aa:bb:cc:dd:ee:01"),
+                net(0, bssid = "aa:bb:cc:dd:ee:02"),
+                net(1),
+            ),
+        )
+        assertEquals(2, summary.occupancy.single { it.channel == 0 }.count)
+        // Only the channel-1 network feeds the overlap maths.
+        assertEquals(1, summary.overlapCounts2_4[1])
+        assertEquals(0, summary.overlapCounts2_4[6])
+        assertEquals(0, summary.overlapCounts2_4[11])
+        assertEquals(listOf(6, 11), summary.leastCongested2_4)
+    }
+
+    @Test
+    fun channelZeroOnlyMeansNoLeastCongested() {
+        // Nothing but unknown-channel 2.4 GHz entries: no real channel to weigh,
+        // so no recommendation (but the buckets still show).
+        val summary = ChannelCongestion.summarise(
+            listOf(net(0, bssid = "aa:bb:cc:dd:ee:01")),
+        )
+        assertEquals(emptyList<Int>(), summary.leastCongested2_4)
+        assertTrue(summary.overlapCounts2_4.isEmpty())
+        assertEquals(1, summary.occupancy.single().count)
+    }
+
     // ---- least-congested 2.4 GHz --------------------------------------------
 
     @Test
@@ -176,6 +209,18 @@ class ChannelCongestionTest {
             connectedChannel = 36,
             connectedBand = "5 GHz",
             nearby = listOf(net(1), net(6), net(11)),
+        )
+        assertNull(suggestion)
+    }
+
+    @Test
+    fun noSuggestionWhenConnectedChannelIsUnknown() {
+        // Connected channel 0 (unknown 2.4 GHz frequency): no defined channel to
+        // advise on, so no suggestion even amid a crowd.
+        val suggestion = ChannelCongestion.suggestLessCongestedChannel(
+            connectedChannel = 0,
+            connectedBand = ChannelCongestion.BAND_2_4,
+            nearby = listOf(net(6), net(6), net(6)),
         )
         assertNull(suggestion)
     }
