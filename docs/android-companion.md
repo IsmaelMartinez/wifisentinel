@@ -267,9 +267,9 @@ The skeleton under `android/` has grown past the first spike. It ships:
     lives in `SpeedMapping` so it is JVM-unit-tested.
   - **Analyse stage** (`LocalAnalyser`, package `analyse`) — the honest subset
     of persona/standards rules (WiFi link security, VPN posture, cleartext LAN
-    services, latency, a 2.4 GHz channel-congestion nudge, and a
-    possible-evil-twin finding when the connected SSID is advertised nearby on
-    weaker security), pure and JVM-unit-tested.
+    services, latency, a 2.4 GHz channel-congestion nudge, and
+    possible-evil-twin findings when the connected SSID is advertised nearby
+    on mismatched security in either direction), pure and JVM-unit-tested.
 - A `ChannelCongestion` helper (pure, framework-free, JVM-tested — same pattern
   as `WifiMapping`/`HostMerge`/`ScanPresentation`) that reads the RF
   neighbourhood a walk-around survey is actually for: it buckets
@@ -288,17 +288,28 @@ The skeleton under `android/` has grown past the first spike. It ships:
   SSIDs advertised by more than one BSSID, and flags the honest-to-detect
   cases — the same SSID appearing with *mismatched security* (e.g. one WPA2
   and one Open BSSID), and a nearby BSSID sharing the *connected* SSID on
-  weaker/open security than the joined link (the classic evil-twin shape).
-  Its strength ladder deliberately mirrors the CLI taxonomy
-  (`src/collector/schema/security.ts` / `src/analyser/rf/rogue-ap.ts`), and
-  "unknown" labels are never compared. The result/detail views render an
-  "SSIDs seen on multiple APs" section below the congestion summary (SSID +
-  BSSID count + a "mixed security" marker listing the labels) for both a
-  survey and a normal scan, hidden honestly when no SSID is multi-homed.
-  Multi-BSSID alone is *not* flagged — a single SSID on several BSSIDs is
-  normal mesh/roaming infrastructure; only the security mismatch is the
-  signal. Like the congestion summary, this is a derived view — recomputed on
-  display, never stored or exported.
+  mismatched security in either direction: a *weaker* twin is the classic
+  evil-twin shape, a *stronger* twin means the phone itself is on the weaker
+  side of a duplicated SSID (the vantage point of a device that already
+  auto-joined the twin). Its strength ladder deliberately mirrors the CLI
+  taxonomy (`src/collector/schema/security.ts` / `src/analyser/rf/rogue-ap.ts`,
+  which carries a matching back-reference), "unknown" labels are never
+  compared, and a JVM test anchors the ladder to every label
+  `WifiMapping.securityFromCapabilities` can emit — which now keeps the
+  mixed/transition modes distinct ("WPA/WPA2", "WPA2/WPA3") instead of
+  collapsing them to the newer protocol, so a mixed-mode downgrade twin is a
+  detectable mismatch. The result/detail views render an "SSIDs seen on
+  multiple APs" section below the congestion summary (SSID + BSSID count + a
+  "mixed security" marker listing the labels) for both a survey and a normal
+  scan, hidden honestly when no SSID is multi-homed; the connected AP —
+  excluded from the nearby list by construction — is handed back into the
+  grouping so the joined SSID's own duplicates count honestly. Multi-BSSID
+  alone is *not* flagged — a single SSID on several BSSIDs is normal
+  mesh/roaming infrastructure; only the security mismatch is the signal. One
+  honest bound: the scanner keeps the 25 strongest sightings, so in a very
+  dense environment a faint twin can be dropped before the helper sees it —
+  absence of a finding is not proof of absence. Like the congestion summary,
+  this is a derived view — recomputed on display, never stored or exported.
 - A `LocalScanResult` data class that matches the schema subset in §3, now
   including the on-device `Analysis` model.
 - JVM unit tests (`src/test/kotlin`, no emulator) covering the pure logic:
@@ -306,19 +317,22 @@ The skeleton under `android/` has grown past the first spike. It ships:
     survey path (an honest "survey" finding, no fabricated link warnings), the
     2.4 GHz congested-channel nudge (raised only for a connected 2.4 GHz AP
     with a clearly-emptier non-overlapping channel; skipped in survey mode),
-    and the possible-evil-twin finding (raised only for a genuinely weaker
-    duplicate of the connected SSID; same-security roaming partners, unknown
-    labels, and survey mode all raise nothing).
+    and the possible-evil-twin findings (raised only for a genuine security
+    mismatch on the connected SSID, in either direction; same-security roaming
+    partners, unknown labels, and survey mode all raise nothing).
   - `ChannelCongestionTest` — the pure bucketing and least-congested logic
     (`ChannelCongestion`): per-(band, channel) occupancy and ordering, the
     overlap-weighted 2.4 GHz pick across 1/6/11 (including ties and the
     no-2.4-GHz-data case), and the connected-AP move suggestion (margin gate,
     5 GHz skip, empty-list skip).
-  - `SsidAnomaliesTest` — the duplicate-SSID grouping and weaker-twin logic
-    (`SsidAnomalies`): multi-BSSID grouping and ordering, the mixed-security
-    signal (same-security fleets and unknown labels never flagged; hidden
-    SSIDs never grouped), and the weaker-twin detection against the connected
-    link (strength-ladder order, unknown-not-comparable, strongest-first).
+  - `SsidAnomaliesTest` — the duplicate-SSID grouping and mismatched-twin
+    logic (`SsidAnomalies`): multi-BSSID grouping and ordering (connected AP
+    included, redacted BSSID excluded), the mixed-security signal
+    (same-security fleets and unknown labels never flagged; hidden/blank
+    SSIDs never grouped), the twin detection against the connected link in
+    both directions (strength-ladder order, unknown-not-comparable,
+    strongest-first), and a vocabulary anchor proving every label
+    `securityFromCapabilities` emits is on the strength ladder.
   - `ScanPresentationTest` — the framework-free survey/title logic
     (`ScanPresentation`) the Compose UI leans on: survey detection and the
     connected-SSID / nearby-survey / unknown-network title descriptor.
@@ -392,15 +406,18 @@ same rules as the CLI's "WPA2 Personal"-style labels.
    the `getScanResults()` neighbourhood), is skipped in survey mode (no
    associated AP to advise on) and off the 2.4 GHz band, and is framed as a
    suggestion the router's own channel picker may already outrank. Added with
-   the duplicate-SSID view: a possible-evil-twin finding (MEDIUM) when the
-   connected SSID is also being advertised nearby on weaker/open security than
-   the joined link — a red-team rule that stays honest for the same reasons
-   (compares only the phone's own security labels via `SsidAnomalies`, whose
-   ladder mirrors the CLI's `rogue-ap.ts`/`security.ts` taxonomy), is skipped
-   in survey mode (no joined link to be a twin of), and deliberately guards
-   against the obvious false positive: the same SSID on multiple BSSIDs with
-   the *same* security is ordinary mesh/roaming and raises nothing — only the
-   security downgrade is the signal, and "unknown" labels are never compared.
+   the duplicate-SSID view: a pair of possible-evil-twin findings (MEDIUM)
+   when the connected SSID is also being advertised nearby on mismatched
+   security — weaker (the classic evil-twin shape) or stronger (the joined
+   link itself is the weaker side, the state of a phone that already
+   auto-joined the twin). A red-team rule that stays honest for the same
+   reasons (compares only the phone's own security labels via `SsidAnomalies`,
+   whose ladder mirrors the CLI's `rogue-ap.ts`/`security.ts` taxonomy), is
+   skipped in survey mode (no joined link to be a twin of), and deliberately
+   guards against the obvious false positive: the same SSID on multiple
+   BSSIDs with the *same* security is ordinary mesh/roaming and raises
+   nothing — only the security mismatch is the signal, and "unknown" labels
+   are never compared.
    It sits at MEDIUM (the CLI rates the richer-context equivalent HIGH)
    because one passive scan can't distinguish an attack from a misconfigured
    second AP, and the copy says so. All findings remain `partial = true`.

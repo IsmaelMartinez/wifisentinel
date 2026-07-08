@@ -32,7 +32,7 @@ object LocalAnalyser {
         val findings = buildList {
             addAll(wifiFindings(result.wifi, result.nearbyNetworks))
             addAll(vpnFindings(result.wifi, result.network))
-            weakerTwinFinding(result.wifi, result.nearbyNetworks)?.let { add(it) }
+            addAll(twinFindings(result.wifi, result.nearbyNetworks))
             channelCongestionFinding(result.wifi, result.nearbyNetworks)?.let { add(it) }
             addAll(hostFindings(result.hosts))
             latencyFinding(result.latencyMs)?.let { add(it) }
@@ -95,11 +95,25 @@ object LocalAnalyser {
                     "WPA (TKIP) is deprecated and vulnerable. Prefer a network offering WPA2 or WPA3.",
                 ),
             )
+            "WPA/WPA2" -> listOf(
+                Finding(
+                    Severity.LOW,
+                    "Mixed WPA/WPA2 mode",
+                    "This network still allows the deprecated WPA (TKIP) handshake alongside WPA2. Traffic is encrypted, but switching the router to WPA2/WPA3-only closes the downgrade path.",
+                ),
+            )
             "WPA2" -> listOf(
                 Finding(
                     Severity.LOW,
                     "WPA2 in use",
                     "WPA2 is acceptable but WPA3 offers stronger protection (forward secrecy, protection against offline cracking) where available.",
+                ),
+            )
+            "WPA2/WPA3" -> listOf(
+                Finding(
+                    Severity.INFO,
+                    "WPA3 transition mode in use",
+                    "This network offers WPA3 but still admits WPA2 clients. Fine for compatibility; WPA3-only is stronger where every device supports it.",
                 ),
             )
             "WPA3" -> listOf(
@@ -147,51 +161,88 @@ object LocalAnalyser {
     }
 
     /**
-     * MEDIUM-level finding when the connected SSID is also being advertised
-     * nearby on weaker/open security than the joined link — the classic
-     * evil-twin shape. Honest and phone-visible: it compares only the
-     * connected link's security label with the labels `getScanResults()`
-     * already surfaced, via [SsidAnomalies.weakerTwins].
+     * MEDIUM-level findings when the connected SSID is also being advertised
+     * nearby on mismatched security. Honest and phone-visible: it compares
+     * only the connected link's security label with the labels
+     * `getScanResults()` already surfaced, via [SsidAnomalies.mismatchedTwins].
+     * Both directions of the mismatch are findings:
+     *
+     * - a *weaker* twin nearby is the classic evil-twin shape;
+     * - a *stronger* twin nearby means this device is on the weaker side of
+     *   a duplicated SSID — the vantage point of a phone that has already
+     *   auto-joined the twin, where the legitimate AP is the one still
+     *   broadcasting stronger security.
      *
      * Skipped in survey mode (`wifi == null`): with no associated AP there is
      * no joined link to be a twin *of*, so no finding is fabricated.
      * False-positive guard: the same SSID on several BSSIDs with the *same*
      * security is ordinary mesh/roaming infrastructure and raises nothing —
-     * only the security downgrade is the signal (the helper also refuses to
+     * only the security mismatch is the signal (the helper also refuses to
      * compare "unknown" labels rather than guess).
      *
      * Taxonomy cross-check: the CLI's `src/analyser/rf/rogue-ap.ts` rates the
-     * same shape (same SSID, different BSSID, `isWeakerSecurity`) HIGH from
-     * its richer vantage point. The phone stays at MEDIUM and says "possible":
-     * its labels are coarse capability strings with no Personal/Enterprise
-     * mode, and a legitimate dual-config AP (e.g. a guest radio misconfigured
-     * onto the main SSID) looks identical from one passive scan — so the
-     * finding flags the shape without over-claiming an attack.
+     * weaker-twin shape (same SSID, different BSSID, `isWeakerSecurity`) HIGH
+     * from its richer vantage point. The phone stays at MEDIUM and says
+     * "possible": its labels are coarse capability strings with no
+     * Personal/Enterprise mode, and a legitimate dual-config AP (e.g. a guest
+     * radio misconfigured onto the main SSID) looks identical from one
+     * passive scan — so the findings flag the shape without over-claiming an
+     * attack.
      */
-    private fun weakerTwinFinding(
+    private fun twinFindings(
         wifi: LocalScanResult.Wifi?,
         nearbyNetworks: List<LocalScanResult.NearbyNetwork>?,
-    ): Finding? {
-        if (wifi == null || nearbyNetworks.isNullOrEmpty()) return null
-        val twins = SsidAnomalies.weakerTwins(
+    ): List<Finding> {
+        if (wifi == null || nearbyNetworks.isNullOrEmpty()) return emptyList()
+        val twins = SsidAnomalies.mismatchedTwins(
             connectedSsid = wifi.ssid,
             connectedSecurity = wifi.security,
             nearby = nearbyNetworks,
         )
-        if (twins.isEmpty()) return null
-        val suspects = twins.joinToString(", ") { twin ->
-            "${twin.bssid} (${twin.security}, ${twin.band} ch ${twin.channel}, ${twin.signal} dBm)"
+        val weaker = twins.filter { it.mismatch == SsidAnomalies.Mismatch.WEAKER }
+        val stronger = twins.filter { it.mismatch == SsidAnomalies.Mismatch.STRONGER }
+        return buildList {
+            if (weaker.isNotEmpty()) {
+                add(
+                    Finding(
+                        Severity.MEDIUM,
+                        "Possible evil twin of this network",
+                        "\"${wifi.ssid}\" is also being advertised nearby with weaker security " +
+                            "than the ${wifi.security} link you are joined to: " +
+                            "${suspects(weaker)}. This is the shape of an evil-twin access " +
+                            "point, but it can also be a misconfigured second AP or guest " +
+                            "radio on the same name. Avoid joining the weaker network and " +
+                            "verify your router's configuration.",
+                    ),
+                )
+            }
+            if (stronger.isNotEmpty()) {
+                add(
+                    Finding(
+                        Severity.MEDIUM,
+                        "Connected to the weakest AP of this SSID",
+                        "\"${wifi.ssid}\" is also being advertised nearby with stronger " +
+                            "security than the ${wifi.security} link you are joined to: " +
+                            "${suspects(stronger)}. If the stronger network is the real " +
+                            "router, this device may have joined an impostor or a " +
+                            "misconfigured radio — reconnect and check which AP you are on.",
+                    ),
+                )
+            }
         }
-        return Finding(
-            Severity.MEDIUM,
-            "Possible evil twin of this network",
-            "\"${wifi.ssid}\" is also being advertised nearby with weaker security than " +
-                "the ${wifi.security} link you are joined to: $suspects. This is the shape " +
-                "of an evil-twin access point, but it can also be a misconfigured second " +
-                "AP or guest radio on the same name. Avoid joining the weaker network and " +
-                "verify your router's configuration.",
-        )
     }
+
+    /**
+     * One-line suspect list for the twin findings. The channel-0 / unknown-band
+     * sentinels ([io.github.ismaelmartinez.wifisentinel.scan.WifiMapping]
+     * couldn't map the frequency) are omitted rather than rendered as
+     * "unknown ch 0" in user-facing copy.
+     */
+    private fun suspects(twins: List<SsidAnomalies.MismatchedTwin>): String =
+        twins.joinToString(", ") { (twin, _) ->
+            val location = if (twin.channel > 0) "${twin.band} ch ${twin.channel}, " else ""
+            "${twin.bssid} (${twin.security}, $location${twin.signal} dBm)"
+        }
 
     /**
      * INFO-level nudge when the connected AP shares a congested 2.4 GHz channel

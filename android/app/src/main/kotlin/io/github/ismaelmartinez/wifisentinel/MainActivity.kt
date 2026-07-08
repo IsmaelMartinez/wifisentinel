@@ -202,18 +202,23 @@ private fun ChannelCongestionSection(nearby: List<LocalScanResult.NearbyNetwork>
 }
 
 /**
- * SSIDs advertised by more than one nearby BSSID: name, AP count, and — the
+ * SSIDs advertised by more than one BSSID: name, AP count, and — the
  * actual signal — a "mixed security" marker listing the labels when the same
  * SSID is seen with mismatched security. Multi-BSSID alone is normal
  * (mesh/roaming), so plain rows carry no warning styling; the whole derived
  * view comes from [SsidAnomalies.duplicates], a pure helper, so nothing here
  * is stored or exported (it recomputes from the nearby list on both a survey
- * and a normal scan). Renders nothing when no SSID is multi-homed, so the
+ * and a normal scan — the connected AP, absent from the nearby list by
+ * construction, is handed to the helper so the joined SSID's own duplicates
+ * count honestly). Renders nothing when no SSID is multi-homed, so the
  * section hides honestly.
  */
 @Composable
-private fun DuplicateSsidSection(nearby: List<LocalScanResult.NearbyNetwork>) {
-    val duplicates = remember(nearby) { SsidAnomalies.duplicates(nearby) }
+private fun DuplicateSsidSection(
+    nearby: List<LocalScanResult.NearbyNetwork>,
+    connected: LocalScanResult.Wifi?,
+) {
+    val duplicates = remember(nearby, connected) { SsidAnomalies.duplicates(nearby, connected) }
     if (duplicates.isEmpty()) return
     val scheme = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -343,7 +348,7 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         result.nearbyNetworks?.let { nearby ->
             NearbyNetworksSection(nearby)
             ChannelCongestionSection(nearby)
-            DuplicateSsidSection(nearby)
+            DuplicateSsidSection(nearby, result.wifi)
         }
 
         result.speed?.let { speed ->

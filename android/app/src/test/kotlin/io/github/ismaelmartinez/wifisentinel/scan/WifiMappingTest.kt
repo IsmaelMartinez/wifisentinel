@@ -64,11 +64,19 @@ class WifiMappingTest {
     }
 
     @Test
-    fun prefersStrongestAdvertisedSecurity() {
-        // Transitional APs advertise both WPA2 and WPA3; the stronger label wins.
-        assertEquals("WPA3", WifiMapping.securityFromCapabilities("[WPA2-PSK][WPA3-SAE][ESS]"))
+    fun mixedModesKeepTheirOwnLabels() {
+        // Mixed/transition modes must not collapse to the newer protocol: the
+        // older handshake stays negotiable, and the distinct labels are what
+        // let SsidAnomalies (and the CLI import) see a mixed-mode downgrade
+        // twin of a pure-WPA2/WPA3 network. Labels match the CLI families in
+        // src/collector/schema/security.ts.
+        assertEquals("WPA2/WPA3", WifiMapping.securityFromCapabilities("[WPA2-PSK][WPA3-SAE][ESS]"))
+        assertEquals("WPA2/WPA3", WifiMapping.securityFromCapabilities("[RSN-SAE+PSK-CCMP][ESS]"))
+        assertEquals("WPA/WPA2", WifiMapping.securityFromCapabilities("[WPA-PSK-TKIP][WPA2-PSK-CCMP][ESS]"))
         // WPA2 must not be shadowed by the bare "WPA" substring check.
         assertEquals("WPA2", WifiMapping.securityFromCapabilities("[WPA2-PSK-CCMP][ESS]"))
+        // Pure WPA3 (SAE, no PSK) keeps the plain label.
+        assertEquals("WPA3", WifiMapping.securityFromCapabilities("[RSN-SAE-CCMP][ESS]"))
     }
 
     @Test
