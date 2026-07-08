@@ -56,10 +56,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import io.github.ismaelmartinez.wifisentinel.scan.ChannelCongestion
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
 import io.github.ismaelmartinez.wifisentinel.scan.ScanPresentation
@@ -145,6 +147,55 @@ private fun NearbyNetworksSection(nearby: List<LocalScanResult.NearbyNetwork>) {
                     color = scheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+/**
+ * A channel-congestion read of the RF neighbourhood: per-channel occupancy and,
+ * for the 2.4 GHz band (where 20 MHz channels overlap), which non-overlapping
+ * channel is least congested. The whole derived view — occupancy and the
+ * least-congested line alike — comes from [ChannelCongestion.summarise], a pure
+ * helper, so nothing here is stored or exported (it recomputes from the nearby
+ * list on both a survey and a normal scan). Renders nothing when the summary is
+ * empty (no networks bucketed), so an empty nearby list hides it honestly.
+ */
+@Composable
+private fun ChannelCongestionSection(nearby: List<LocalScanResult.NearbyNetwork>) {
+    val summary = remember(nearby) { ChannelCongestion.summarise(nearby) }
+    if (summary.isEmpty) return
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(R.string.congestion_title),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        summary.occupancy.forEach { bucket ->
+            Text(
+                text = pluralStringResource(
+                    R.plurals.congestion_channel_row,
+                    bucket.count,
+                    bucket.band,
+                    bucket.channel,
+                    bucket.count,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        if (summary.leastCongested2_4.isNotEmpty()) {
+            // Prefix each channel with its own "ch" so a tie reads naturally
+            // ("ch 1, ch 11") rather than "ch 1, 11". `map` is inline, so the
+            // per-channel stringResource (locale-correct, unlike String.format
+            // with the process default locale) resolves in the composable scope
+            // before the plain-string joinToString.
+            val channels = summary.leastCongested2_4
+                .map { stringResource(R.string.congestion_channel_ref, it) }
+                .joinToString(", ")
+            Text(
+                text = stringResource(R.string.congestion_least, channels),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -237,8 +288,13 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         // Honest count + strongest-first list, zero included — the emulator (and
         // a phone that was denied a fresh scan) may legitimately see no other
         // networks. Hidden entirely for pre-upgrade stored scans, where the list
-        // is null ("not collected", not "none seen").
-        result.nearbyNetworks?.let { nearby -> NearbyNetworksSection(nearby) }
+        // is null ("not collected", not "none seen"). The channel-congestion
+        // summary sits below the list (both a survey and a normal scan get it)
+        // and hides itself when there's nothing to bucket.
+        result.nearbyNetworks?.let { nearby ->
+            NearbyNetworksSection(nearby)
+            ChannelCongestionSection(nearby)
+        }
 
         result.speed?.let { speed ->
             Text(

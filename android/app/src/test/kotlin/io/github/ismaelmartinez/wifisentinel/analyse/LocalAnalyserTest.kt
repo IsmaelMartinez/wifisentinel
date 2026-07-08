@@ -18,6 +18,8 @@ class LocalAnalyserTest {
         hosts: List<LocalScanResult.Host> = emptyList(),
         latencyMs: Long? = null,
         nearbyNetworks: List<LocalScanResult.NearbyNetwork>? = null,
+        channel: Int = 36,
+        band: String = "5 GHz",
     ) = LocalScanResult(
         meta = LocalScanResult.Meta(
             scanId = "test",
@@ -28,8 +30,8 @@ class LocalAnalyserTest {
             ssid = "Net",
             bssid = "aa:bb:cc:dd:ee:ff",
             security = security,
-            channel = 36,
-            band = "5 GHz",
+            channel = channel,
+            band = band,
             signal = -50,
             txRate = 866,
         ),
@@ -148,6 +150,63 @@ class LocalAnalyserTest {
         val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
         assertTrue(analysis.findings.none { it.title.contains("VPN", ignoreCase = true) })
         assertTrue(analysis.findings.none { it.title.contains("Open", ignoreCase = true) })
+    }
+
+    private fun nearby2_4(channel: Int, count: Int) = (1..count).map {
+        LocalScanResult.NearbyNetwork(
+            ssid = "AP$it",
+            bssid = "aa:bb:cc:dd:e$channel:0$it",
+            security = "WPA2",
+            channel = channel,
+            band = "2.4 GHz",
+            signal = -60,
+        )
+    }
+
+    @Test
+    fun congested2_4ChannelRaisesInfoFinding() {
+        // Connected on a busy 2.4 GHz channel 6 while channel 11 is clear — an
+        // honest INFO nudge to retune.
+        val analysis = LocalAnalyser.analyse(
+            result(
+                channel = 6,
+                band = "2.4 GHz",
+                // Crowd channel 6, one AP on channel 1, none on 11 — so channel
+                // 11 is the unambiguous emptiest to suggest.
+                nearbyNetworks = nearby2_4(6, 4) + nearby2_4(1, 1),
+            ),
+        )
+        val finding = analysis.findings.single { it.title.contains("Congested", ignoreCase = true) }
+        assertEquals(Severity.INFO, finding.severity)
+        assertTrue(finding.detail.contains("channel 11"))
+    }
+
+    @Test
+    fun quiet2_4ChannelRaisesNoCongestionFinding() {
+        // One competing AP is below the margin — no congestion finding.
+        val analysis = LocalAnalyser.analyse(
+            result(channel = 6, band = "2.4 GHz", nearbyNetworks = nearby2_4(6, 1)),
+        )
+        assertTrue(analysis.findings.none { it.title.contains("Congested", ignoreCase = true) })
+    }
+
+    @Test
+    fun fiveGhzConnectionRaisesNoCongestionFinding() {
+        // A 5 GHz association has ample non-overlapping channels — never nagged,
+        // even with a crowded 2.4 GHz neighbourhood.
+        val analysis = LocalAnalyser.analyse(
+            result(channel = 36, band = "5 GHz", nearbyNetworks = nearby2_4(6, 5)),
+        )
+        assertTrue(analysis.findings.none { it.title.contains("Congested", ignoreCase = true) })
+    }
+
+    @Test
+    fun surveyModeRaisesNoCongestionFinding() {
+        // No associated AP (survey mode): there is no channel to advise on, so no
+        // congestion finding is fabricated even with a crowded neighbourhood.
+        val base = result(channel = 6, band = "2.4 GHz", nearbyNetworks = nearby2_4(6, 5))
+        val analysis = LocalAnalyser.analyse(base.copy(wifi = null))
+        assertTrue(analysis.findings.none { it.title.contains("Congested", ignoreCase = true) })
     }
 
     @Test
