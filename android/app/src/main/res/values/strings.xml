@@ -33,6 +33,13 @@
         <item quantity="other">%1$s — %2$d APs</item>
     </plurals>
     <string name="duplicate_ssid_mixed">Mixed security: %1$s</string>
+    <string name="since_last_title">Since last scan (%1$s)</string>
+    <string name="since_last_none">No changes in the RF neighbourhood.</string>
+    <string name="diff_security_row">%1$s — security changed: %2$s → %3$s</string>
+    <string name="diff_appeared_row">+ %1$s · %2$s · ch %3$d · %4$d dBm</string>
+    <string name="diff_appeared_known">New AP on an SSID seen last scan</string>
+    <string name="diff_vanished_row">− %1$s — not seen this scan</string>
+    <string name="diff_vanished_note">A missing AP is usually just scan noise, not a change.</string>
     <string name="no_associated_network">No associated network</string>
     <string name="survey_mode_note">Nearby-only survey — the RF neighbourhood, captured without joining a network.</string>
     <string name="overall_risk">Overall risk: %s</string>

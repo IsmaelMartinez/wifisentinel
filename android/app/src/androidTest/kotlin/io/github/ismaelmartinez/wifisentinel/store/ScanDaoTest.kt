@@ -80,6 +80,32 @@ class ScanDaoTest {
     }
 
     @Test
+    fun predecessorQuerySkipsSelfAndRowsWithoutNearby() = runBlocking {
+        // The since-last-scan diff wants the newest scan strictly before the
+        // viewed one that actually collected a nearby list: a newer row, the
+        // viewed row itself, and a "not collected" (null nearbyCount) row must
+        // all be passed over.
+        dao.upsert(entity("ancient", "2026-07-01T10:00:00Z", json = """{"id":"ancient"}"""))
+        dao.upsert(
+            entity(
+                "no-nearby",
+                "2026-07-02T10:00:00Z",
+                json = """{"id":"no-nearby"}""",
+                nearbyCount = null,
+            ),
+        )
+        dao.upsert(entity("viewed", "2026-07-03T10:00:00Z", json = """{"id":"viewed"}"""))
+        dao.upsert(entity("newer", "2026-07-04T10:00:00Z", json = """{"id":"newer"}"""))
+
+        assertEquals(
+            """{"id":"ancient"}""",
+            dao.findLatestNearbyJsonBefore("2026-07-03T10:00:00Z", "viewed"),
+        )
+        // The oldest scan has no predecessor.
+        assertNull(dao.findLatestNearbyJsonBefore("2026-07-01T10:00:00Z", "ancient"))
+    }
+
+    @Test
     fun upsertReplacesRowWithSameScanId() = runBlocking {
         dao.upsert(entity("scan", "2026-07-01T10:00:00Z", json = """{"v":1}"""))
         dao.upsert(entity("scan", "2026-07-01T10:00:00Z", json = """{"v":2}"""))

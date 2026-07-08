@@ -56,6 +56,23 @@ class ScanStore internal constructor(
         return runCatching { json.decodeFromString<LocalScanResult>(blob) }.getOrNull()
     }
 
+    /**
+     * The most recent stored scan strictly before [result] that collected a
+     * nearby list, or null when no comparable predecessor exists (first ever
+     * scan, or a history of pre-upgrade rows with no RF capture). Backs the
+     * since-last-scan RF diff ([io.github.ismaelmartinez.wifisentinel.scan.RfDiff])
+     * — a derived view, so this only reads; nothing new is stored. The
+     * decoded guard re-checks `nearbyNetworks != null` so a row whose blob
+     * fails to parse into a diffable scan degrades to "no predecessor"
+     * rather than a crash, mirroring [load]'s best-effort stance.
+     */
+    suspend fun loadPreviousWithNearby(result: LocalScanResult): LocalScanResult? {
+        val blob = dao.findLatestNearbyJsonBefore(result.meta.timestamp, result.meta.scanId)
+            ?: return null
+        return runCatching { json.decodeFromString<LocalScanResult>(blob) }.getOrNull()
+            ?.takeIf { it.nearbyNetworks != null }
+    }
+
     /** Delete every stored scan. */
     suspend fun clear() = dao.clear()
 

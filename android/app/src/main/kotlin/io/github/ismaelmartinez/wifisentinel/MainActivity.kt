@@ -64,6 +64,7 @@ import androidx.core.content.ContextCompat
 import io.github.ismaelmartinez.wifisentinel.scan.ChannelCongestion
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanner
+import io.github.ismaelmartinez.wifisentinel.scan.RfDiff
 import io.github.ismaelmartinez.wifisentinel.scan.ScanPresentation
 import io.github.ismaelmartinez.wifisentinel.scan.SpeedProbe
 import io.github.ismaelmartinez.wifisentinel.scan.SsidAnomalies
@@ -253,6 +254,102 @@ private fun DuplicateSsidSection(
     }
 }
 
+/**
+ * The since-last-scan diff of the RF neighbourhood: what changed between
+ * [previous] (the most recent stored scan that collected a nearby list) and
+ * [current]. Renders nothing when either side has no nearby list — no
+ * comparable predecessor means no section, not an empty one. The signals get
+ * warning colour: a per-BSSID security change, and a new BSSID appearing on
+ * an SSID the previous scan already knew (a stronger twin hint than any
+ * single snapshot). Plain appearances are neutral churn, and vanished APs
+ * are deliberately informational only — WiFi scans are noisy and the nearby
+ * list is capped, so a weak AP missing from one scan is normal, and the copy
+ * says so. Like the congestion/duplicate views this is a derived,
+ * display-time comparison of two stored scans ([RfDiff.diff], pure and
+ * JVM-tested); nothing new is stored or exported.
+ */
+@Composable
+private fun SinceLastScanSection(
+    current: LocalScanResult,
+    previous: LocalScanResult?,
+) {
+    val currentNearby = current.nearbyNetworks ?: return
+    val previousNearby = previous?.nearbyNetworks ?: return
+    val diff = remember(current, previous) {
+        RfDiff.diff(previousNearby, currentNearby, previous.wifi, current.wifi)
+    }
+    val scheme = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(
+                R.string.since_last_title,
+                formatTimestamp(previous.meta.timestamp),
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (diff.isEmpty) {
+            // "Nothing changed" is itself information once a comparison ran —
+            // unlike the anomaly sections, an empty diff still renders.
+            Text(
+                text = stringResource(R.string.since_last_none),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        diff.securityChanges.forEach { change ->
+            Text(
+                text = stringResource(
+                    R.string.diff_security_row,
+                    change.network.ssid ?: stringResource(R.string.nearby_hidden_ssid),
+                    change.previousSecurity,
+                    change.network.security,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.tertiary,
+            )
+        }
+        diff.appeared.forEach { appeared ->
+            Column {
+                Text(
+                    text = stringResource(
+                        R.string.diff_appeared_row,
+                        appeared.network.ssid ?: stringResource(R.string.nearby_hidden_ssid),
+                        appeared.network.security,
+                        appeared.network.channel,
+                        appeared.network.signal,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (appeared.onKnownSsid) scheme.tertiary else scheme.onSurfaceVariant,
+                )
+                if (appeared.onKnownSsid) {
+                    Text(
+                        text = stringResource(R.string.diff_appeared_known),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.tertiary,
+                    )
+                }
+            }
+        }
+        diff.vanished.forEach { network ->
+            Text(
+                text = stringResource(
+                    R.string.diff_vanished_row,
+                    network.ssid ?: stringResource(R.string.nearby_hidden_ssid),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        if (diff.vanished.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.diff_vanished_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 @Composable
 private fun AnalysisSummary(analysis: LocalScanResult.Analysis) {
     val scheme = MaterialTheme.colorScheme
@@ -289,12 +386,21 @@ private fun AnalysisSummary(analysis: LocalScanResult.Analysis) {
 /**
  * Renders a scan result: the analysis summary, a JSON export button, and the
  * raw JSON. Shared by the live scan screen and the stored-scan detail screen,
- * so a past scan can be re-viewed and re-exported.
+ * so a past scan can be re-viewed and re-exported. [store] is read-only here:
+ * it supplies the most recent prior scan with a nearby list so the
+ * since-last-scan RF diff can render (against the viewed scan's own
+ * predecessor, on both screens); when none exists the section hides honestly.
  */
 @Composable
-private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
+private fun ResultView(store: ScanStore, result: LocalScanResult, exportEnabled: Boolean = true) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Loaded per result, off the main thread via Room's suspend query. Stays
+    // null (section hidden) until the lookup lands or when no comparable
+    // predecessor exists.
+    var previous by remember(result) { mutableStateOf<LocalScanResult?>(null) }
+    LaunchedEffect(result) { previous = store.loadPreviousWithNearby(result) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -344,11 +450,14 @@ private fun ResultView(result: LocalScanResult, exportEnabled: Boolean = true) {
         // is null ("not collected", not "none seen"). The channel-congestion
         // summary sits below the list (both a survey and a normal scan get it)
         // and hides itself when there's nothing to bucket, as does the
-        // duplicate-SSID view below it when no SSID is multi-homed.
+        // duplicate-SSID view below it when no SSID is multi-homed, and the
+        // since-last-scan diff below that when no comparable predecessor
+        // exists in the store.
         result.nearbyNetworks?.let { nearby ->
             NearbyNetworksSection(nearby)
             ChannelCongestionSection(nearby)
             DuplicateSsidSection(nearby, result.wifi)
+            SinceLastScanSection(result, previous)
         }
 
         result.speed?.let { speed ->
@@ -609,7 +718,7 @@ private fun ScanScreen(store: ScanStore, onOpenHistory: () -> Unit) {
 
             when (val current = result) {
                 null -> Text(stringResource(R.string.scan_empty_state))
-                else -> ResultView(current, exportEnabled = !scanning)
+                else -> ResultView(store, current, exportEnabled = !scanning)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -742,7 +851,7 @@ private fun DetailScreen(store: ScanStore, scanId: String, onBack: () -> Unit) {
             when {
                 loading -> CircularProgressIndicator()
                 result == null -> Text(stringResource(R.string.scan_not_found))
-                else -> ResultView(result!!)
+                else -> ResultView(store, result!!)
             }
         }
     }

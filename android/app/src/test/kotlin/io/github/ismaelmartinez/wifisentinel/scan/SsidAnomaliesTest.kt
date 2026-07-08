@@ -341,6 +341,25 @@ class SsidAnomaliesTest {
         assertEquals(listOf(-40, -80), twins.map { it.network.signal })
     }
 
+    // ---- securityChanged --------------------------------------------------------
+
+    @Test
+    fun securityChangedComparesByFamilyOnly() {
+        // Different rungs change; same rung (any spelling/case) doesn't.
+        assertTrue(SsidAnomalies.securityChanged("WPA2", "Open"))
+        assertTrue(SsidAnomalies.securityChanged("WPA/WPA2", "WPA2"))
+        assertFalse(SsidAnomalies.securityChanged("WPA2", "wpa2"))
+    }
+
+    @Test
+    fun securityChangedNeverFiresOnUnknownLabels() {
+        // Mirrors the CLI's securityChanged: unknown on either side is not
+        // comparable, so it is never a change.
+        assertFalse(SsidAnomalies.securityChanged("unknown", "Open"))
+        assertFalse(SsidAnomalies.securityChanged("WPA2", "unknown"))
+        assertFalse(SsidAnomalies.securityChanged("unknown", "unknown"))
+    }
+
     // ---- vocabulary anchor -----------------------------------------------------
 
     @Test

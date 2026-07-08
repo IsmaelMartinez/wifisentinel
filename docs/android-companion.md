@@ -310,6 +310,45 @@ The skeleton under `android/` has grown past the first spike. It ships:
   dense environment a faint twin can be dropped before the helper sees it —
   absence of a finding is not proof of absence. Like the congestion summary,
   this is a derived view — recomputed on display, never stored or exported.
+- An `RfDiff` helper (pure, framework-free, JVM-tested — same pattern again)
+  that adds the first *since-last-scan* read of the RF neighbourhood — every
+  other helper reads one snapshot; this one notices the environment
+  *changed*. It compares two `nearbyNetworks` lists keyed by BSSID
+  (lowercased, matching the CLI's `apKey` rationale) and returns typed
+  descriptors for APs that **appeared**, APs that **vanished**, and
+  per-BSSID **security changes**. The change taxonomy deliberately stays
+  consistent with the CLI's diff surfaces — `wifisentinel diff`
+  (`src/store/diff.ts`) and `rf --compare`
+  (`src/analyser/rf/environment.ts`'s `new_ap` / `disappeared_ap` /
+  `security_change`) — and the security comparison mirrors the CLI's
+  `securityChanged` (`src/collector/schema/security.ts`) at the granularity
+  the phone supports: family-level via `SsidAnomalies.securityChanged` (one
+  Kotlin copy of the strength ladder), with an "unknown" label on either
+  side never a change. Each scan's connected AP — excluded from its own
+  nearby list by construction — is folded back into its side of the
+  comparison, so a phone that merely roamed between scans doesn't report its
+  old AP as "appeared". False-positive stance: WiFi scans are noisy and the
+  nearby list is capped at the 25 strongest sightings, so a **vanished** AP
+  is informational colour only, never a warning; the *signals* are a
+  per-BSSID security change and the specially-flagged appearance — a new
+  BSSID on an SSID the previous scan already knew (including the connected
+  one), which is a stronger evil-twin hint than anything one snapshot can
+  give. The result/detail views render this as a short **"Since last scan"**
+  section below the duplicate-SSID view, comparing the viewed scan against
+  the most recent *prior* stored scan that collected a nearby list (survey
+  or normal — both diff fine; `ScanStore.loadPreviousWithNearby`, backed by
+  a `nearbyCount IS NOT NULL` Room query). It hides honestly when no
+  comparable predecessor exists, and renders an explicit "no changes" line
+  when one does but nothing moved — unlike the anomaly sections, a ran
+  comparison that found nothing is itself information. Like the congestion
+  and duplicate-SSID views this is a *derived*, presentation-layer view —
+  computed on display from two stored scans, never stored or exported.
+  `LocalAnalyser` deliberately stays per-scan pure and knows nothing of
+  history: the CLI import recomputes the analysis blob from the export's
+  single-scan fields, so a history-dependent finding would be unreproducible
+  there — the phone would show a finding its own export could never
+  round-trip. Cross-scan *analysis* (as opposed to presentation) stays on
+  the CLI side, where `rf --compare` has the full store to reason over.
 - A `LocalScanResult` data class that matches the schema subset in §3, now
   including the on-device `Analysis` model.
 - JVM unit tests (`src/test/kotlin`, no emulator) covering the pure logic:
@@ -333,6 +372,13 @@ The skeleton under `android/` has grown past the first spike. It ships:
     both directions (strength-ladder order, unknown-not-comparable,
     strongest-first), and a vocabulary anchor proving every label
     `securityFromCapabilities` emits is on the strength ladder.
+  - `RfDiffTest` — the since-last-scan diff (`RfDiff`): appeared/vanished
+    keyed by (case-insensitive) BSSID, the new-BSSID-on-known-SSID flag
+    (including the previous scan's connected SSID counting as known, and
+    hidden/blank SSIDs never matching), the connected-AP fold (roaming
+    between scans fabricates nothing; a redacted BSSID is never folded),
+    family-level security changes (unknown-not-comparable, mixed-mode rungs
+    distinct), empty-list predecessors, and ordering.
   - `ScanPresentationTest` — the framework-free survey/title logic
     (`ScanPresentation`) the Compose UI leans on: survey detection and the
     connected-SSID / nearby-survey / unknown-network title descriptor.
@@ -354,7 +400,9 @@ The skeleton under `android/` has grown past the first spike. It ships:
     rule's `ActivityScenario` and asserts the Scan screen renders.
   - `ScanDaoTest` — Room `ScanDao` insert/query/replace/clear against a real
     on-device SQLite database, plus a nearby-only survey row (null SSID with a
-    `nearbyCount`) round-tripping through the denormalised projection.
+    `nearbyCount`) round-tripping through the denormalised projection, and the
+    since-last-scan predecessor query (skips the viewed row, newer rows, and
+    rows that never collected a nearby list).
   - `ScanEndToEndTest` — grants the scan permission, taps "Scan now", waits
     for the pipeline (`LocalScanner` → probes → `LocalAnalyser` →
     `ScanStore`) to finish, and asserts the result rendered and a row landed
