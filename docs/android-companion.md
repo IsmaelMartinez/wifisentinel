@@ -267,8 +267,9 @@ The skeleton under `android/` has grown past the first spike. It ships:
     lives in `SpeedMapping` so it is JVM-unit-tested.
   - **Analyse stage** (`LocalAnalyser`, package `analyse`) — the honest subset
     of persona/standards rules (WiFi link security, VPN posture, cleartext LAN
-    services, latency, and a 2.4 GHz channel-congestion nudge), pure and
-    JVM-unit-tested.
+    services, latency, a 2.4 GHz channel-congestion nudge, and a
+    possible-evil-twin finding when the connected SSID is advertised nearby on
+    weaker security), pure and JVM-unit-tested.
 - A `ChannelCongestion` helper (pure, framework-free, JVM-tested — same pattern
   as `WifiMapping`/`HostMerge`/`ScanPresentation`) that reads the RF
   neighbourhood a walk-around survey is actually for: it buckets
@@ -281,18 +282,43 @@ The skeleton under `android/` has grown past the first spike. It ships:
   analyser's congested-channel finding. The summary is a *derived* view —
   recomputed from `nearbyNetworks` on display and never stored or exported, so
   the JSON export contract with the CLI import is unchanged.
+- An `SsidAnomalies` helper (pure, framework-free, JVM-tested — same pattern
+  again) that reads the RF neighbourhood for security anomalies, the other
+  thing a survey is good for: it groups `nearbyNetworks` by SSID, surfaces
+  SSIDs advertised by more than one BSSID, and flags the honest-to-detect
+  cases — the same SSID appearing with *mismatched security* (e.g. one WPA2
+  and one Open BSSID), and a nearby BSSID sharing the *connected* SSID on
+  weaker/open security than the joined link (the classic evil-twin shape).
+  Its strength ladder deliberately mirrors the CLI taxonomy
+  (`src/collector/schema/security.ts` / `src/analyser/rf/rogue-ap.ts`), and
+  "unknown" labels are never compared. The result/detail views render an
+  "SSIDs seen on multiple APs" section below the congestion summary (SSID +
+  BSSID count + a "mixed security" marker listing the labels) for both a
+  survey and a normal scan, hidden honestly when no SSID is multi-homed.
+  Multi-BSSID alone is *not* flagged — a single SSID on several BSSIDs is
+  normal mesh/roaming infrastructure; only the security mismatch is the
+  signal. Like the congestion summary, this is a derived view — recomputed on
+  display, never stored or exported.
 - A `LocalScanResult` data class that matches the schema subset in §3, now
   including the on-device `Analysis` model.
 - JVM unit tests (`src/test/kotlin`, no emulator) covering the pure logic:
   - `LocalAnalyserTest` — the rule-based analyser, including the nearby-only
-    survey path (an honest "survey" finding, no fabricated link warnings) and
-    the 2.4 GHz congested-channel nudge (raised only for a connected 2.4 GHz AP
-    with a clearly-emptier non-overlapping channel; skipped in survey mode).
+    survey path (an honest "survey" finding, no fabricated link warnings), the
+    2.4 GHz congested-channel nudge (raised only for a connected 2.4 GHz AP
+    with a clearly-emptier non-overlapping channel; skipped in survey mode),
+    and the possible-evil-twin finding (raised only for a genuinely weaker
+    duplicate of the connected SSID; same-security roaming partners, unknown
+    labels, and survey mode all raise nothing).
   - `ChannelCongestionTest` — the pure bucketing and least-congested logic
     (`ChannelCongestion`): per-(band, channel) occupancy and ordering, the
     overlap-weighted 2.4 GHz pick across 1/6/11 (including ties and the
     no-2.4-GHz-data case), and the connected-AP move suggestion (margin gate,
     5 GHz skip, empty-list skip).
+  - `SsidAnomaliesTest` — the duplicate-SSID grouping and weaker-twin logic
+    (`SsidAnomalies`): multi-BSSID grouping and ordering, the mixed-security
+    signal (same-security fleets and unknown labels never flagged; hidden
+    SSIDs never grouped), and the weaker-twin detection against the connected
+    link (strength-ladder order, unknown-not-comparable, strongest-first).
   - `ScanPresentationTest` — the framework-free survey/title logic
     (`ScanPresentation`) the Compose UI leans on: survey detection and the
     connected-SSID / nearby-survey / unknown-network title descriptor.
@@ -361,12 +387,23 @@ same rules as the CLI's "WPA2 Personal"-style labels.
    high internet latency, the nearby-only survey note, and — added with the
    channel-congestion view — a 2.4 GHz congested-channel nudge (INFO) when the
    connected AP shares a busy channel while a clearly-emptier non-overlapping
-   channel exists. That last one is a light network-engineer rule that stays
+   channel exists. That one is a light network-engineer rule that stays
    honest because it reads only phone-visible data (the connected channel and
    the `getScanResults()` neighbourhood), is skipped in survey mode (no
    associated AP to advise on) and off the 2.4 GHz band, and is framed as a
-   suggestion the router's own channel picker may already outrank. All findings
-   remain `partial = true`.
+   suggestion the router's own channel picker may already outrank. Added with
+   the duplicate-SSID view: a possible-evil-twin finding (MEDIUM) when the
+   connected SSID is also being advertised nearby on weaker/open security than
+   the joined link — a red-team rule that stays honest for the same reasons
+   (compares only the phone's own security labels via `SsidAnomalies`, whose
+   ladder mirrors the CLI's `rogue-ap.ts`/`security.ts` taxonomy), is skipped
+   in survey mode (no joined link to be a twin of), and deliberately guards
+   against the obvious false positive: the same SSID on multiple BSSIDs with
+   the *same* security is ordinary mesh/roaming and raises nothing — only the
+   security downgrade is the signal, and "unknown" labels are never compared.
+   It sits at MEDIUM (the CLI rates the richer-context equivalent HIGH)
+   because one passive scan can't distinguish an attack from a misconfigured
+   second AP, and the copy says so. All findings remain `partial = true`.
 6. ~~**Disconnected-scan / survey mode.**~~ Resolved (data **and** UI).
    `nearbyNetworks` was lifted out of `LocalScanResult.Wifi` to a top-level
    field (`WifiMapping.mapNearbyNetworks` already took a nullable connected

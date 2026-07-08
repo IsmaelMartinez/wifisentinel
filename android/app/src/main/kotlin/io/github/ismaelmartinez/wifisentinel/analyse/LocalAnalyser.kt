@@ -4,6 +4,7 @@ import io.github.ismaelmartinez.wifisentinel.scan.ChannelCongestion
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult.Finding
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult.Severity
+import io.github.ismaelmartinez.wifisentinel.scan.SsidAnomalies
 
 /**
  * Rule-based, on-device analyser. It implements the subset of the CLI's
@@ -31,6 +32,7 @@ object LocalAnalyser {
         val findings = buildList {
             addAll(wifiFindings(result.wifi, result.nearbyNetworks))
             addAll(vpnFindings(result.wifi, result.network))
+            weakerTwinFinding(result.wifi, result.nearbyNetworks)?.let { add(it) }
             channelCongestionFinding(result.wifi, result.nearbyNetworks)?.let { add(it) }
             addAll(hostFindings(result.hosts))
             latencyFinding(result.latencyMs)?.let { add(it) }
@@ -141,6 +143,53 @@ object LocalAnalyser {
                 "No VPN on an insecure network",
                 "You are on a weakly-encrypted or open network with no active VPN. A VPN would protect your traffic from other users on this network.",
             ),
+        )
+    }
+
+    /**
+     * MEDIUM-level finding when the connected SSID is also being advertised
+     * nearby on weaker/open security than the joined link — the classic
+     * evil-twin shape. Honest and phone-visible: it compares only the
+     * connected link's security label with the labels `getScanResults()`
+     * already surfaced, via [SsidAnomalies.weakerTwins].
+     *
+     * Skipped in survey mode (`wifi == null`): with no associated AP there is
+     * no joined link to be a twin *of*, so no finding is fabricated.
+     * False-positive guard: the same SSID on several BSSIDs with the *same*
+     * security is ordinary mesh/roaming infrastructure and raises nothing —
+     * only the security downgrade is the signal (the helper also refuses to
+     * compare "unknown" labels rather than guess).
+     *
+     * Taxonomy cross-check: the CLI's `src/analyser/rf/rogue-ap.ts` rates the
+     * same shape (same SSID, different BSSID, `isWeakerSecurity`) HIGH from
+     * its richer vantage point. The phone stays at MEDIUM and says "possible":
+     * its labels are coarse capability strings with no Personal/Enterprise
+     * mode, and a legitimate dual-config AP (e.g. a guest radio misconfigured
+     * onto the main SSID) looks identical from one passive scan — so the
+     * finding flags the shape without over-claiming an attack.
+     */
+    private fun weakerTwinFinding(
+        wifi: LocalScanResult.Wifi?,
+        nearbyNetworks: List<LocalScanResult.NearbyNetwork>?,
+    ): Finding? {
+        if (wifi == null || nearbyNetworks.isNullOrEmpty()) return null
+        val twins = SsidAnomalies.weakerTwins(
+            connectedSsid = wifi.ssid,
+            connectedSecurity = wifi.security,
+            nearby = nearbyNetworks,
+        )
+        if (twins.isEmpty()) return null
+        val suspects = twins.joinToString(", ") { twin ->
+            "${twin.bssid} (${twin.security}, ${twin.band} ch ${twin.channel}, ${twin.signal} dBm)"
+        }
+        return Finding(
+            Severity.MEDIUM,
+            "Possible evil twin of this network",
+            "\"${wifi.ssid}\" is also being advertised nearby with weaker security than " +
+                "the ${wifi.security} link you are joined to: $suspects. This is the shape " +
+                "of an evil-twin access point, but it can also be a misconfigured second " +
+                "AP or guest radio on the same name. Avoid joining the weaker network and " +
+                "verify your router's configuration.",
         )
     }
 
