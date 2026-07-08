@@ -39,11 +39,13 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           # On release publish, build the code the release points at. On
-          # manual backfill, build the dispatching branch (github.ref)
-          # instead — the target tag may predate the Android app entirely
-          # (v1.0.0 has no android/ directory), and the companion app is
-          # versioned independently of CLI releases anyway.
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          # manual backfill, build the dispatching branch instead — the
+          # target tag may predate the Android app entirely (v1.0.0 has no
+          # android/ directory), and the companion app is versioned
+          # independently of CLI releases anyway. If the dispatch itself is
+          # run from a tag, fall back to the default branch for the same
+          # reason.
+          ref: ${{ github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/') && github.event.repository.default_branch) || github.ref }}
 
       - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
