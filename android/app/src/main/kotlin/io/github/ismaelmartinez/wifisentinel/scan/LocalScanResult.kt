@@ -76,7 +76,26 @@ data class LocalScanResult(
         val band: String,
         val signal: Int,
         val txRate: Int,
-    )
+    ) {
+        /**
+         * The connected AP as a nearby-shaped entry, or null when the BSSID
+         * is redacted. [WifiMapping.mapNearbyNetworks] excludes the connected
+         * BSSID from the nearby list, so consumers comparing whole
+         * neighbourhoods ([SsidAnomalies], [RfDiff]) fold the AP back in via
+         * this shape; a null BSSID could not have been excluded from the
+         * list, so folding it back could double-count the same radio.
+         */
+        fun asNearbyNetwork(): NearbyNetwork? = bssid?.let {
+            NearbyNetwork(
+                ssid = ssid,
+                bssid = it,
+                security = security,
+                channel = channel,
+                band = band,
+                signal = signal,
+            )
+        }
+    }
 
     /**
      * A nearby AP from the scan results. `band` is phone-side colour for the

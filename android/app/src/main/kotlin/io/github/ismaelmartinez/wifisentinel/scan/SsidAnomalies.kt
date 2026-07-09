@@ -65,6 +65,24 @@ object SsidAnomalies {
     private fun strength(security: String): Int? = securityStrength[security.trim().uppercase()]
 
     /**
+     * Whether two labels describe genuinely different security, mirroring the
+     * CLI's `securityChanged` in `src/collector/schema/security.ts` at the
+     * granularity the phone can support: protocol family only (each rung of
+     * the ladder is one family), with an unrecognised/"unknown" label on
+     * either side never a change — an unmeasured reading must not manufacture
+     * a "security changed" signal. The CLI's extra mode rule (Personal vs
+     * Enterprise, counted only when both sides state one) is vacuous here:
+     * the phone's coarse labels never carry a mode, so family equality is the
+     * whole comparison. Lives on this object so [RfDiff] shares the one
+     * Kotlin copy of the ladder.
+     */
+    fun securityChanged(a: String, b: String): Boolean {
+        val fa = strength(a) ?: return false
+        val fb = strength(b) ?: return false
+        return fa != fb
+    }
+
+    /**
      * An SSID advertised by more than one BSSID.
      *
      * - [securities] — the distinct security labels seen across those BSSIDs,
@@ -113,18 +131,9 @@ object SsidAnomalies {
         nearby: List<LocalScanResult.NearbyNetwork>,
         connected: LocalScanResult.Wifi? = null,
     ): List<DuplicateSsid> {
-        val connectedEntry = connected?.takeIf {
-            !it.ssid.isNullOrBlank() && it.bssid != null
-        }?.let {
-            LocalScanResult.NearbyNetwork(
-                ssid = it.ssid,
-                bssid = it.bssid!!,
-                security = it.security,
-                channel = it.channel,
-                band = it.band,
-                signal = it.signal,
-            )
-        }
+        val connectedEntry = connected
+            ?.takeIf { !it.ssid.isNullOrBlank() }
+            ?.asNearbyNetwork()
         return (nearby + listOfNotNull(connectedEntry))
             .filter { !it.ssid.isNullOrBlank() }
             .groupBy { it.ssid!! }

@@ -4,10 +4,13 @@ import android.content.Context
 import androidx.room.Room
 import io.github.ismaelmartinez.wifisentinel.scan.LocalScanResult
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.time.Instant
 
 /**
  * Persists completed scans to a single-table Room database and exposes the
@@ -55,6 +58,46 @@ class ScanStore internal constructor(
         val blob = dao.findJson(scanId) ?: return null
         return runCatching { json.decodeFromString<LocalScanResult>(blob) }.getOrNull()
     }
+
+    /**
+     * The most recent stored scan strictly before [result] that collected a
+     * nearby list, or null when no comparable predecessor exists (first ever
+     * scan, or a history of pre-upgrade rows with no RF capture). Backs the
+     * since-last-scan RF diff ([io.github.ismaelmartinez.wifisentinel.scan.RfDiff])
+     * — a derived view, so this only reads; nothing new is stored.
+     *
+     * Chronology is decided on *parsed* instants, not timestamp strings:
+     * `Instant.toString()` omits the fraction on a whole-second instant, and
+     * "…05.500Z" sorts lexicographically before "…05Z" despite being later,
+     * so a string-ordered SQL pick could skip a real predecessor or diff
+     * against a chronologically *newer* scan (see [ScanDao.nearbySummariesExcept]).
+     * Rows whose timestamp doesn't parse are skipped — no honest "before"
+     * claim can be made for them. Candidates are tried newest-first, falling
+     * back past a row whose blob fails to decode into a diffable scan
+     * (mirroring [load]'s best-effort stance) rather than hiding the section
+     * because the nearest row is corrupt. Decoding runs off the caller's
+     * dispatcher — the UI calls this from a main-thread coroutine.
+     */
+    suspend fun loadPreviousWithNearby(result: LocalScanResult): LocalScanResult? {
+        val reference = parseInstant(result.meta.timestamp) ?: return null
+        val candidates = dao.nearbySummariesExcept(result.meta.scanId)
+            .mapNotNull { summary ->
+                parseInstant(summary.timestamp)
+                    ?.takeIf { it < reference }
+                    ?.let { instant -> instant to summary.scanId }
+            }
+            .sortedByDescending { it.first }
+        return withContext(Dispatchers.Default) {
+            candidates.firstNotNullOfOrNull { (_, scanId) ->
+                dao.findJson(scanId)?.let { blob ->
+                    runCatching { json.decodeFromString<LocalScanResult>(blob) }.getOrNull()
+                }?.takeIf { it.nearbyNetworks != null }
+            }
+        }
+    }
+
+    private fun parseInstant(timestamp: String): Instant? =
+        runCatching { Instant.parse(timestamp) }.getOrNull()
 
     /** Delete every stored scan. */
     suspend fun clear() = dao.clear()
