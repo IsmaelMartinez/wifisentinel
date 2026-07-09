@@ -80,29 +80,24 @@ class ScanDaoTest {
     }
 
     @Test
-    fun predecessorQuerySkipsSelfAndRowsWithoutNearby() = runBlocking {
-        // The since-last-scan diff wants the newest scan strictly before the
-        // viewed one that actually collected a nearby list: a newer row, the
-        // viewed row itself, and a "not collected" (null nearbyCount) row must
-        // all be passed over.
-        dao.upsert(entity("ancient", "2026-07-01T10:00:00Z", json = """{"id":"ancient"}"""))
-        dao.upsert(
-            entity(
-                "no-nearby",
-                "2026-07-02T10:00:00Z",
-                json = """{"id":"no-nearby"}""",
-                nearbyCount = null,
-            ),
-        )
-        dao.upsert(entity("viewed", "2026-07-03T10:00:00Z", json = """{"id":"viewed"}"""))
-        dao.upsert(entity("newer", "2026-07-04T10:00:00Z", json = """{"id":"newer"}"""))
+    fun nearbySummariesExceptSkipsSelfAndRowsWithoutNearby() = runBlocking {
+        // The since-last-scan diff's candidate set: every scan that collected
+        // a nearby list except the viewed one — a "not collected" (null
+        // nearbyCount) row and the viewed row itself must be passed over.
+        // Chronology (the strictly-before pick) is ScanStore's job, on parsed
+        // instants, so the query deliberately returns candidates unordered.
+        dao.upsert(entity("ancient", "2026-07-01T10:00:00Z"))
+        dao.upsert(entity("no-nearby", "2026-07-02T10:00:00Z", nearbyCount = null))
+        dao.upsert(entity("viewed", "2026-07-03T10:00:00Z"))
+        dao.upsert(entity("newer", "2026-07-04T10:00:00Z"))
 
-        assertEquals(
-            """{"id":"ancient"}""",
-            dao.findLatestNearbyJsonBefore("2026-07-03T10:00:00Z", "viewed"),
-        )
-        // The oldest scan has no predecessor.
-        assertNull(dao.findLatestNearbyJsonBefore("2026-07-01T10:00:00Z", "ancient"))
+        val candidates = dao.nearbySummariesExcept("viewed")
+        assertEquals(setOf("ancient", "newer"), candidates.map { it.scanId }.toSet())
+
+        // A lone scan has no candidates at all.
+        dao.clear()
+        dao.upsert(entity("only", "2026-07-01T10:00:00Z"))
+        assertEquals(emptyList<ScanSummary>(), dao.nearbySummariesExcept("only"))
     }
 
     @Test

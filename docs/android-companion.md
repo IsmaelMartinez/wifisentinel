@@ -337,10 +337,13 @@ The skeleton under `android/` has grown past the first spike. It ships:
   section below the duplicate-SSID view, comparing the viewed scan against
   the most recent *prior* stored scan that collected a nearby list (survey
   or normal — both diff fine; `ScanStore.loadPreviousWithNearby`, backed by
-  a `nearbyCount IS NOT NULL` Room query). It hides honestly when no
-  comparable predecessor exists, and renders an explicit "no changes" line
-  when one does but nothing moved — unlike the anomaly sections, a ran
-  comparison that found nothing is itself information. Like the congestion
+  a `nearbyCount IS NOT NULL` Room query, with the strictly-before pick made
+  on *parsed* instants rather than timestamp strings — `Instant.toString()`
+  omits the fraction on whole-second instants, so lexicographic order can
+  disagree with chronology on same-second boundaries). It hides honestly
+  when no comparable predecessor exists, and renders an explicit "no
+  changes" line when one does but nothing moved — unlike the anomaly
+  sections, a comparison that ran and found nothing is itself information. Like the congestion
   and duplicate-SSID views this is a *derived*, presentation-layer view —
   computed on display from two stored scans, never stored or exported.
   `LocalAnalyser` deliberately stays per-scan pure and knows nothing of
@@ -379,6 +382,12 @@ The skeleton under `android/` has grown past the first spike. It ships:
     between scans fabricates nothing; a redacted BSSID is never folded),
     family-level security changes (unknown-not-comparable, mixed-mode rungs
     distinct), empty-list predecessors, and ordering.
+  - `ScanStoreTest` — the predecessor selection behind the since-last-scan
+    diff (`ScanStore.loadPreviousWithNearby`) against a fake in-memory DAO:
+    the chronology contract (parsed instants, so whole-second vs fractional
+    same-second timestamps neither hide a real predecessor nor pick a
+    chronologically-later scan), fallback past an undecodable nearest
+    candidate, unparseable timestamps skipped, and the no-predecessor null.
   - `ScanPresentationTest` — the framework-free survey/title logic
     (`ScanPresentation`) the Compose UI leans on: survey detection and the
     connected-SSID / nearby-survey / unknown-network title descriptor.
@@ -401,8 +410,9 @@ The skeleton under `android/` has grown past the first spike. It ships:
   - `ScanDaoTest` — Room `ScanDao` insert/query/replace/clear against a real
     on-device SQLite database, plus a nearby-only survey row (null SSID with a
     `nearbyCount`) round-tripping through the denormalised projection, and the
-    since-last-scan predecessor query (skips the viewed row, newer rows, and
-    rows that never collected a nearby list).
+    since-last-scan candidate query (excludes the viewed row and rows that
+    never collected a nearby list; chronology is decided in `ScanStore` on
+    parsed instants).
   - `ScanEndToEndTest` — grants the scan permission, taps "Scan now", waits
     for the pipeline (`LocalScanner` → probes → `LocalAnalyser` →
     `ScanStore`) to finish, and asserts the result rendered and a row landed

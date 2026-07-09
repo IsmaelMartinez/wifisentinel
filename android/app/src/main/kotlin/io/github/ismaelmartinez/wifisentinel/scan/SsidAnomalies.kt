@@ -131,18 +131,9 @@ object SsidAnomalies {
         nearby: List<LocalScanResult.NearbyNetwork>,
         connected: LocalScanResult.Wifi? = null,
     ): List<DuplicateSsid> {
-        val connectedEntry = connected?.takeIf {
-            !it.ssid.isNullOrBlank() && it.bssid != null
-        }?.let {
-            LocalScanResult.NearbyNetwork(
-                ssid = it.ssid,
-                bssid = it.bssid!!,
-                security = it.security,
-                channel = it.channel,
-                band = it.band,
-                signal = it.signal,
-            )
-        }
+        val connectedEntry = connected
+            ?.takeIf { !it.ssid.isNullOrBlank() }
+            ?.asNearbyNetwork()
         return (nearby + listOfNotNull(connectedEntry))
             .filter { !it.ssid.isNullOrBlank() }
             .groupBy { it.ssid!! }

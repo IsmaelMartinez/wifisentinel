@@ -84,19 +84,6 @@ object RfDiff {
             get() = appeared.isEmpty() && vanished.isEmpty() && securityChanges.isEmpty()
     }
 
-    /** The connected AP as a nearby-shaped entry, or null when unfoldable. */
-    private fun asNearby(connected: LocalScanResult.Wifi?): LocalScanResult.NearbyNetwork? =
-        connected?.bssid?.let { bssid ->
-            LocalScanResult.NearbyNetwork(
-                ssid = connected.ssid,
-                bssid = bssid,
-                security = connected.security,
-                channel = connected.channel,
-                band = connected.band,
-                signal = connected.signal,
-            )
-        }
-
     /**
      * Compare the previous scan's neighbourhood against the current one.
      * Each side is its nearby list plus its own connected AP (when foldable —
@@ -110,9 +97,9 @@ object RfDiff {
         previousConnected: LocalScanResult.Wifi? = null,
         currentConnected: LocalScanResult.Wifi? = null,
     ): Diff {
-        val previous = (previousNearby + listOfNotNull(asNearby(previousConnected)))
+        val previous = (previousNearby + listOfNotNull(previousConnected?.asNearbyNetwork()))
             .associateBy { it.bssid.lowercase() }
-        val current = (currentNearby + listOfNotNull(asNearby(currentConnected)))
+        val current = (currentNearby + listOfNotNull(currentConnected?.asNearbyNetwork()))
             .associateBy { it.bssid.lowercase() }
 
         // SSIDs the previous scan knew, for the new-BSSID-on-known-SSID flag.
@@ -123,8 +110,9 @@ object RfDiff {
             .mapNotNull { it.ssid?.takeIf(String::isNotBlank) }
             .toSet()
 
-        val appeared = current.values
-            .filter { it.bssid.lowercase() !in previous }
+        val appeared = current
+            .filterKeys { it !in previous }
+            .values
             .map { network ->
                 val name = network.ssid?.takeIf(String::isNotBlank)
                 Appeared(
@@ -137,13 +125,14 @@ object RfDiff {
                     .thenByDescending { it.network.signal },
             )
 
-        val vanished = previous.values
-            .filter { it.bssid.lowercase() !in current }
+        val vanished = previous
+            .filterKeys { it !in current }
+            .values
             .sortedByDescending { it.signal }
 
-        val securityChanges = current.values
-            .mapNotNull { network ->
-                val before = previous[network.bssid.lowercase()] ?: return@mapNotNull null
+        val securityChanges = current.entries
+            .mapNotNull { (key, network) ->
+                val before = previous[key] ?: return@mapNotNull null
                 if (SsidAnomalies.securityChanged(before.security, network.security)) {
                     SecurityChange(network = network, previousSecurity = before.security)
                 } else {

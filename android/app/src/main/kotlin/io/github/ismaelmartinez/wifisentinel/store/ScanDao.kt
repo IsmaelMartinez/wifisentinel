@@ -21,21 +21,22 @@ interface ScanDao {
     suspend fun findJson(scanId: String): String?
 
     /**
-     * The JSON blob of the most recent scan strictly before [timestamp] that
-     * collected a nearby list (`nearbyCount IS NOT NULL` — "not collected"
-     * rows, including pre-upgrade ones, can't be diffed against). The
-     * [scanId] guard excludes the scan being compared itself, so an
-     * equal-timestamp self-row never becomes its own predecessor. Backs the
-     * since-last-scan RF diff; timestamps are ISO-8601 UTC, so string
-     * ordering is chronological (same reason `observeSummaries` can ORDER BY
-     * it).
+     * Summaries of every scan that collected a nearby list (`nearbyCount IS
+     * NOT NULL` — "not collected" rows, including pre-upgrade ones, can't be
+     * diffed against), excluding [scanId] (the scan being compared). Backs
+     * the since-last-scan RF diff. Choosing the *most recent prior* scan is
+     * deliberately left to the caller: `meta.timestamp` comes from
+     * `Instant.toString()`, whose variable sub-second precision ("…05Z" vs
+     * "…05.500Z") makes lexicographic string comparison disagree with
+     * chronology on same-second boundaries — tolerable for display ordering
+     * (`observeSummaries`), not for a correctness-sensitive strictly-before
+     * pick. `ScanStore` parses and compares real instants instead.
      */
     @Query(
-        "SELECT json FROM scans WHERE nearbyCount IS NOT NULL " +
-            "AND scanId != :scanId AND timestamp < :timestamp " +
-            "ORDER BY timestamp DESC LIMIT 1",
+        "SELECT scanId, timestamp, ssid, overallRisk, nearbyCount FROM scans " +
+            "WHERE nearbyCount IS NOT NULL AND scanId != :scanId",
     )
-    suspend fun findLatestNearbyJsonBefore(timestamp: String, scanId: String): String?
+    suspend fun nearbySummariesExcept(scanId: String): List<ScanSummary>
 
     @Query("DELETE FROM scans")
     suspend fun clear()

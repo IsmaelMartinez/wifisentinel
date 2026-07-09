@@ -396,9 +396,10 @@ private fun ResultView(store: ScanStore, result: LocalScanResult, exportEnabled:
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Loaded per result, off the main thread via Room's suspend query. Stays
-    // null (section hidden) until the lookup lands or when no comparable
-    // predecessor exists.
+    // Loaded per result; the store runs the query on Room's executor and the
+    // blob decode on a background dispatcher, so nothing heavy lands on this
+    // main-thread coroutine. Stays null (section hidden) until the lookup
+    // lands or when no comparable predecessor exists.
     var previous by remember(result) { mutableStateOf<LocalScanResult?>(null) }
     LaunchedEffect(result) { previous = store.loadPreviousWithNearby(result) }
 
