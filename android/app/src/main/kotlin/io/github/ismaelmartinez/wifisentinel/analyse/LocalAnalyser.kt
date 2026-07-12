@@ -25,8 +25,18 @@ object LocalAnalyser {
         23 to "Telnet",
         80 to "HTTP",
         8080 to "HTTP (alt)",
-        554 to "RTSP",
     )
+
+    /**
+     * RTSP video-streaming ports. An open RTSP port is the strongest camera /
+     * NVR signal the phone can see — but a weak one: unlike the CLI's
+     * `hidden-device` scanner it cannot read device MAC addresses to confirm the
+     * vendor (see docs/android-companion.md §3), so a media server or video
+     * doorbell is indistinguishable from a surveillance camera here. Surfaced as
+     * a low-confidence [cameraFindings] hint rather than a generic cleartext
+     * finding, so RTSP is reported once, framed as what it most likely is.
+     */
+    private val rtspPorts = setOf(554, 8554)
 
     fun analyse(result: LocalScanResult): LocalScanResult.Analysis {
         val findings = buildList {
@@ -35,6 +45,7 @@ object LocalAnalyser {
             addAll(twinFindings(result.wifi, result.nearbyNetworks))
             channelCongestionFinding(result.wifi, result.nearbyNetworks)?.let { add(it) }
             addAll(hostFindings(result.hosts))
+            addAll(cameraFindings(result.hosts))
             latencyFinding(result.latencyMs)?.let { add(it) }
         }.sortedBy { it.severity.ordinal }
 
@@ -297,6 +308,35 @@ object LocalAnalyser {
                 Severity.LOW,
                 "Cleartext services on the LAN",
                 "One or more devices expose services over unencrypted protocols: $detail. Anyone on this network can intercept those sessions.",
+            ),
+        )
+    }
+
+    /**
+     * LOW-confidence camera/NVR hint: hosts exposing an RTSP port ([rtspPorts]).
+     * Deliberately hedged — the phone has no MAC/OUI vendor signal (the CLI's
+     * primary camera indicator), so an open RTSP port is the shape of an IP
+     * camera but could equally be a media server or doorbell. The copy says so
+     * and does not assert surveillance. Also notes RTSP is unencrypted, which is
+     * why RTSP was dropped from [cleartextPorts] — it is reported here once.
+     */
+    private fun cameraFindings(hosts: List<LocalScanResult.Host>): List<Finding> {
+        val suspects = hosts.filter { host -> host.openPorts.any { it in rtspPorts } }
+        if (suspects.isEmpty()) return emptyList()
+        val detail = suspects.joinToString(", ") { host ->
+            val ports = host.openPorts.filter { it in rtspPorts }.sorted().joinToString("/")
+            "${host.hostname ?: host.ip} (RTSP $ports)"
+        }
+        return listOf(
+            Finding(
+                Severity.LOW,
+                "Possible camera or streaming device",
+                "One or more devices expose an RTSP video-streaming port: $detail. That is " +
+                    "the shape of an IP camera or NVR — but a low-confidence signal only: a " +
+                    "media server or video doorbell looks identical, and this app cannot read " +
+                    "device MAC addresses to confirm the vendor the way the desktop CLI does. " +
+                    "RTSP is also unencrypted, so anyone on this network could view the stream. " +
+                    "Check whether you recognise the device.",
             ),
         )
     }

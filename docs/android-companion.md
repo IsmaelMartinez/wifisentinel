@@ -49,7 +49,7 @@ either omitted or set to a documented sentinel.
 | `wifi.macRandomised` | — | **Not observable.** `WifiInfo.getMacAddress()` returns the sanitised `02:00:00:00:00:00` for all non-system callers; the real per-SSID randomisation flag lives in `WifiConfiguration.macRandomizationSetting` which requires a system permission. Omitted from the Android schema. |
 | `network.ip`, `subnet`, `gateway.ip`, `dns.servers` | `DhcpInfo` / `LinkProperties` | Available without extra permissions |
 | `network.gateway.mac` | ARP via `/proc/net/arp` | **Blocked** on modern Android; leave undefined |
-| `network.hosts` | TCP connect sweep + `NsdManager` (mDNS) | Lightweight; no OS fingerprint, no nmap-grade detail |
+| `network.hosts` | TCP connect sweep + `NsdManager` (mDNS) | Lightweight; no OS fingerprint, no nmap-grade detail. The sweep includes RTSP (554/8554), so the analyser can raise a **low-confidence** camera/NVR hint — but without ARP it has no MAC/OUI vendor signal (the CLI's primary camera indicator), so a media server or doorbell is indistinguishable from a surveillance camera and the finding stays hedged. ONVIF's UDP WS-Discovery (3702) is out of reach of a TCP connect sweep, so it is not probed |
 | `connections.*`, `localServices` | — | **Not observable** from an unprivileged app; omit |
 | `security.firewall`, `security.vpn` | `ConnectivityManager` link capabilities (`NET_CAPABILITY_*`) | Can detect an active VPN; no firewall introspection |
 | `traffic.*` | — | **Not observable** without VpnService interception; explicit follow-up |
