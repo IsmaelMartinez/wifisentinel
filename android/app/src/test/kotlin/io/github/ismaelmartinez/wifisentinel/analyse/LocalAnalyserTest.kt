@@ -123,6 +123,42 @@ class LocalAnalyserTest {
     }
 
     @Test
+    fun rtspHostIsFlaggedAsPossibleCamera() {
+        // An open RTSP port is the low-confidence camera signal — surfaced with
+        // the host named and hedged, since the phone can't confirm the vendor.
+        val hosts = listOf(LocalScanResult.Host(ip = "192.168.1.20", openPorts = listOf(554)))
+        val analysis = LocalAnalyser.analyse(result(security = "WPA2", hosts = hosts))
+        val finding = analysis.findings.single { it.title.contains("camera", ignoreCase = true) }
+        assertEquals(Severity.LOW, finding.severity)
+        assertTrue(finding.detail.contains("192.168.1.20"))
+        assertTrue(finding.detail.contains("RTSP"))
+    }
+
+    @Test
+    fun altRtspPortIsFlaggedAsPossibleCamera() {
+        // The alt RTSP port (8554) added to the sweep is treated the same as 554.
+        val hosts = listOf(LocalScanResult.Host(ip = "192.168.1.21", openPorts = listOf(8554)))
+        val analysis = LocalAnalyser.analyse(result(security = "WPA2", hosts = hosts))
+        assertTrue(analysis.findings.any { it.title.contains("camera", ignoreCase = true) })
+    }
+
+    @Test
+    fun rtspIsNotAlsoReportedAsCleartext() {
+        // RTSP is surfaced once, as a camera hint (whose copy notes it's
+        // unencrypted) — not additionally as a generic cleartext finding.
+        val hosts = listOf(LocalScanResult.Host(ip = "192.168.1.20", openPorts = listOf(554)))
+        val analysis = LocalAnalyser.analyse(result(security = "WPA2", hosts = hosts))
+        assertTrue(analysis.findings.none { it.title.contains("Cleartext", ignoreCase = true) })
+    }
+
+    @Test
+    fun nonRtspHostRaisesNoCameraFinding() {
+        val hosts = listOf(LocalScanResult.Host(ip = "192.168.1.10", openPorts = listOf(80, 443)))
+        val analysis = LocalAnalyser.analyse(result(security = "WPA2", hosts = hosts))
+        assertTrue(analysis.findings.none { it.title.contains("camera", ignoreCase = true) })
+    }
+
+    @Test
     fun highLatencyIsReportedAsInfo() {
         val analysis = LocalAnalyser.analyse(result(latencyMs = 500))
         assertTrue(analysis.findings.any { it.title.contains("latency", ignoreCase = true) })

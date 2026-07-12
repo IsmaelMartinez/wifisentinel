@@ -45,8 +45,16 @@ class HostProbe(private val context: Context) {
         "_googlecast._tcp.",
     )
 
-    /** Ports the TCP sweep checks. Kept short to bound wall-clock time. */
-    private val sweepPorts = listOf(22, 53, 80, 443, 554, 8080, 8443)
+    /**
+     * Ports the TCP sweep checks. Kept short to bound wall-clock time. 554 and
+     * 8554 are RTSP (video streaming) — a low-confidence IP-camera / NVR signal
+     * the analyser surfaces (see
+     * [io.github.ismaelmartinez.wifisentinel.analyse.LocalAnalyser]). ONVIF's
+     * device-discovery port (3702) is deliberately absent: it is UDP
+     * WS-Discovery, which a TCP connect sweep cannot observe, so probing it here
+     * would only ever be a dead socket.
+     */
+    private val sweepPorts = listOf(22, 53, 80, 443, 554, 8080, 8443, 8554)
 
     /**
      * Discover hosts on the network the device is attached to.
