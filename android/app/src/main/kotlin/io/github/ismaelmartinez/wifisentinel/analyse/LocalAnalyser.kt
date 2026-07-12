@@ -317,8 +317,9 @@ object LocalAnalyser {
      * Deliberately hedged — the phone has no MAC/OUI vendor signal (the CLI's
      * primary camera indicator), so an open RTSP port is the shape of an IP
      * camera but could equally be a media server or doorbell. The copy says so
-     * and does not assert surveillance. Also notes RTSP is unencrypted, which is
-     * why RTSP was dropped from [cleartextPorts] — it is reported here once.
+     * and does not assert surveillance. Also notes RTSP is often unencrypted (it
+     * can carry auth or run over TLS/RTSPS, so it's a caveat, not a certainty),
+     * which is why RTSP was dropped from [cleartextPorts] — it is reported here once.
      */
     private fun cameraFindings(hosts: List<LocalScanResult.Host>): List<Finding> {
         val suspects = hosts.filter { host -> host.openPorts.any { it in rtspPorts } }
@@ -335,7 +336,8 @@ object LocalAnalyser {
                     "the shape of an IP camera or NVR — but a low-confidence signal only: a " +
                     "media server or video doorbell looks identical, and this app cannot read " +
                     "device MAC addresses to confirm the vendor the way the desktop CLI does. " +
-                    "RTSP is also unencrypted, so anyone on this network could view the stream. " +
+                    "RTSP is also often unencrypted, so the stream may be viewable by others on " +
+                    "this network unless it requires credentials or runs over TLS (RTSPS). " +
                     "Check whether you recognise the device.",
             ),
         )
