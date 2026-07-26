@@ -6,6 +6,13 @@ const wifisentinelSrc = path.resolve(process.cwd(), "../src");
 const nextConfig: NextConfig = {
   transpilePackages: ["../src"],
   serverExternalPackages: ["zod"],
+  // TypeScript 7 dropped the classic `typescript/lib/typescript.js` compiler
+  // API that Next.js otherwise uses to read tsconfig (paths, etc.) for the
+  // webpack build. Without this flag, Next can't load tsconfig at all under
+  // TS7 and silently drops the `@/*` path aliases, breaking module resolution.
+  experimental: {
+    useTypeScriptCli: true,
+  },
   // Silence the "multiple lockfiles detected" warning by anchoring tracing
   // to this dashboard directory rather than the repo root.
   outputFileTracingRoot: process.cwd(),
