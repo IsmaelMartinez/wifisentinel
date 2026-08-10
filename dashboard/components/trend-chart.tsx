@@ -37,7 +37,7 @@ export function TrendChart({
         <Tooltip
           contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px" }}
           labelStyle={{ color: "#fafafa" }}
-          labelFormatter={(v) => new Date(v).toLocaleString()}
+          labelFormatter={(v) => (typeof v === "string" || typeof v === "number" ? new Date(v).toLocaleString() : "")}
           formatter={(value) => [`${value}${unit}`, ""]}
         />
         <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={{ r: 3 }} />
