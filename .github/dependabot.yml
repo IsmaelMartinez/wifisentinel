@@ -7,9 +7,10 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
-    # Hold TypeScript majors on the CLI: no typescript-eslint release supports
-    # TS 7 yet (typescript-eslint/typescript-eslint#10940). The dashboard is
-    # already on 7.x and is not held. #182 sat red for four weeks.
+    # Hold TypeScript majors on the CLI: typescript-eslint's peer range is
+    # typescript >=4.8.4 <6.1.0, so 7.x cannot install (#182 sat red for four
+    # weeks). TS 7 support is tracked in typescript-eslint/typescript-eslint#10940.
+    # The dashboard is already on 7.x and is not held.
     ignore:
       - dependency-name: typescript
         update-types:
