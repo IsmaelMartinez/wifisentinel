@@ -7,6 +7,15 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    # Hold TypeScript majors on the CLI: typescript-eslint's peer range is
+    # typescript >=4.8.4 <6.1.0, so 7.x cannot install (#182 sat red for four
+    # weeks). Remove this ignore once that peer range admits 7.x; upstream
+    # context is typescript-eslint/typescript-eslint#10940 (TS 7 is the Go port).
+    # The dashboard is already on 7.x and is not held.
+    ignore:
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     groups:
       opentelemetry:
         patterns:
