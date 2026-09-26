@@ -1,6 +1,6 @@
 // src/analyser/rf/rogue-ap.ts
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isWeakerSecurity } from "../../collector/schema/security.js";
+import { isSecurityDowngrade } from "../security.js";
 import type { RogueAPFinding, RogueAPAnalysis } from "./types.js";
 
 export function detectRogueAPs(wifi: NetworkScanResult["wifi"]): RogueAPAnalysis {
@@ -26,7 +26,7 @@ export function detectRogueAPs(wifi: NetworkScanResult["wifi"]): RogueAPAnalysis
     }
 
     // Rule 2: Same SSID, weaker security
-    if (isWeakerSecurity(nearby.security, wifi.security)) {
+    if (isSecurityDowngrade(wifi.security, nearby.security)) {
       indicators.push("weaker_security");
       descParts.push(`Security downgraded: ${nearby.security} vs current ${wifi.security}`);
       severity = "high";

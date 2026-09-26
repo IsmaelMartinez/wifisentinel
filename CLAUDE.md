@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev             # Run CLI in development (via tsx): tsx src/cli.ts
 npm run scan            # Quick scan shortcut: tsx src/cli.ts scan
 npm run build           # Compile TypeScript to dist/
-npm run typecheck       # Type-check without emitting: tsc --noEmit
+npm run typecheck       # Type-check src/ and tests/ without emitting: tsc -p tsconfig.check.json
 npm test                # Run tests (Node built-in test runner via tsx)
 npm run lint            # Run ESLint on src/ and tests/
+npm run dashboard       # Start the Next.js dashboard on 127.0.0.1 (run npm install in dashboard/ first)
 ```
 
 Scan with options:
@@ -20,9 +21,10 @@ npm run dev -- scan --analyse -v                               # full analysis w
 npm run dev -- scan -o json -f report.json                     # JSON output to file
 npm run dev -- scan --otel otlp                                # enable OTEL tracing
 npm run dev -- analyse -v                                      # dedicated analysis command
-npm run dev -- watch --interval 10m                            # continuous monitoring with alerting
+npm run dev -- watch --interval 10                             # continuous monitoring with alerting
 npm run dev -- devices                                         # per-MAC presence timelines from history
 npm run dev -- recon example.com --analyse                     # external attack surface recon
+npm run dev -- import scan.json                                # import an Android companion export
 ```
 
 Tests are in `tests/` and run with `npm test` (Node built-in test runner via tsx). ESLint is configured in `eslint.config.js` and run with `npm run lint`.
@@ -35,7 +37,7 @@ The pipeline flows: CLI (commander) -> Collector -> Scanners -> Analyser -> Repo
 
 ### `src/collector/` — Data collection layer
 
-The collector orchestrates all scanning. `tool-resolver.ts` implements a three-tier fallback chain (preferred -> fallback -> minimal) for each capability (e.g. nmap -> arp-scan -> arp for host discovery). `exec.ts` provides safe command execution via `execFileSync`/`execFile` (no shell, avoiding injection). Eleven scanners in `scanners/` each parse output from system tools into typed data (wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, deauth, speed, traffic). `schema/scan-result.ts` is the central Zod-validated schema — the `NetworkScanResult` type flows through everything. The `traffic` scanner uses tshark (preferred) or tcpdump (fallback); it degrades to an absent field when neither tool is installed or capture permissions are missing.
+The collector orchestrates all scanning. `tool-resolver.ts` implements a three-tier fallback chain (preferred -> fallback -> minimal) for each capability (e.g. nmap -> arp-scan -> arp for host discovery). `exec.ts` provides safe command execution via `execFileSync`/`execFile` (no shell, avoiding injection). Eleven scanners in `scanners/` each parse output from system tools into typed data (wifi, dns, host-discovery, port, security-posture, connection, hidden-device, intrusion-detection, deauth, speed, traffic). `schema/scan-result.ts` is the central Zod schema — the `NetworkScanResult` type inferred from it flows through everything. Live scan results are not `.parse`d at runtime (the schema serves as the type source; the Android import tests assert conformance); runtime Zod validation happens on the store indexes (`ScanIndex`, `ReconIndex`) and on Android imports via the relaxed `AndroidScanImport` schema in `android-import.ts`. The `traffic` scanner uses tshark (preferred) or tcpdump (fallback); it degrades to an absent field when neither tool is installed or capture permissions are missing.
 
 Network detection branches by platform: macOS uses `ifconfig en0` + `networksetup`; Linux uses `ip route` + `ip addr` to pick the default wireless interface. The scan runs in stages: parallel independent scans first (wifi, dns, security, connections), then host discovery, then deep analysis (ports, hidden devices, intrusion detection, deauth detection, traffic capture), and finally speed test last to avoid skewing results.
 
@@ -49,15 +51,19 @@ Core reporters: `terminal.reporter.ts` produces coloured ASCII output with a sco
 
 ### `src/commands/` — Additional CLI commands
 
-Beyond `scan` / `analyse` (registered directly in `cli.ts`), each file in `src/commands/` registers one sub-command on the Commander program: `history`, `diff`, `trend`, `schedule`, `rf`, `export`, `recon`, `recon-history`, `watch` (continuous monitoring), `devices` (per-MAC presence timelines aggregated from scan history).
+Beyond `scan` / `analyse` (registered directly in `cli.ts`), each file in `src/commands/` registers one sub-command on the Commander program: `history`, `diff`, `trend`, `schedule`, `rf`, `export`, `recon`, `recon-history`, `watch` (continuous monitoring), `devices` (per-MAC presence timelines aggregated from scan history), `import` (loads an Android companion export, validates it with `AndroidScanImport`, maps it onto a partial `NetworkScanResult` via `src/collector/android-import.ts`, then scores and saves it).
 
 ### `src/store/` — Scan persistence
 
-`src/store/index.ts` persists scans to `~/.wifisentinel/scans/` as JSON files with a validated index. `recon-store.ts` does the same for recon results. `diff.ts` computes structural deltas between two stored scans.
+`src/store/index.ts` persists scans to `~/.wifisentinel/scans/` (or `$XDG_DATA_HOME/wifisentinel/scans/` on Linux when set) as JSON files with a validated index. `recon-store.ts` does the same for recon results. `diff.ts` computes structural deltas between two stored scans.
 
 ### `src/telemetry/` — OpenTelemetry instrumentation
 
 Tracing wraps scan phases in spans via `withSpan()`. Metrics record tool resolution tiers and scan durations. Supports console, OTLP, or no-op exporters.
+
+### `dashboard/` and `android/`
+
+`dashboard/` is a separate Next.js app (its own `package.json` and lockfile) that reads the scan store and renders history, per-scan detail, trends and HTML export; `npm run dashboard` starts it bound to 127.0.0.1. `android/` is a prototype Kotlin + Jetpack Compose companion app built with Gradle; it exports scans as JSON (`LocalScanResult`) that the CLI's `import` command ingests. See `android/README.md` and `docs/android-companion.md`.
 
 ## Conventions
 

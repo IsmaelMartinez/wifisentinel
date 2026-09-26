@@ -3,10 +3,12 @@ package io.github.ismaelmartinez.wifisentinel.scan
 import kotlinx.serialization.Serializable
 
 /**
- * Narrower cousin of the CLI's `NetworkScanResult`. Field names mirror the
- * Zod schema at `src/collector/schema/scan-result.ts` so the planned
- * `wifisentinel import <file>` command can validate against a relaxed
- * variant without renaming. Anything the phone cannot observe (traffic
+ * Narrower cousin of the CLI's `NetworkScanResult`. Field names are
+ * Android-side names (e.g. `gatewayIp`, `dnsServers`, `vpnActive`), not a
+ * mirror of the Zod schema at `src/collector/schema/scan-result.ts`: the
+ * `wifisentinel import <file>` command validates exports against the relaxed
+ * `AndroidScanImport` schema and maps them onto `NetworkScanResult` in
+ * `src/collector/android-import.ts`. Anything the phone cannot observe (traffic
  * capture, connections table, deauth detection, MAC randomisation state,
  * etc.) is omitted rather than filled with zeros.
  *

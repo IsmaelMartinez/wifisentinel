@@ -1,5 +1,6 @@
 import { run } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
+import { parseArpOutput } from "./host-discovery.scanner.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -116,18 +117,29 @@ function scanKernelParams(): NetworkScanResult["security"]["kernelParams"] {
 // Client isolation
 // ---------------------------------------------------------------------------
 
-function scanClientIsolation(knownHostIp?: string): boolean | null {
-  // If no known host IP was supplied, try to find one from the ARP table
-  let targetIp = knownHostIp;
+/**
+ * Pick a peer to test client isolation against: the first unicast ARP entry
+ * that is neither the gateway nor this machine. The gateway always answers
+ * even with isolation on, so pinging it would report isolation as off.
+ * Without a known gateway and local IP (bootstrap reports "unknown") neither
+ * can be safely excluded — macOS lists this host as a permanent ARP entry —
+ * so no target is returned.
+ */
+export function pickIsolationTarget(
+  arpOutput: string,
+  gatewayIp?: string,
+  localIp?: string,
+): string | undefined {
+  const ipv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+  if (!gatewayIp || !ipv4.test(gatewayIp) || !localIp || !ipv4.test(localIp)) return undefined;
+  return parseArpOutput(arpOutput).find(
+    (e) => e.ip !== gatewayIp && e.ip !== localIp,
+  )?.ip;
+}
 
-  if (!targetIp) {
-    const arpOut = run("/usr/sbin/arp", ["-a"]).stdout;
-    // Lines look like:  hostname (192.168.1.1) at aa:bb:cc:dd:ee:ff ...
-    const arpMatch = arpOut.match(/\((\d{1,3}(?:\.\d{1,3}){3})\)/);
-    if (arpMatch) {
-      targetIp = arpMatch[1];
-    }
-  }
+function scanClientIsolation(gatewayIp?: string, localIp?: string): boolean | null {
+  const arpOut = run("/usr/sbin/arp", ["-a"]).stdout;
+  const targetIp = pickIsolationTarget(arpOut, gatewayIp, localIp);
 
   if (!targetIp) {
     // Cannot determine isolation without a peer to ping
@@ -251,8 +263,13 @@ async function scanSecurityPostureLinux(): Promise<NetworkScanResult["security"]
 // Main export
 // ---------------------------------------------------------------------------
 
+export interface SecurityPostureOptions {
+  gatewayIp?: string;
+  localIp?: string;
+}
+
 export async function scanSecurityPosture(
-  knownHostIp?: string
+  options: SecurityPostureOptions = {}
 ): Promise<NetworkScanResult["security"]> {
   if (process.platform === "linux") {
     return scanSecurityPostureLinux();
@@ -262,7 +279,7 @@ export async function scanSecurityPosture(
   const vpn = scanVpn();
   const proxy = scanProxy();
   const kernelParams = scanKernelParams();
-  const clientIsolation = scanClientIsolation(knownHostIp);
+  const clientIsolation = scanClientIsolation(options.gatewayIp, options.localIp);
 
   return { firewall, vpn, proxy, kernelParams, clientIsolation };
 }

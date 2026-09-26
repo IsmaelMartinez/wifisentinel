@@ -49,7 +49,7 @@ export const FullAnalysis = z.object({
   scanId: z.string(),
   timestamp: z.string(),
   analyses: z.array(PersonaAnalysis),
-  consensusRating: z.string(),
+  consensusRating: RiskRating,
   consensusActions: z.array(z.string()),
 });
 export type FullAnalysis = z.infer<typeof FullAnalysis>;
@@ -92,7 +92,9 @@ export function consensusRating(ratings: RiskRating[]): RiskRating {
   let bestCount = 0;
   for (const rating of RISK_ORDER) {
     const count = counts.get(rating) ?? 0;
-    if (count > bestCount || (count === bestCount && count > 0)) {
+    // Strictly greater: RISK_ORDER runs most-severe first, so the first
+    // rating to reach a tied count is the more severe one and keeps it.
+    if (count > bestCount) {
       best = rating;
       bestCount = count;
     }
@@ -100,16 +102,84 @@ export function consensusRating(ratings: RiskRating[]): RiskRating {
   return best;
 }
 
-/** Deduplicate and order actions by frequency across personas. */
-export function consensusActions(allActions: string[][]): string[] {
-  const freq = new Map<string, number>();
+/**
+ * A persona's priority action for one insight id. `key` names the underlying
+ * remediation so consensus can merge different wordings of it across
+ * personas; `text` defaults to the insight's own recommendation.
+ */
+export interface ActionDef {
+  key: string;
+  text?: string;
+}
+/** Insight id → action, in priority order. */
+export type ActionMap = Record<string, ActionDef>;
+export interface KeyedAction {
+  key: string;
+  text: string;
+}
+
+export interface PersonaSpec {
+  persona: PersonaId;
+  displayName: string;
+  perspective: string;
+  actions: ActionMap;
+  /** When nothing maps, fall back to the most severe insight's recommendation. */
+  fallback?: boolean;
+}
+
+const MAX_ACTIONS = 5;
+
+/**
+ * Priority actions for the insights a persona raised, in map order. Info
+ * insights (passing checks) never produce an action.
+ */
+export function keyedActionsFor(insights: Insight[], spec: PersonaSpec): KeyedAction[] {
+  const gaps = insights.filter((i) => i.severity !== "info");
+  const byId = new Map(gaps.map((i) => [i.id, i]));
+  const actions: KeyedAction[] = [];
+  for (const [id, def] of Object.entries(spec.actions)) {
+    const insight = byId.get(id);
+    if (insight) actions.push({ key: def.key, text: def.text ?? insight.recommendation });
+  }
+  if (actions.length === 0 && spec.fallback && gaps.length > 0) {
+    const top = Severity.options.map((s) => gaps.find((i) => i.severity === s)).find(Boolean)!;
+    actions.push({ key: top.recommendation, text: top.recommendation });
+  }
+  return actions.slice(0, MAX_ACTIONS);
+}
+
+export function actionsFor(insights: Insight[], spec: PersonaSpec): string[] {
+  return keyedActionsFor(insights, spec).map((a) => a.text);
+}
+
+export function buildPersonaAnalysis(
+  spec: PersonaSpec,
+  insights: Insight[],
+  executiveSummary: string,
+): PersonaAnalysis {
+  return {
+    persona: spec.persona,
+    displayName: spec.displayName,
+    perspective: spec.perspective,
+    riskRating: riskFromInsights(insights),
+    executiveSummary,
+    insights,
+    priorityActions: actionsFor(insights, spec),
+  };
+}
+
+/**
+ * Merge actions across personas on their canonical key, keeping the first
+ * wording seen, ordered by how many personas recommend it.
+ */
+export function consensusActions(allActions: KeyedAction[][]): string[] {
+  const byKey = new Map<string, { text: string; count: number }>();
   for (const actions of allActions) {
-    for (const action of actions) {
-      const normalised = action.trim();
-      freq.set(normalised, (freq.get(normalised) ?? 0) + 1);
+    for (const key of new Set(actions.map((a) => a.key))) {
+      const entry = byKey.get(key);
+      if (entry) entry.count++;
+      else byKey.set(key, { text: actions.find((a) => a.key === key)!.text.trim(), count: 1 });
     }
   }
-  return [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([action]) => action);
+  return [...byKey.values()].sort((a, b) => b.count - a.count).map((e) => e.text);
 }

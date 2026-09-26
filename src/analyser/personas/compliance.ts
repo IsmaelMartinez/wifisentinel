@@ -1,12 +1,22 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isWeakSecurity } from "../../collector/schema/security.js";
-import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import { classifySecurity } from "../security.js";
+import type { Insight, PersonaAnalysis, PersonaSpec } from "./types.js";
+import { buildPersonaAnalysis } from "./types.js";
 
-const PERSONA_ID = "compliance" as const;
-const DISPLAY_NAME = "Compliance Officer";
-const PERSPECTIVE =
-  "Assesses adherence to regulatory frameworks, industry standards, and organisational security policies.";
+export const complianceSpec: PersonaSpec = {
+  persona: "compliance",
+  displayName: "Compliance Officer",
+  perspective:
+    "Assesses adherence to regulatory frameworks, industry standards, and organisational security policies.",
+  actions: {
+    "co-firewall-control-failure": { key: "firewall", text: "Enable the host firewall to satisfy mandatory access control requirements" },
+    "co-weak-encryption": { key: "wifi-encryption", text: "Upgrade wireless encryption to meet minimum cryptographic standards" },
+    "co-unencrypted-data-transit": { key: "enforce-tls", text: "Enforce TLS on all data flows to meet data-in-transit requirements" },
+    "co-incomplete-asset-inventory": { key: "identify-devices", text: "Complete the asset inventory and implement device registration controls" },
+    "co-unmanaged-cameras": { key: "camera-review", text: "Conduct vendor security assessments for detected camera devices" },
+    "co-dns-integrity-compromised": { key: "encrypted-dns", text: "Remediate DNS interception to restore data integrity controls" },
+  },
+};
 
 export function analyseAsCompliance(
   result: NetworkScanResult,
@@ -14,7 +24,7 @@ export function analyseAsCompliance(
   const insights: Insight[] = [];
 
   // --- Encryption controls ---
-  if (isWeakSecurity(result.wifi.security)) {
+  if (classifySecurity(result.wifi.security).weak) {
     insights.push({
       id: "co-weak-encryption",
       title:
@@ -26,7 +36,7 @@ export function analyseAsCompliance(
       recommendation:
         "Remediation required: upgrade to WPA3-Personal or WPA2-AES. Document the finding in the risk register and set a remediation deadline.",
       affectedAssets: [result.wifi.bssid, result.wifi.ssid ?? "(hidden)"],
-      references: ["CIS-W-1.1", "NIST-800-153-3.2", "IEEE-802.11-9.4"],
+      references: ["CIS-W-1.1", "NIST-W-2.1", "IEEE-4.1"],
     });
   }
 
@@ -42,7 +52,7 @@ export function analyseAsCompliance(
       recommendation:
         "Enable the firewall immediately. Document the gap period. Update the control assessment to reflect current status.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.1", "NIST-800-153-5.1"],
+      references: ["CIS-W-2.1", "NIST-W-4.2"],
     });
   }
 
@@ -58,7 +68,7 @@ export function analyseAsCompliance(
       recommendation:
         "Implement DNSSEC-validating resolvers. Document in the remediation plan with target completion date.",
       affectedAssets: result.network.dns.servers,
-      references: ["CIS-W-4.1", "NIST-800-153-3.3"],
+      references: ["CIS-W-4.2"],
     });
   }
 
@@ -73,7 +83,7 @@ export function analyseAsCompliance(
       recommendation:
         "Switch to encrypted DNS transport (DoH/DoT). Document the interception finding and notify the security team.",
       affectedAssets: result.network.dns.servers,
-      references: ["CIS-W-4.1", "NIST-800-153-3.3"],
+      references: ["CIS-W-4.1"],
     });
   }
 
@@ -97,26 +107,7 @@ export function analyseAsCompliance(
           .map((h) => h.ip),
         ...unknownDevices.map((d) => d.ip),
       ],
-      references: ["CIS-W-2.1", "NIST-800-153-2.1"],
-    });
-  }
-
-  // --- Audit trail / logging ---
-  const hasOtel = Object.keys(result.meta.toolchain).some((k) =>
-    k.toLowerCase().includes("otel"),
-  );
-  if (!hasOtel) {
-    insights.push({
-      id: "co-no-audit-logging",
-      title: "No OpenTelemetry instrumentation detected — audit trail gap",
-      severity: "medium",
-      category: "audit-trail",
-      description: `Compliance frameworks require adequate audit logging for security events. Without OTEL or equivalent instrumentation, there is no verifiable audit trail for incident investigation or regulatory review.`,
-      technicalDetail: `Toolchain entries: ${Object.keys(result.meta.toolchain).join(", ")}. No OTEL-related tooling detected.`,
-      recommendation:
-        "Implement OpenTelemetry instrumentation for security-relevant events. Configure log export to a tamper-evident store.",
-      affectedAssets: [result.meta.hostname],
-      references: ["NIST-800-153-6.2"],
+      references: ["OWASP-IoT-8"],
     });
   }
 
@@ -134,7 +125,7 @@ export function analyseAsCompliance(
       affectedAssets: result.traffic.unencrypted.map(
         (u) => `${u.dest}:${u.port}`,
       ),
-      references: ["CIS-W-3.2", "NIST-800-153-3.2"],
+      references: ["CIS-W-3.2", "OWASP-IoT-7"],
     });
   }
 
@@ -151,7 +142,7 @@ export function analyseAsCompliance(
       recommendation:
         "Conduct a vendor security assessment for each camera manufacturer. Document data flows and retention policies.",
       affectedAssets: cameras.map((c) => c.ip),
-      references: ["OWASP-IoT-1", "NIST-800-153-2.2"],
+      references: ["OWASP-IoT-1", "CIS-W-5.2"],
     });
   }
 
@@ -167,7 +158,7 @@ export function analyseAsCompliance(
       recommendation:
         "Document the double NAT configuration in the risk register. Assess impact on security monitoring and incident response.",
       affectedAssets: [result.network.gateway.ip],
-      references: ["NIST-800-153-4.1"],
+      references: ["NIST-W-4.1"],
     });
   }
 
@@ -183,7 +174,7 @@ export function analyseAsCompliance(
       recommendation:
         "Enable MAC address randomisation. Document the privacy control in the data protection impact assessment.",
       affectedAssets: [result.meta.hostname],
-      references: ["IEEE-802.11-11.1"],
+      references: ["NIST-W-1.1"],
     });
   }
 
@@ -200,21 +191,11 @@ export function analyseAsCompliance(
       recommendation:
         "Review and authorise each exposed service. Bind to loopback where network access is not required. Document approved exceptions.",
       affectedAssets: exposed.map((s) => `${s.bindAddress}:${s.port}`),
-      references: ["CIS-W-5.2", "NIST-800-153-5.1"],
+      references: ["OWASP-IoT-3"],
     });
   }
 
-  const priorityActions = deriveActions(insights);
-
-  return {
-    persona: PERSONA_ID,
-    displayName: DISPLAY_NAME,
-    perspective: PERSPECTIVE,
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildSummary(insights),
-    insights,
-    priorityActions,
-  };
+  return buildPersonaAnalysis(complianceSpec, insights, buildSummary(insights));
 }
 
 function buildSummary(insights: Insight[]): string {
@@ -232,36 +213,4 @@ function buildSummary(insights: Insight[]): string {
     return `The environment has ${insights.length} compliance finding(s) across ${categories.size} control domain(s). Most mandatory controls are in place, though several recommendations should be addressed in the next audit cycle.`;
   }
   return `All assessed controls are in place. No compliance findings were identified. The environment meets the minimum requirements of the assessed frameworks.`;
-}
-
-function deriveActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  const ids = new Set(insights.map((i) => i.id));
-
-  if (ids.has("co-firewall-control-failure"))
-    actions.push(
-      "Enable the host firewall to satisfy mandatory access control requirements",
-    );
-  if (ids.has("co-weak-encryption"))
-    actions.push(
-      "Upgrade wireless encryption to meet minimum cryptographic standards",
-    );
-  if (ids.has("co-unencrypted-data-transit"))
-    actions.push(
-      "Enforce TLS on all data flows to meet data-in-transit requirements",
-    );
-  if (ids.has("co-incomplete-asset-inventory"))
-    actions.push(
-      "Complete the asset inventory and implement device registration controls",
-    );
-  if (ids.has("co-unmanaged-cameras"))
-    actions.push(
-      "Conduct vendor security assessments for detected camera devices",
-    );
-  if (ids.has("co-dns-integrity-compromised"))
-    actions.push("Remediate DNS interception to restore data integrity controls");
-  if (ids.has("co-no-audit-logging"))
-    actions.push("Implement audit logging with OpenTelemetry instrumentation");
-
-  return actions.slice(0, 5);
 }
