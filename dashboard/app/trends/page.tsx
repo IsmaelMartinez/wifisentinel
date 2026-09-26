@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { getScans, getScan } from "@/lib/store";
 import { isPartialSource, splitBySource } from "@wifisentinel/store/source.js";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default function TrendsPage() {
   const entries = getScans({ limit: 20 });
