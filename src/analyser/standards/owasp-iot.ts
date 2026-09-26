@@ -6,8 +6,12 @@ import {
   computeGrade,
   computeScore,
 } from "./types.js";
+import { wifiGeneration } from "./protocol.js";
 
 const STANDARD = "owasp-iot" as const;
+
+/** 802.11a/b/g — generations that predate WPA2-era firmware support. */
+const LAST_LEGACY_GENERATION = 3;
 
 /** Common management/admin ports that may indicate weak default configs. */
 const MANAGEMENT_PORTS = new Set([
@@ -104,25 +108,26 @@ function checkInsecureInterfaces(result: NetworkScanResult): Finding {
 function checkUpdateMechanism(result: NetworkScanResult): Finding {
   // Infer from protocol version — older protocols suggest unmaintained firmware
   const isLegacy = isUnencrypted(result.wifi.security);
-  const proto = result.wifi.protocol.toLowerCase();
-  const isOldProto =
-    proto.includes("802.11b") ||
-    proto.includes("802.11a") ||
-    proto.includes("802.11g");
+  const generation = wifiGeneration(result.wifi.protocol);
+  const isOldProto = generation !== undefined && generation <= LAST_LEGACY_GENERATION;
 
   const outdated = isLegacy || isOldProto;
+  // With a usable cipher and no PHY reading there is nothing to infer from.
+  const unmeasured = !outdated && generation === undefined;
 
   return {
     id: "OWASP-IoT-4",
     standard: STANDARD,
     title: "Lack of secure update mechanism",
     severity: "high",
-    status: outdated ? "fail" : "pass",
+    status: outdated ? "fail" : unmeasured ? "not-applicable" : "pass",
     description:
       "Devices running outdated protocols likely lack automated secure update mechanisms, leaving known vulnerabilities unpatched.",
     recommendation: outdated
       ? "Update device firmware. Replace end-of-life hardware that no longer receives security updates."
-      : "No action needed — current protocol versions suggest maintained devices.",
+      : unmeasured
+        ? "No action needed — the Wi-Fi protocol generation was not reported."
+        : "No action needed — current protocol versions suggest maintained devices.",
     evidence: `Protocol: ${result.wifi.protocol}, security: ${result.wifi.security}`,
   };
 }

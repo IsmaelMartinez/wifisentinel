@@ -1,7 +1,7 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
 import { isPingLatency } from "../../collector/schema/latency.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import { fallbackActions, riskFromInsights } from "./types.js";
 
 const PERSONA_ID = "net-engineer" as const;
 const DISPLAY_NAME = "Network Engineer";
@@ -320,9 +320,7 @@ function deriveActions(
   if (ids.has("ne-slow-dns"))
     actions.push("Switch to a faster DNS resolver to reduce resolution latency");
 
-  if (actions.length === 0 && insights.length > 0) {
-    actions.push("Review DNS anomalies and optimise resolver configuration");
-  }
+  if (actions.length === 0) return fallbackActions(insights);
 
   return actions.slice(0, 5);
 }
