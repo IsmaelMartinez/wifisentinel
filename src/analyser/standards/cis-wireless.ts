@@ -1,10 +1,11 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import {
   type Finding,
   type StandardScore,
   computeGrade,
   computeScore,
+  wpaTierStatus,
 } from "./types.js";
 
 const STANDARD = "cis-wireless" as const;
@@ -32,12 +33,8 @@ const DEFAULT_SSIDS = new Set([
 ]);
 
 function checkEncryption(result: NetworkScanResult): Finding {
-  const isWpa3 = supportsWpa3(result.wifi.security);
-  const isWpa2 = supportsWpa2(result.wifi.security);
-
-  let status: Finding["status"] = "fail";
-  if (isWpa3) status = "pass";
-  else if (isWpa2) status = "partial";
+  const { wpaTier } = classifySecurity(result.wifi.security);
+  const status = wpaTierStatus(wpaTier);
 
   return {
     id: "CIS-W-1.1",
@@ -47,9 +44,12 @@ function checkEncryption(result: NetworkScanResult): Finding {
     status,
     description:
       "Network should use WPA3 or at minimum WPA2. WEP and open networks are insecure.",
-    recommendation: isWpa3
-      ? "No action needed."
-      : "Upgrade to WPA3-Personal or WPA3-Enterprise on the access point.",
+    recommendation:
+      wpaTier === "wpa3"
+        ? "No action needed."
+        : wpaTier === "unknown"
+          ? "Security mode was not reported — confirm the access point uses WPA3, or WPA2 at minimum."
+          : "Upgrade to WPA3-Personal or WPA3-Enterprise on the access point.",
     evidence: `Security: ${result.wifi.security}`,
   };
 }
