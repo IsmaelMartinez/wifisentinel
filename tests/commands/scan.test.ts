@@ -48,7 +48,8 @@ describe("scan pipeline", () => {
       const result = makeScan();
       const { calls, deps, computed } = spies();
 
-      const rendered = reportAndSave(result, { output, analyse: true, save: true }, deps);
+      let rendered = "";
+      reportAndSave(result, { output, analyse: true, save: true }, (o) => { rendered = o; }, deps);
 
       assert.equal(calls.compute, 1);
       assert.equal(calls.saved.length, 1);
@@ -62,9 +63,25 @@ describe("scan pipeline", () => {
 
   it("still analyses once when not saving", () => {
     const { calls, deps } = spies();
-    reportAndSave(makeScan(), { output: "terminal", save: false }, deps);
+    reportAndSave(makeScan(), { output: "terminal", save: false }, () => {}, deps);
     assert.equal(calls.compute, 1);
     assert.equal(calls.saved.length, 0);
+  });
+
+  it("delivers the report before saving, so a failed save still leaves output", () => {
+    const { deps } = spies();
+    let delivered = false;
+    const failingSave = () => { throw new Error("disk full"); };
+    assert.throws(
+      () => reportAndSave(
+        makeScan(),
+        { output: "json", save: true },
+        () => { delivered = true; },
+        { ...deps, saveScan: failingSave },
+      ),
+      /disk full/,
+    );
+    assert.ok(delivered);
   });
 });
 

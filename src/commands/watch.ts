@@ -51,8 +51,10 @@ export function registerWatchCommand(program: Command): void {
 
     const shutdown = () => {
       if (stop.signal.aborted) {
-        // Second signal: don't wait for the in-flight scan.
-        process.exit(130);
+        // Second signal: don't wait for the in-flight scan, but still flush
+        // telemetry before leaving.
+        void shutdownTelemetry().finally(() => process.exit(130));
+        return;
       }
       console.error("\n[wifisentinel] Stopping (press Ctrl+C again to abort the current scan)...");
       stop.abort();
