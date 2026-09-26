@@ -68,10 +68,6 @@ export function listRecons(options: ListReconsOptions = {}): ReconIndexEntry[] {
   return entries;
 }
 
-export function loadRecon(reconId: string): StoredRecon {
-  return store.load(reconId);
-}
-
 export function rebuildReconIndex(): ReconIndexEntry[] {
   return store.rebuildIndex();
 }

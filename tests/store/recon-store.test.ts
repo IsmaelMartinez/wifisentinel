@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getStorePath } from "../../src/store/index.js";
-import { saveRecon, listRecons, loadRecon } from "../../src/store/recon-store.js";
+import { saveRecon, listRecons } from "../../src/store/recon-store.js";
 import type { ReconResult } from "../../src/collector/recon/schema.js";
 import type { FullReconAnalysis } from "../../src/analyser/recon-personas.js";
 
@@ -45,6 +45,5 @@ describe("recon store", () => {
     assert.deepEqual(entries.map(e => e.reconId), ["r2222222-y", "r1111111-x"]);
     assert.equal(entries[0].overallGrade, "B");
     assert.equal(entries[0].subdomainCount, 2);
-    assert.equal(loadRecon("r1111111").recon.meta.reconId, "r1111111-x");
   });
 });
