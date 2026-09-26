@@ -1,6 +1,7 @@
 import { accessSync, constants } from "node:fs";
 import { join } from "node:path";
 import type { ToolTier } from "./schema/scan-result.js";
+import { currentPlatform, fixedPath, type Platform } from "./platform/commands.js";
 
 export interface ToolChain {
   capability: string;
@@ -14,119 +15,102 @@ export interface ResolvedToolResult {
   tier: ToolTier;
 }
 
-/** Resolve a tool by searching PATH directories — no shell spawned. */
-function whichTool(name: string): string | null {
-  const dirs = (process.env.PATH ?? "").split(":");
-  for (const dir of dirs) {
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a tool the way the scanners will run it: the fixed platform path
+ * from `bin()` when there is one (macOS system tools), otherwise a PATH
+ * search — no shell spawned.
+ */
+function whichTool(name: string, platform: Platform, pathEnv: string): string | null {
+  const fixed = fixedPath(name, platform);
+  if (fixed) return isExecutable(fixed) ? fixed : null;
+  for (const dir of pathEnv.split(":")) {
+    if (!dir) continue;
     const candidate = join(dir, name);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // not found in this directory
-    }
+    if (isExecutable(candidate)) return candidate;
   }
   return null;
 }
 
-const TOOL_CHAINS: ToolChain[] = [
-  {
-    capability: "hostDiscovery",
-    candidates: [
-      { name: "nmap", tier: "preferred" },
-      { name: "arp-scan", tier: "fallback" },
-      { name: "arp", tier: "minimal" },
-    ],
-  },
-  {
-    capability: "portScanning",
-    candidates: [
-      { name: "nmap", tier: "preferred" },
-      { name: "masscan", tier: "fallback" },
-      { name: "nc", tier: "minimal" },
-    ],
-  },
-  {
-    capability: "wifiAnalysis",
-    candidates: [
-      { name: "system_profiler", tier: "preferred" },
-      { name: "networksetup", tier: "minimal" },
-    ],
-  },
-  {
-    capability: "dnsAudit",
-    candidates: [
-      { name: "dig", tier: "preferred" },
-      { name: "nslookup", tier: "fallback" },
-    ],
-  },
-  {
-    capability: "packetAnalysis",
-    candidates: [
-      { name: "tshark", tier: "preferred" },
-      { name: "tcpdump", tier: "fallback" },
-    ],
-  },
-  {
-    capability: "tlsVerify",
-    candidates: [
-      { name: "testssl.sh", tier: "preferred" },
-      { name: "openssl", tier: "fallback" },
-      { name: "curl", tier: "minimal" },
-    ],
-  },
-  {
-    capability: "mitmDetection",
-    candidates: [
-      { name: "bettercap", tier: "preferred" },
-      { name: "arp", tier: "minimal" },
-    ],
-  },
-  {
-    capability: "traceroute",
-    candidates: [
-      { name: "mtr", tier: "preferred" },
-      { name: "traceroute", tier: "fallback" },
-    ],
-  },
-  {
-    capability: "serviceDiscovery",
-    candidates: [
-      { name: "avahi-browse", tier: "preferred" },
-      { name: "dns-sd", tier: "fallback" },
-    ],
-  },
-];
+/**
+ * The binaries each scanner actually runs, in the order it prefers them.
+ * dnsAudit and packetAnalysis are consumed by the dns and traffic scanners;
+ * the others are single-binary capabilities reported for the toolchain summary.
+ */
+export function toolChains(platform: Platform): ToolChain[] {
+  return [
+    {
+      capability: "wifiAnalysis",
+      candidates:
+        platform === "darwin"
+          ? [
+              { name: "system_profiler", tier: "preferred" },
+              { name: "networksetup", tier: "minimal" },
+            ]
+          : [
+              // iw supplies SSID/BSSID/signal for the current link; nmcli alone
+              // only yields nearby networks, so it is the minimal tier.
+              { name: "iw", tier: "preferred" },
+              { name: "nmcli", tier: "minimal" },
+            ],
+    },
+    {
+      capability: "dnsAudit",
+      candidates: [
+        { name: "dig", tier: "preferred" },
+        { name: "nslookup", tier: "fallback" },
+      ],
+    },
+    {
+      capability: "packetAnalysis",
+      candidates: [
+        { name: "tshark", tier: "preferred" },
+        { name: "tcpdump", tier: "fallback" },
+      ],
+    },
+    { capability: "hostDiscovery", candidates: [{ name: "arp", tier: "minimal" }] },
+    { capability: "portScanning", candidates: [{ name: "nc", tier: "minimal" }] },
+    { capability: "traceroute", candidates: [{ name: "traceroute", tier: "minimal" }] },
+  ];
+}
 
-export function resolveAllTools(): Map<string, ResolvedToolResult> {
-  const results = new Map<string, ResolvedToolResult>();
-
-  for (const chain of TOOL_CHAINS) {
-    let resolved = false;
-    for (const candidate of chain.candidates) {
-      const path = whichTool(candidate.name);
-      if (path) {
-        results.set(chain.capability, {
-          capability: chain.capability,
-          name: candidate.name,
-          path,
-          tier: candidate.tier,
-        });
-        resolved = true;
-        break;
-      }
-    }
-    if (!resolved) {
-      results.set(chain.capability, {
-        capability: chain.capability,
-        name: "none",
-        path: "",
-        tier: "minimal",
-      });
+function resolveChain(chain: ToolChain, platform: Platform, pathEnv: string): ResolvedToolResult {
+  for (const candidate of chain.candidates) {
+    const path = whichTool(candidate.name, platform, pathEnv);
+    if (path) {
+      return { capability: chain.capability, name: candidate.name, path, tier: candidate.tier };
     }
   }
+  return { capability: chain.capability, name: "none", path: "", tier: "minimal" };
+}
 
+export function resolveAllTools(
+  platform: Platform = currentPlatform(),
+  pathEnv: string = process.env.PATH ?? "",
+): Map<string, ResolvedToolResult> {
+  const results = new Map<string, ResolvedToolResult>();
+  for (const chain of toolChains(platform)) {
+    results.set(chain.capability, resolveChain(chain, platform, pathEnv));
+  }
   return results;
+}
+
+/** Resolve one capability, for scanners called outside a full scan. */
+export function resolveCapability(
+  capability: string,
+  platform: Platform = currentPlatform(),
+  pathEnv: string = process.env.PATH ?? "",
+): ResolvedToolResult | undefined {
+  const chain = toolChains(platform).find((c) => c.capability === capability);
+  return chain ? resolveChain(chain, platform, pathEnv) : undefined;
 }
 
 export function toolchainSummary(

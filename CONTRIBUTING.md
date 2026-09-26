@@ -50,11 +50,11 @@ Use imperative mood: "Add Linux WiFi scanner", "Fix schedule interval parsing".
 
 ```bash
 npm test           # run all tests
-npm run typecheck  # tsc type-checking (includes tests)
+npm run typecheck  # tsc -p tsconfig.check.json (src and tests, no emit)
 npm run lint       # eslint
 ```
 
-CI runs typecheck, build, lint, and tests on Node 20 and 22, plus a dashboard build, on every PR.
+CI runs on every PR to `main`: `npm audit`, typecheck, build, a CLI help smoke check, lint and tests on Node 22 and 24; a dashboard build; Android JVM unit tests plus a debug APK build; and Android instrumented tests on an emulator. CodeQL and OSV-Scanner also run on pull requests.
 
 ## Adding a Scanner
 

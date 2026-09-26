@@ -1,8 +1,10 @@
 import { run, runAsync } from "../exec.js";
+import { bin } from "../platform/commands.js";
+import { parseNetstat, type NetstatEntry } from "../platform/netstat.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 
 // ---------------------------------------------------------------------------
-// netstat parsing
+// netstat counting
 // ---------------------------------------------------------------------------
 
 interface NetstatCounts {
@@ -12,59 +14,33 @@ interface NetstatCounts {
   establishedDestinations: string[];
 }
 
-function parseNetstat(output: string): NetstatCounts {
+/** Public IPv4 destination worth reporting, or null for IPv6/loopback/link-local. */
+function reportableIpv4(addr: string): string | null {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(addr)) return null;
+  if (addr.startsWith("127.") || addr.startsWith("169.254.")) return null;
+  return addr;
+}
+
+export function countNetstat(entries: NetstatEntry[]): NetstatCounts {
   let established = 0;
   let listening = 0;
   let timeWait = 0;
   const establishedDestinations: string[] = [];
 
-  for (const line of output.split("\n")) {
-    const cols = line.trim().split(/\s+/);
-    // netstat -an columns (TCP):  Proto  Recv-Q  Send-Q  Local  Foreign  State
-    // We need at least 6 columns and the first must be tcp/tcp4/tcp6
-    if (cols.length < 6 || !/^tcp/i.test(cols[0])) continue;
-
-    const state = cols[5].toUpperCase();
-    const foreign = cols[4]; // e.g. "1.2.3.4.443" or "*.*"
-
-    if (state === "ESTABLISHED") {
+  for (const entry of entries) {
+    if (!entry.proto.startsWith("tcp")) continue;
+    if (entry.state === "ESTABLISHED") {
       established++;
-      // Extract IP from "a.b.c.d.port" — everything before the last dot segment
-      const ip = extractIpFromNetstatAddr(foreign);
+      const ip = reportableIpv4(entry.remoteAddr);
       if (ip) establishedDestinations.push(ip);
-    } else if (state === "LISTEN") {
+    } else if (entry.state === "LISTEN") {
       listening++;
-    } else if (state === "TIME_WAIT") {
+    } else if (entry.state === "TIME_WAIT") {
       timeWait++;
     }
   }
 
   return { established, listening, timeWait, establishedDestinations };
-}
-
-/**
- * netstat -an on macOS uses dot-separated notation: "1.2.3.4.443"
- * The last segment is the port; everything before is the IP.
- */
-function extractIpFromNetstatAddr(addr: string): string | null {
-  if (!addr || addr === "*.*" || addr.startsWith("*")) return null;
-
-  // IPv6 addresses are wrapped in brackets: [::1].port — skip them
-  if (addr.startsWith("[") || addr.includes("::")) return null;
-
-  const parts = addr.split(".");
-  if (parts.length < 5) return null; // need at least a.b.c.d.port
-
-  // Last part is the port; first four are the IPv4 address
-  const ip = parts.slice(0, 4).join(".");
-
-  // Validate it looks like an IPv4 address
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return null;
-
-  // Skip loopback / private link-local
-  if (ip === "127.0.0.1" || ip.startsWith("169.254.")) return null;
-
-  return ip;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +60,7 @@ function countDestinations(
 }
 
 async function reverseDns(ip: string): Promise<string | undefined> {
-  const result = await runAsync("/usr/bin/dig", [
+  const result = await runAsync(bin("dig"), [
     "-x",
     ip,
     "+short",
@@ -103,9 +79,9 @@ async function reverseDns(ip: string): Promise<string | undefined> {
 export async function scanConnections(): Promise<
   NetworkScanResult["connections"]
 > {
-  const netstatOut = run("/usr/sbin/netstat", ["-an"]).stdout;
+  const netstatOut = run(bin("netstat"), ["-an"]).stdout;
   const { established, listening, timeWait, establishedDestinations } =
-    parseNetstat(netstatOut);
+    countNetstat(parseNetstat(netstatOut));
 
   const sorted = countDestinations(establishedDestinations);
   const top10 = sorted.slice(0, 10);
