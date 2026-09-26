@@ -14,7 +14,7 @@ Multi-persona WiFi and network security analyser with compliance scoring, RF int
 
 **External reconnaissance** — `recon <domain>` maps the external attack surface of a domain: DNS enumeration (brute + certificate transparency), WHOIS, TLS/SSL grading, and HTTP security header analysis. Results are scored and analysed through the same persona layer.
 
-**Scan history and observability** — scans are persisted to `~/.wifisentinel/scans/`. `history`, `trend`, and `diff` commands let you review past scans, track compliance over time, and compare two scan snapshots. `devices` aggregates scan history into per-MAC presence timelines. Scheduled scanning via launchd/cron is available through the `schedule` command, and `watch` runs continuous scans with alerting on changes.
+**Scan history and observability** — scans are persisted to `~/.wifisentinel/scans/` (under `$XDG_DATA_HOME/wifisentinel/` on Linux when that is set). `history`, `trend`, and `diff` commands let you review past scans, track compliance over time, and compare two scan snapshots. `devices` aggregates scan history into per-MAC presence timelines. Scheduled scanning via launchd/cron is available through the `schedule` command, and `watch` runs continuous scans with alerting on changes.
 
 **Dashboard** — Next.js app (dark theme, shadcn/ui) showing scan details, real-time persona perspectives, historical trends, and compliance tracking. HTML report export from both CLI and dashboard.
 
@@ -22,7 +22,7 @@ Multi-persona WiFi and network security analyser with compliance scoring, RF int
 
 ## Requirements
 
-- Node.js >= 20
+- Node.js >= 22
 - macOS or Linux (WiFi scanning uses platform-native tools)
 
 Optional system tools (used when available, gracefully degraded otherwise):
@@ -103,6 +103,7 @@ wifisentinel recon example.com
 | `diff <id1> <id2>` | Compare two saved scans |
 | `schedule` | Configure scheduled scanning via launchd/cron |
 | `recon-history` | List saved recon results |
+| `import <path>` | Import a scan exported by the Android companion app |
 
 ### `scan` / `analyse` options
 
@@ -110,9 +111,10 @@ wifisentinel recon example.com
 -o, --output <format>       Output format: terminal, json  (default: terminal)
 -f, --file <path>           Write output to file instead of stdout
 --skip-ports                Skip port scanning
---skip-traffic              Skip traffic analysis (reserved — scanner not yet implemented)
+--skip-traffic              Skip traffic capture (tshark, falling back to tcpdump)
+--traffic-duration <secs>   Traffic capture duration in seconds (default: 8)
 --skip-speed                Skip speed test
---no-vendor-lookup          Skip MAC vendor lookups (no calls to api.macvendors.com)
+--no-vendor-lookup          Skip the gateway's MAC vendor lookup (all lookups use a bundled offline OUI database)
 --stealth                   Passive host discovery, randomised port timing, skip speed/traffic
 --monitor-interface <iface> (scan only) Enable deauth detection via monitor mode on this interface
 --events                    (scan only) Output scan events as NDJSON instead of a report
@@ -130,8 +132,11 @@ wifisentinel recon example.com
 --no-alert-dropped-hosts         Disable alerts on hosts leaving
 --no-alert-security-change       Disable alerts on security/WiFi changes
 --events                         Output NDJSON events to stdout instead of a rendered report
---skip-ports / --skip-speed      Reduce per-cycle cost
+--skip-ports / --skip-speed / --skip-traffic   Reduce per-cycle cost
+--no-vendor-lookup               Skip the gateway's MAC vendor lookup
 --stealth                        Passive, randomised scanning
+--otel <exporter>                OTEL exporter: console, otlp, none (default: none)
+--no-save                        Skip saving scan results to history
 ```
 
 ### `devices` options
@@ -154,7 +159,12 @@ wifisentinel recon example.com
 --zone-transfer         Attempt DNS zone transfers (may trigger security alerts)
 --no-save               Skip saving to history
 -v, --verbose           Verbose output
+--shodan-key <key>      Shodan API key (or set SHODAN_API_KEY)
+--censys-id <id>        Censys API ID (or set CENSYS_API_ID)
+--censys-secret <secret> Censys API secret (or set CENSYS_API_SECRET)
 ```
+
+Shodan and Censys lookups run only when credentials are supplied. Prefer the `SHODAN_API_KEY`, `CENSYS_API_ID` and `CENSYS_API_SECRET` environment variables over the flags: anything passed on the command line is visible to other local users through `ps` and is saved in your shell history. A flag, when given, takes precedence over the environment variable.
 
 ## Dashboard
 
@@ -173,13 +183,13 @@ The dashboard shows scan history with per-scan detail pages (raw data, persona p
 
 The pipeline flows: **CLI** (commander) → **Collector** → **Analyser** → **Reporter**.
 
-`src/collector/` orchestrates all scanning. `src/collector/tool-resolver.ts` implements the three-tier fallback chain (preferred → fallback → minimal) for each capability. Nine scanner modules in `src/collector/scanners/` each parse system tool output into typed data. All data is validated against the central Zod schema in `src/collector/schema/scan-result.ts` — the `NetworkScanResult` type flows through everything.
+`src/collector/` orchestrates all scanning. `src/collector/tool-resolver.ts` implements the three-tier fallback chain (preferred → fallback → minimal) for each capability. Eleven scanner modules in `src/collector/scanners/` each parse system tool output into typed data. The central Zod schema in `src/collector/schema/scan-result.ts` defines the `NetworkScanResult` type that flows through everything; it is used for type inference rather than runtime validation of live scans, while Android imports are validated against a relaxed schema before being mapped onto it.
 
 `src/analyser/` contains two sub-modules: `src/analyser/personas/` (five analysis functions producing `PersonaAnalysis` with insights and risk ratings) and `src/analyser/standards/` (scoring against CIS, NIST, IEEE, and OWASP frameworks). The RF analyser in `src/analyser/rf/` reads both live scan data and historical scans from the store.
 
-`src/reporter/` provides three formatters: `terminal.reporter.ts` (coloured ASCII scorecard), `analysis.reporter.ts` (adds persona and standards output), and `json.reporter.ts` (structured JSON including analysis).
+`src/reporter/` provides the output formatters: `terminal.reporter.ts` (coloured ASCII scorecard), `analysis.reporter.ts` (adds persona and standards output), `json.reporter.ts` (structured JSON including analysis) and `html.reporter.ts` (shareable HTML export), plus specialised reporters for RF, recon and watch mode.
 
-`src/store/` persists scans to `~/.wifisentinel/scans/` as JSON files, indexed for history and trend queries.
+`src/store/` persists scans to `~/.wifisentinel/scans/` (or `$XDG_DATA_HOME/wifisentinel/scans/` on Linux when set) as JSON files, indexed for history and trend queries.
 
 `src/telemetry/` wraps scan phases in OTEL spans via `withSpan()` and records tool resolution tier metrics.
 
@@ -236,7 +246,7 @@ wifisentinel devices
 
 If you haven't run `npm link`, use `npm run dev -- <command>` instead.
 
-All scan data is stored locally in `~/.wifisentinel/` — nothing is sent to any external service.
+All scan data is stored locally in `~/.wifisentinel/` (or `$XDG_DATA_HOME/wifisentinel/` on Linux when that variable is set) and is never uploaded. Beyond the scan's own network probes, the only external requests are the speed test (Cloudflare, OVH and Tele2; skip it with `--skip-speed`), the `recon` command's lookups, and trace export to your configured collector when `--otel otlp` is enabled.
 
 ## Contributing
 
@@ -279,15 +289,15 @@ The project uses UK English spelling throughout (analyser, analyse, normalised, 
 
 ```bash
 npm test                    # run all tests
-npm run typecheck           # tsc --noEmit
+npm run typecheck           # tsc -p tsconfig.check.json (src and tests, no emit)
 npm run lint                # eslint
 ```
 
-CI runs typecheck, build, lint, and tests on Node 20 and 22, plus a dashboard build, on every PR.
+CI runs on every PR to `main`: `npm audit`, typecheck, build, a CLI help smoke check, lint and tests on Node 22 and 24; a dashboard build; Android JVM unit tests plus a debug APK build; and Android instrumented tests on an emulator. CodeQL and OSV-Scanner also run on pull requests.
 
 ### Areas for contribution
 
-There are several areas where contributions would be particularly valuable: adding Linux support (the WiFi scanner currently targets macOS `system_profiler` and `en0`), expanding the test suite, improving error messages when system tools are missing, adding Shodan/Censys integration to the recon command, and building Phase 6 (continuous monitoring with `wifisentinel watch`).
+The open items in [ROADMAP.md](ROADMAP.md) are the best place to start: the browser-based network scan and PWA support in Phase 6, and anomaly detection, broader signal-quality trending and threat correlation for `watch` in Phase 7. Wider Linux testing across distributions and WiFi drivers, clearer error messages when system tools are missing, and more test coverage are also welcome.
 
 ## Licence
 

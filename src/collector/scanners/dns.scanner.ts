@@ -1,5 +1,8 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
+import { isPrivateIp } from "../util.js";
+import { bin } from "../platform/commands.js";
+import { resolveCapability } from "../tool-resolver.js";
 
 type DnsResult = NetworkScanResult["network"]["dns"];
 
@@ -14,6 +17,8 @@ export function randomHijackDomain(): string {
 }
 const CLOUDFLARE_DNS = "1.1.1.1";
 const TEST_DOMAIN = "google.com";
+/** A DNSSEC-signed zone: a validating resolver sets the AD flag on answers for it. */
+const DNSSEC_SIGNED_DOMAIN = "cloudflare.com";
 
 /**
  * Parse DNS server IPs from `scutil --dns` output.
@@ -44,29 +49,40 @@ function isIpAddress(value: string): boolean {
  * Run a dig query and return trimmed stdout.
  * Uses: dig @server domain type +short [extraFlags...]
  */
-function digShort(server: string, domain: string, type: string, extraFlags: string[] = []): string {
-  const result = run("dig", ["@" + server, domain, type, "+short", ...extraFlags]);
+async function digShort(server: string, domain: string, type: string, extraFlags: string[] = []): Promise<string> {
+  const result = await runAsync(bin("dig"), ["@" + server, domain, type, "+short", ...extraFlags]);
   return result.stdout.trim();
 }
 
 /**
- * Test DNSSEC: dig @server google.com A +dnssec +short
- * DNSSEC is considered supported if RRSIG records appear in the response.
+ * True when dig's header shows the AD (authenticated data) flag, i.e. the
+ * resolver validated the answer with DNSSEC.
+ * Header line: ";; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, ..."
  */
-function testDnssec(server: string): boolean {
-  const result = run("dig", ["@" + server, TEST_DOMAIN, "A", "+dnssec", "+short"]);
+export function hasAdFlag(digOutput: string): boolean {
+  const flags = /^;; flags:([^;\n]*);/m.exec(digOutput);
+  if (!flags) return false;
+  return flags[1].trim().split(/\s+/).includes("ad");
+}
+
+/**
+ * Test DNSSEC: query a signed zone with +dnssec and check the resolver sets
+ * the AD flag. An unsigned zone such as google.com never gets AD, so it
+ * cannot be used for this check.
+ */
+async function testDnssec(server: string): Promise<boolean> {
+  const result = await runAsync(bin("dig"), ["@" + server, DNSSEC_SIGNED_DOMAIN, "A", "+dnssec"]);
   if (result.exitCode !== 0) return false;
-  const lines = result.stdout.split("\n").filter((l) => l.trim().length > 0);
-  return lines.some((l) => /^A\s|RRSIG|^\S+\s+\d+\s+IN\s+RRSIG/i.test(l)) || lines.length > 1;
+  return hasAdFlag(result.stdout);
 }
 
 /**
  * Hijack test: resolve a domain that should never exist.
  * If we get back an IP, the DNS resolver is intercepting/hijacking queries.
  */
-function testHijack(server: string, stealth = false): "clean" | "intercepted" | "unknown" {
+async function testHijack(server: string, stealth = false): Promise<"clean" | "intercepted" | "unknown"> {
   const domain = stealth ? randomHijackDomain() : HIJACK_TEST_DOMAIN;
-  const result = run("dig", ["@" + server, domain, "A", "+short"]);
+  const result = await runAsync(bin("dig"), ["@" + server, domain, "A", "+short"]);
   if (result.exitCode !== 0) return "unknown";
   const out = result.stdout.trim();
   if (!out) return "clean";
@@ -99,7 +115,7 @@ function detectDohDot(servers: string[]): boolean {
  * Only flags genuine anomalies — different IPs for CDN-served domains like google.com
  * are normal (geo-routing). We check for truly suspicious patterns instead.
  */
-function detectDnsLeakAnomalies(gatewayServers: string[], gateway: string): string[] {
+async function detectDnsLeakAnomalies(gatewayServers: string[], gateway: string): Promise<string[]> {
   const anomalies: string[] = [];
   if (gatewayServers.length === 0) return anomalies;
 
@@ -123,7 +139,7 @@ function detectDnsLeakAnomalies(gatewayServers: string[], gateway: string): stri
 
     // Check if the server resolves the NX test domain (hijack already caught above,
     // but some resolvers hijack only popular domains)
-    const gwResult = digShort(server, TEST_DOMAIN, "A");
+    const gwResult = await digShort(server, TEST_DOMAIN, "A");
     const gwIps = gwResult.split("\n").filter((l) => l.trim() && isIpAddress(l));
     if (gwIps.length === 0) {
       anomalies.push(`DNS server ${server} returned no results for ${TEST_DOMAIN} — possible filtering or failure`);
@@ -131,16 +147,6 @@ function detectDnsLeakAnomalies(gatewayServers: string[], gateway: string): stri
   }
 
   return anomalies;
-}
-
-function isPrivateIp(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4) return false;
-  return (
-    parts[0] === 10 ||
-    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-    (parts[0] === 192 && parts[1] === 168)
-  );
 }
 
 /**
@@ -156,6 +162,8 @@ function parseNslookupServer(output: string): string[] {
 
 export interface DnsScanOptions {
   stealth?: boolean;
+  /** Resolved dnsAudit tool name ("dig", "nslookup" or "none"). */
+  tool?: string;
 }
 
 export async function scanDns(gateway: string, options: DnsScanOptions = {}): Promise<DnsResult> {
@@ -169,14 +177,14 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
 
   // Step 1: Get DNS servers from scutil --dns
   let servers: string[] = [];
-  const scutilResult = run("scutil", ["--dns"]);
+  const scutilResult = await runAsync(bin("scutil"), ["--dns"]);
   if (scutilResult.exitCode === 0 && scutilResult.stdout.length > 0) {
     servers = parseScutilDns(scutilResult.stdout);
   }
 
   // Fallback: try resolv.conf
   if (servers.length === 0) {
-    const resolvResult = run("/bin/cat", ["/etc/resolv.conf"]);
+    const resolvResult = await runAsync("/bin/cat", ["/etc/resolv.conf"]);
     if (resolvResult.exitCode === 0) {
       const re = /^nameserver\s+([\d.:a-fA-F]+)/gim;
       let m: RegExpExecArray | null;
@@ -189,12 +197,10 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
 
   const dohDotEnabled = detectDohDot(servers);
 
-  // Step 2: Determine which DNS tool is available
-  const digCheck = run("dig", ["-v"]);
-  const hasDig = digCheck.exitCode === 0 || digCheck.stderr.includes("DiG") || digCheck.stdout.includes("DiG");
-
-  const nslookupCheck = run("nslookup", ["-version"]);
-  const hasNslookup = nslookupCheck.exitCode === 0 || nslookupCheck.stderr.length > 0;
+  // Step 2: Which DNS tool is available (resolved once by the tool resolver)
+  const tool = options.tool ?? resolveCapability("dnsAudit")?.name ?? "none";
+  const hasDig = tool === "dig";
+  const hasNslookup = tool === "nslookup";
 
   if (!hasDig && !hasNslookup) {
     // Minimal: scutil --dns only
@@ -203,7 +209,7 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
 
   // Step 3: If no servers found yet and we have nslookup, try to get server from it
   if (servers.length === 0 && hasNslookup) {
-    const nsResult = run("nslookup", [TEST_DOMAIN]);
+    const nsResult = await runAsync(bin("nslookup"), [TEST_DOMAIN]);
     if (nsResult.exitCode === 0 || nsResult.stdout.length > 0) {
       servers = parseNslookupServer(nsResult.stdout);
     }
@@ -220,13 +226,13 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
     const primaryServer = testServers[0];
 
     try {
-      dnssecSupported = testDnssec(primaryServer);
+      dnssecSupported = await testDnssec(primaryServer);
     } catch {
       dnssecSupported = false;
     }
 
     try {
-      hijackTestResult = testHijack(primaryServer, options.stealth);
+      hijackTestResult = await testHijack(primaryServer, options.stealth);
       if (hijackTestResult === "intercepted") {
         const domain = options.stealth ? "random NXDOMAIN test" : HIJACK_TEST_DOMAIN;
         anomalies.push(`DNS hijacking detected: ${domain} resolved to an IP via ${primaryServer}`);
@@ -236,14 +242,14 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
     }
 
     try {
-      const leakAnomalies = detectDnsLeakAnomalies(testServers, gateway);
+      const leakAnomalies = await detectDnsLeakAnomalies(testServers, gateway);
       anomalies.push(...leakAnomalies);
     } catch {
       // ignore leak detection failures
     }
   } else if (hasNslookup) {
     // Minimal hijack check with nslookup
-    const hijackResult = run("nslookup", [HIJACK_TEST_DOMAIN]);
+    const hijackResult = await runAsync(bin("nslookup"), [HIJACK_TEST_DOMAIN]);
     if (hijackResult.exitCode === 0 || hijackResult.stdout.length > 0) {
       const lines = hijackResult.stdout.split("\n");
       // Skip server/address header lines — only look at the answer section

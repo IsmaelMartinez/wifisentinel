@@ -1,11 +1,11 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import type { FullAnalysis, PersonaAnalysis, RiskRating } from "./types.js";
-import { consensusActions, consensusRating } from "./types.js";
-import { analyseAsRedTeam } from "./red-team.js";
-import { analyseAsBlueTeam } from "./blue-team.js";
-import { analyseAsCompliance } from "./compliance.js";
-import { analyseAsNetEngineer } from "./net-engineer.js";
-import { analyseAsPrivacy } from "./privacy.js";
+import type { FullAnalysis, PersonaAnalysis, PersonaSpec } from "./types.js";
+import { consensusActions, consensusRating, keyedActionsFor } from "./types.js";
+import { analyseAsRedTeam, redTeamSpec } from "./red-team.js";
+import { analyseAsBlueTeam, blueTeamSpec } from "./blue-team.js";
+import { analyseAsCompliance, complianceSpec } from "./compliance.js";
+import { analyseAsNetEngineer, netEngineerSpec } from "./net-engineer.js";
+import { analyseAsPrivacy, privacySpec } from "./privacy.js";
 
 export { analyseAsRedTeam } from "./red-team.js";
 export { analyseAsBlueTeam } from "./blue-team.js";
@@ -28,24 +28,25 @@ export {
   consensusActions,
 } from "./types.js";
 
+export const PERSONAS: Array<[PersonaSpec, (result: NetworkScanResult) => PersonaAnalysis]> = [
+  [redTeamSpec, analyseAsRedTeam],
+  [blueTeamSpec, analyseAsBlueTeam],
+  [complianceSpec, analyseAsCompliance],
+  [netEngineerSpec, analyseAsNetEngineer],
+  [privacySpec, analyseAsPrivacy],
+];
+
 /** Run all five persona analyses and compute consensus. */
 export function analyseAllPersonas(result: NetworkScanResult): FullAnalysis {
-  const analyses: PersonaAnalysis[] = [
-    analyseAsRedTeam(result),
-    analyseAsBlueTeam(result),
-    analyseAsCompliance(result),
-    analyseAsNetEngineer(result),
-    analyseAsPrivacy(result),
-  ];
-
-  const ratings = analyses.map((a) => a.riskRating) as RiskRating[];
-  const allActions = analyses.map((a) => a.priorityActions);
+  const analyses = PERSONAS.map(([, analyse]) => analyse(result));
 
   return {
     scanId: result.meta.scanId,
     timestamp: result.meta.timestamp,
     analyses,
-    consensusRating: consensusRating(ratings),
-    consensusActions: consensusActions(allActions),
+    consensusRating: consensusRating(analyses.map((a) => a.riskRating)),
+    consensusActions: consensusActions(
+      analyses.map((a, i) => keyedActionsFor(a.insights, PERSONAS[i][0])),
+    ),
   };
 }

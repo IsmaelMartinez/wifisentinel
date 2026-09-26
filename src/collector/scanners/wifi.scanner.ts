@@ -1,8 +1,29 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult, NearbyNetwork } from "../schema/scan-result.js";
 import { normaliseSecurity } from "../schema/security.js";
+import { bin } from "../platform/commands.js";
+import { detectWifiInterface } from "../platform/bootstrap.js";
 
 type WifiResult = NetworkScanResult["wifi"];
+
+function emptyWifiResult(): WifiResult {
+  return {
+    ssid: null,
+    bssid: "",
+    protocol: "Unknown",
+    channel: 0,
+    band: "unknown",
+    width: "20MHz",
+    security: "Unknown",
+    signal: 0,
+    noise: 0,
+    snr: 0,
+    txRate: 0,
+    macRandomised: false,
+    countryCode: "",
+    nearbyNetworks: [],
+  };
+}
 
 function parseChannel(raw: string): { channel: number; band: string; width: string } {
   // e.g. "6 (2GHz)", "36,+1 (5GHz)", "6 (2.4 GHz, 20 MHz)"
@@ -43,22 +64,7 @@ function parseMacRandomised(raw: string): boolean {
  * Parse system_profiler SPAirPortDataType output.
  */
 function parseSystemProfiler(output: string): WifiResult {
-  const defaults: WifiResult = {
-    ssid: null,
-    bssid: "",
-    protocol: "Unknown",
-    channel: 0,
-    band: "unknown",
-    width: "20MHz",
-    security: "Unknown",
-    signal: 0,
-    noise: 0,
-    snr: 0,
-    txRate: 0,
-    macRandomised: false,
-    countryCode: "",
-    nearbyNetworks: [],
-  };
+  const defaults = emptyWifiResult();
 
   const get = (key: string): string => {
     const re = new RegExp(`^\\s*${key}:\\s*(.+)$`, "im");
@@ -181,18 +187,6 @@ function parseNetworksetup(output: string): Partial<WifiResult> {
 // Linux WiFi helpers
 // ---------------------------------------------------------------------------
 
-function findLinuxWifiInterface(): string {
-  const routeResult = run("ip", ["route", "show", "default"]);
-  const routeMatch = routeResult.stdout.match(/dev (\S+)/);
-  if (routeMatch) return routeMatch[1];
-
-  const iwResult = run("iw", ["dev"]);
-  const ifaceMatch = iwResult.stdout.match(/Interface\s+(\S+)/);
-  if (ifaceMatch) return ifaceMatch[1];
-
-  return "wlan0";
-}
-
 function bandFromFrequency(freqMhz: number): string {
   if (freqMhz < 3000) return "2.4GHz";
   if (freqMhz <= 6000) return "5GHz";
@@ -215,25 +209,8 @@ function isLocallyAdministeredMac(mac: string): boolean {
   return (firstOctet & 0x02) !== 0;
 }
 
-async function scanWifiLinux(): Promise<WifiResult> {
-  const defaults: WifiResult = {
-    ssid: null,
-    bssid: "",
-    protocol: "Unknown",
-    channel: 0,
-    band: "unknown",
-    width: "20MHz",
-    security: "Unknown",
-    signal: 0,
-    noise: 0,
-    snr: 0,
-    txRate: 0,
-    macRandomised: false,
-    countryCode: "",
-    nearbyNetworks: [],
-  };
-
-  const iface = findLinuxWifiInterface();
+async function scanWifiLinux(iface: string): Promise<WifiResult> {
+  const defaults = emptyWifiResult();
 
   // Current connection info via iw dev <iface> link
   let ssid: string | null = null;
@@ -242,7 +219,7 @@ async function scanWifiLinux(): Promise<WifiResult> {
   let frequency = 0;
   let txRate = 0;
 
-  const linkResult = run("iw", ["dev", iface, "link"]);
+  const linkResult = await runAsync("iw", ["dev", iface, "link"]);
   if (linkResult.exitCode === 0 && !linkResult.stdout.includes("Not connected")) {
     const bssidMatch = linkResult.stdout.match(/Connected to ([0-9a-f:]+)/i);
     if (bssidMatch) bssid = bssidMatch[1];
@@ -264,7 +241,7 @@ async function scanWifiLinux(): Promise<WifiResult> {
   const band = frequency ? bandFromFrequency(frequency) : "unknown";
 
   // MAC randomisation check
-  const linkShowResult = run("ip", ["link", "show", iface]);
+  const linkShowResult = await runAsync("ip", ["link", "show", iface]);
   let macRandomised = false;
   const macShowMatch = linkShowResult.stdout.match(
     /link\/ether\s+([0-9a-f:]+)/i
@@ -277,7 +254,7 @@ async function scanWifiLinux(): Promise<WifiResult> {
   let security = "Unknown";
   const nearbyNetworks: NearbyNetwork[] = [];
 
-  const nmcliResult = run("nmcli", [
+  const nmcliResult = await runAsync("nmcli", [
     "-t",
     "-f",
     "SSID,SECURITY,SIGNAL,CHAN,MODE,BSSID",
@@ -319,7 +296,7 @@ async function scanWifiLinux(): Promise<WifiResult> {
     }
   } else {
     // Fallback: try iw scan (may need sudo, fail gracefully)
-    const scanResult = run("iw", ["dev", iface, "scan"]);
+    const scanResult = await runAsync("iw", ["dev", iface, "scan"]);
     if (scanResult.exitCode === 0) {
       const blocks = scanResult.stdout.split(/^BSS /m);
       for (const block of blocks) {
@@ -377,29 +354,19 @@ async function scanWifiLinux(): Promise<WifiResult> {
 // Main export
 // ---------------------------------------------------------------------------
 
-export async function scanWifi(): Promise<WifiResult> {
+/**
+ * Scan the current Wi-Fi connection. `iface` comes from the scan bootstrap;
+ * standalone callers (e.g. the rf command) let it be detected.
+ */
+export async function scanWifi(iface?: string): Promise<WifiResult> {
+  iface ??= (await detectWifiInterface()).iface;
   if (process.platform === "linux") {
-    return scanWifiLinux();
+    return scanWifiLinux(iface);
   }
 
-  const defaults: WifiResult = {
-    ssid: null,
-    bssid: "",
-    protocol: "Unknown",
-    channel: 0,
-    band: "unknown",
-    width: "20MHz",
-    security: "Unknown",
-    signal: 0,
-    noise: 0,
-    snr: 0,
-    txRate: 0,
-    macRandomised: false,
-    countryCode: "",
-    nearbyNetworks: [],
-  };
+  const defaults = emptyWifiResult();
 
-  const profilerResult = run("system_profiler", ["SPAirPortDataType"]);
+  const profilerResult = await runAsync(bin("system_profiler"), ["SPAirPortDataType"]);
   if (profilerResult.exitCode === 0 && profilerResult.stdout.length > 0) {
     try {
       return parseSystemProfiler(profilerResult.stdout);
@@ -409,7 +376,7 @@ export async function scanWifi(): Promise<WifiResult> {
   }
 
   // Fallback: networksetup
-  const nsResult = run("networksetup", ["-getairportnetwork", "en0"]);
+  const nsResult = await runAsync(bin("networksetup"), ["-getairportnetwork", iface]);
   if (nsResult.exitCode === 0 && nsResult.stdout.length > 0) {
     const partial = parseNetworksetup(nsResult.stdout);
     return { ...defaults, ...partial };

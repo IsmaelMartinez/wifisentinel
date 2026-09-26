@@ -1,6 +1,6 @@
 // src/analyser/diff.ts — Lightweight change detection for watch mode
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
-import { securityChanged } from "../collector/schema/security.js";
+import { securityChanged } from "./security.js";
 
 export type NetworkChange =
   | { type: "host:joined"; ip: string; mac: string; vendor?: string }
