@@ -1,3 +1,7 @@
+import { randomBytes } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { run, runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 
@@ -11,7 +15,8 @@ const DOWNLOAD_URLS = [
   "http://speedtest.tele2.net/1MB.zip",                  // 1MB from Tele2
 ];
 
-const UPLOAD_URL = "https://speed.cloudflare.com/__up";
+export const UPLOAD_URL = "https://speed.cloudflare.com/__up";
+const UPLOAD_BYTES = 1_000_000;
 
 const PING_COUNT = 10;
 const PING_TARGETS = {
@@ -108,26 +113,35 @@ async function measureDownload(): Promise<DownloadResult> {
   return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: "none" };
 }
 
-async function measureUpload(): Promise<DownloadResult> {
-  // Generate 1MB of random-ish data and POST it to Cloudflare's speed test endpoint
-  const size = 1_000_000;
-  const result = await runAsync(
-    "curl",
-    [
-      "-s", "-o", "/dev/null",
-      "-w", "%{size_upload} %{time_total} %{speed_upload}",
-      "--max-time", "15",
-      "-X", "POST",
-      "-H", "Content-Type: application/octet-stream",
-      "--data-binary", "@/dev/urandom",
-      "--limit-rate", "0",
-      "-d", "x".repeat(Math.min(size, 100000)), // 100KB test payload
-      UPLOAD_URL,
-    ],
-    20_000
-  );
+export function buildUploadArgs(payloadPath: string): string[] {
+  return [
+    "-s", "-o", "/dev/null",
+    "-w", "%{size_upload} %{time_total} %{speed_upload}",
+    "--max-time", "15",
+    "-H", "Content-Type: application/octet-stream",
+    "--data-binary", `@${payloadPath}`,
+    UPLOAD_URL,
+  ];
+}
 
-  if (result.exitCode !== 0 || !result.stdout.trim()) {
+export async function measureUpload(): Promise<DownloadResult> {
+  // POST a bounded 1MB random payload to Cloudflare's speed test endpoint.
+  // A temp-file setup failure (e.g. full or missing tmpdir) degrades to a zero result
+  // rather than aborting the whole scan.
+  let dir: string | undefined;
+  let result;
+  try {
+    dir = await mkdtemp(join(tmpdir(), "wifisentinel-upload-"));
+    const payloadPath = join(dir, "payload.bin");
+    await writeFile(payloadPath, randomBytes(UPLOAD_BYTES));
+    result = await runAsync("curl", buildUploadArgs(payloadPath), 20_000);
+  } catch {
+    result = undefined;
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+
+  if (!result || result.exitCode !== 0 || !result.stdout.trim()) {
     return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: UPLOAD_URL };
   }
 
