@@ -1,6 +1,4 @@
 import {
-  isWeakerSecurity,
-  securityChanged,
   securityFamily,
   securityMode,
   securityStrength,
@@ -52,10 +50,27 @@ export function classifySecurity(raw: string): SecurityClassification {
 
 /**
  * Whether moving from `from` to `to` lowers the security level, or drops
- * Enterprise to Personal. Unknown on either side is never a downgrade.
+ * Enterprise to Personal in any family combination (a PSK twin of an 802.1X
+ * network dodges certificate validation). Unknown on either side is never a
+ * downgrade, and a missing mode never counts — coarse sources don't know it.
  */
 export function isSecurityDowngrade(from: string, to: string): boolean {
-  return isWeakerSecurity(to, from);
+  const a = classifySecurity(from);
+  const b = classifySecurity(to);
+  if (a.level < 0 || b.level < 0) return false;
+  if (b.level < a.level) return true;
+  return a.mode === "Enterprise" && b.mode === "Personal";
 }
 
-export { securityChanged };
+/**
+ * Whether two labels describe a genuinely different configuration, at the
+ * coarsest granularity both sides support: both families must be known, and
+ * modes only count when both sides state one.
+ */
+export function securityChanged(a: string, b: string): boolean {
+  const ca = classifySecurity(a);
+  const cb = classifySecurity(b);
+  if (ca.family === "unknown" || cb.family === "unknown") return false;
+  if (ca.family !== cb.family) return true;
+  return ca.mode !== undefined && cb.mode !== undefined && ca.mode !== cb.mode;
+}
