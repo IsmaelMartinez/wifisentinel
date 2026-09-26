@@ -10,7 +10,9 @@ export interface ArpEntry {
 
 // macOS: ? (192.168.1.1) at 48:22:54:b:d0:90 on en0 ifscope [ethernet]
 // Linux: ? (192.168.1.1) at 48:22:54:0b:d0:90 [ether] on wlp2s0
-const ARP_LINE = /\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)(?:\s+\[\w+\])?\s+on\s+(\S+)/;
+//        ? (192.168.1.2) at 48:22:54:0b:d0:91 [ether] PERM on wlp2s0   (static; net-tools may also print PUB)
+const ARP_LINE =
+  /\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)(?:\s+\[\w+\])?(?:\s+PERM)?(?:\s+PUB)?\s+on\s+(\S+)/;
 
 /**
  * Parse `arp -a` output (macOS or Linux) into unicast entries with

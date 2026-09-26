@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArp } from "../../src/collector/platform/arp.js";
@@ -12,6 +12,7 @@ import {
   parseIwDevInterface,
   parseLinuxDefaultRoute,
   parseWifiHardwarePort,
+  subnetCidr,
 } from "../../src/collector/platform/bootstrap.js";
 import { countNetstat } from "../../src/collector/scanners/connection.scanner.js";
 import { detectScanPatterns } from "../../src/collector/scanners/intrusion-detection.scanner.js";
@@ -25,6 +26,7 @@ mdns.mcast.net (224.0.0.251) at 1:0:5e:0:0:fb on en0 ifscope permanent [ethernet
 const LINUX_ARP = `_gateway (192.168.1.1) at 60:d8:a4:37:7e:2e [ether] on wlp2s0
 ? (192.168.1.40) at 48:22:54:0b:d0:90 [ether] on wlp2s0
 ? (192.168.1.77) at <incomplete> on wlp2s0
+? (192.168.1.2) at 48:22:54:0b:d0:91 [ether] PERM on wlp2s0
 ? (224.0.0.251) at 01:00:5e:00:00:fb [ether] PERM on wlp2s0`;
 
 describe("platform/arp", () => {
@@ -37,8 +39,11 @@ describe("platform/arp", () => {
     assert.deepEqual(parseArp(MACOS_ARP), expected("en0"));
   });
 
-  it("parses Linux arp -a", () => {
-    assert.deepEqual(parseArp(LINUX_ARP), expected("wlp2s0"));
+  it("parses Linux arp -a, including permanent entries", () => {
+    assert.deepEqual(parseArp(LINUX_ARP), [
+      ...expected("wlp2s0"),
+      { ip: "192.168.1.2", mac: "48:22:54:0b:d0:91", iface: "wlp2s0" },
+    ]);
   });
 });
 
@@ -190,6 +195,13 @@ VLAN Configurations
     assert.equal(parseWifiHardwarePort("Hardware Port: Thunderbolt Bridge\nDevice: bridge0"), null);
   });
 
+  it("computes the network address for any prefix length", () => {
+    assert.equal(subnetCidr("192.168.1.93", 24), "192.168.1.0/24");
+    assert.equal(subnetCidr("10.0.5.7", 16), "10.0.0.0/16");
+    assert.equal(subnetCidr("172.20.130.4", 20), "172.20.128.0/20");
+    assert.equal(subnetCidr("unknown", 24), "unknown/24");
+  });
+
   it("parses the Linux default route and iw dev", () => {
     assert.deepEqual(
       parseLinuxDefaultRoute("default via 192.168.1.1 dev wlp2s0 proto dhcp metric 600"),
@@ -214,7 +226,7 @@ describe("tool-resolver", () => {
   it("picks the preferred tier when available", () => {
     const { dir, cleanup } = fakePath(["dig", "nslookup", "tshark", "tcpdump"]);
     try {
-      const tools = resolveAllTools("darwin", dir);
+      const tools = resolveAllTools("linux", dir);
       assert.deepEqual(tools.get("dnsAudit"), { capability: "dnsAudit", name: "dig", path: join(dir, "dig"), tier: "preferred" });
       assert.equal(tools.get("packetAnalysis")?.name, "tshark");
     } finally {
@@ -234,9 +246,26 @@ describe("tool-resolver", () => {
   });
 
   it("reports none when no candidate exists", () => {
-    const tools = resolveAllTools("darwin", "");
+    const tools = resolveAllTools("linux", "");
     assert.deepEqual(tools.get("packetAnalysis"), { capability: "packetAnalysis", name: "none", path: "", tier: "minimal" });
     assert.equal(toolchainSummary(tools).packetAnalysis, null);
+  });
+
+  it("resolves macOS system tools at the fixed path the scanners execute, ignoring PATH", () => {
+    const { dir, cleanup } = fakePath(["dig", "nc"]);
+    try {
+      const tools = resolveAllTools("darwin", dir);
+      for (const [capability, name, path] of [
+        ["dnsAudit", "dig", "/usr/bin/dig"],
+        ["portScanning", "nc", "/usr/bin/nc"],
+      ] as const) {
+        const tool = tools.get(capability);
+        // The fixed path is used when present, and a PATH copy never stands in for it.
+        assert.ok(tool?.path === path || (tool?.name !== name && !existsSync(path)), `${capability}: ${JSON.stringify(tool)}`);
+      }
+    } finally {
+      cleanup();
+    }
   });
 
   it("only lists capabilities the scanners run", () => {

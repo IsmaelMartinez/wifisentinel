@@ -1,7 +1,7 @@
 import { accessSync, constants } from "node:fs";
 import { join } from "node:path";
 import type { ToolTier } from "./schema/scan-result.js";
-import { currentPlatform, type Platform } from "./platform/commands.js";
+import { currentPlatform, fixedPath, type Platform } from "./platform/commands.js";
 
 export interface ToolChain {
   capability: string;
@@ -15,17 +15,27 @@ export interface ResolvedToolResult {
   tier: ToolTier;
 }
 
-/** Resolve a tool by searching PATH directories — no shell spawned. */
-function whichTool(name: string, pathEnv: string): string | null {
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve a tool the way the scanners will run it: the fixed platform path
+ * from `bin()` when there is one (macOS system tools), otherwise a PATH
+ * search — no shell spawned.
+ */
+function whichTool(name: string, platform: Platform, pathEnv: string): string | null {
+  const fixed = fixedPath(name, platform);
+  if (fixed) return isExecutable(fixed) ? fixed : null;
   for (const dir of pathEnv.split(":")) {
     if (!dir) continue;
     const candidate = join(dir, name);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // not found in this directory
-    }
+    if (isExecutable(candidate)) return candidate;
   }
   return null;
 }
@@ -70,9 +80,9 @@ export function toolChains(platform: Platform): ToolChain[] {
   ];
 }
 
-function resolveChain(chain: ToolChain, pathEnv: string): ResolvedToolResult {
+function resolveChain(chain: ToolChain, platform: Platform, pathEnv: string): ResolvedToolResult {
   for (const candidate of chain.candidates) {
-    const path = whichTool(candidate.name, pathEnv);
+    const path = whichTool(candidate.name, platform, pathEnv);
     if (path) {
       return { capability: chain.capability, name: candidate.name, path, tier: candidate.tier };
     }
@@ -86,7 +96,7 @@ export function resolveAllTools(
 ): Map<string, ResolvedToolResult> {
   const results = new Map<string, ResolvedToolResult>();
   for (const chain of toolChains(platform)) {
-    results.set(chain.capability, resolveChain(chain, pathEnv));
+    results.set(chain.capability, resolveChain(chain, platform, pathEnv));
   }
   return results;
 }
@@ -98,7 +108,7 @@ export function resolveCapability(
   pathEnv: string = process.env.PATH ?? "",
 ): ResolvedToolResult | undefined {
   const chain = toolChains(platform).find((c) => c.capability === capability);
-  return chain ? resolveChain(chain, pathEnv) : undefined;
+  return chain ? resolveChain(chain, platform, pathEnv) : undefined;
 }
 
 export function toolchainSummary(
