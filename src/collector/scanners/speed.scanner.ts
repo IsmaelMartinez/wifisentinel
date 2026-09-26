@@ -1,5 +1,6 @@
 import { run, runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
+import { parsePingStats, type PingStats } from "../platform/ping.js";
 
 type SpeedResult = NonNullable<NetworkScanResult["speed"]>;
 
@@ -19,39 +20,15 @@ const PING_TARGETS = {
   internet: "1.1.1.1",
 };
 
-interface PingStats {
-  avgMs: number;
-  minMs: number;
-  maxMs: number;
-  jitterMs: number;
-  lossPercent: number;
-}
-
-function parsePingOutput(output: string): PingStats {
-  const defaults: PingStats = { avgMs: 0, minMs: 0, maxMs: 0, jitterMs: 0, lossPercent: 100 };
-
-  // Parse packet loss: "X packets transmitted, Y packets received, Z% packet loss"
-  const lossMatch = output.match(/([\d.]+)% packet loss/);
-  const lossPercent = lossMatch ? parseFloat(lossMatch[1]) : 100;
-
-  // Parse round-trip: "round-trip min/avg/max/stddev = 1.234/5.678/9.012/3.456 ms"
-  const rttMatch = output.match(/min\/avg\/max\/stddev\s*=\s*([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)/);
-  if (!rttMatch) return { ...defaults, lossPercent };
-
-  const minMs = parseFloat(rttMatch[1]);
-  const avgMs = parseFloat(rttMatch[2]);
-  const maxMs = parseFloat(rttMatch[3]);
-  const jitterMs = parseFloat(rttMatch[4]); // stddev is a good jitter approximation
-
-  return { avgMs, minMs, maxMs, jitterMs, lossPercent };
-}
+// Latency parsing is shared with the platform module (macOS stddev and Linux mdev).
+export { parsePingStats as parsePingOutput };
 
 async function pingTarget(target: string, count: number): Promise<PingStats> {
   const result = await runAsync("ping", ["-c", String(count), "-W", "2", target], 30_000);
   if (result.exitCode !== 0 && !result.stdout.includes("packet loss")) {
     return { avgMs: 0, minMs: 0, maxMs: 0, jitterMs: 0, lossPercent: 100 };
   }
-  return parsePingOutput(result.stdout);
+  return parsePingStats(result.stdout);
 }
 
 async function measureDnsResolution(): Promise<number> {

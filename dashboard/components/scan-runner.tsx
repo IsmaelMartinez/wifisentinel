@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, type ComponentProps } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { NetworkTopology } from "./network-topology";
@@ -174,23 +174,31 @@ export function ScanRunner() {
     .map((e) => e.scanner!)
     .filter((s) => !completedScanners.some((c) => c.scanner === s));
 
-  const hosts = events.filter((e) => e.type === "host:found");
   const alerts = events.filter((e) => e.type === "watch:alert");
 
-  const enrichedHosts = useMemo(() => hosts.map((h) => {
-    const enrichment = events.find((e) => e.type === "host:enriched" && e.ip === h.ip);
-    const cameraEvent = events.find((e) => e.type === "host:camera-detected" && e.ip === h.ip);
-    const hostPorts = events
-      .filter((e) => e.type === "port:found" && e.ip === h.ip)
-      .map((e) => ({ port: e.port!, service: e.service! }));
-    return {
-      ip: h.ip!,
-      mac: h.mac!,
-      vendor: enrichment?.vendor,
-      isCamera: !!cameraEvent,
-      ports: hostPorts,
-    };
-  }), [hosts, events]);
+  // Serialise the host data so its identity only changes when the host set
+  // (or a host's vendor/ports/camera flag) changes, not on every streamed
+  // event; otherwise the topology restarts its d3 simulation each time.
+  const hostsKey = useMemo(() => JSON.stringify(
+    events.filter((e) => e.type === "host:found").map((h) => {
+      const enrichment = events.find((e) => e.type === "host:enriched" && e.ip === h.ip);
+      const cameraEvent = events.find((e) => e.type === "host:camera-detected" && e.ip === h.ip);
+      const hostPorts = events
+        .filter((e) => e.type === "port:found" && e.ip === h.ip)
+        .map((e) => ({ port: e.port!, service: e.service! }));
+      return {
+        ip: h.ip!,
+        mac: h.mac!,
+        vendor: enrichment?.vendor,
+        isCamera: !!cameraEvent,
+        ports: hostPorts,
+      };
+    }),
+  ), [events]);
+  const enrichedHosts = useMemo(
+    () => JSON.parse(hostsKey) as ComponentProps<typeof NetworkTopology>["hosts"],
+    [hostsKey],
+  );
 
   const gatewayEvent = useMemo(
     () => events.find((e) => e.type === "bootstrap:complete"),
@@ -293,9 +301,9 @@ export function ScanRunner() {
                   ◐ {s}...
                 </div>
               ))}
-              {hosts.length > 0 && (
+              {enrichedHosts.length > 0 && (
                 <div className="mt-2 text-muted-foreground">
-                  {hosts.length} host{hosts.length !== 1 ? "s" : ""} discovered
+                  {enrichedHosts.length} host{enrichedHosts.length !== 1 ? "s" : ""} discovered
                 </div>
               )}
             </div>

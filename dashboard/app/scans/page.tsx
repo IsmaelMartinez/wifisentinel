@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ScanRunner } from "@/components/scan-runner";
 import { getScans } from "@/lib/store";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default function HistoryPage() {
   const entries = getScans({ limit: 100 });

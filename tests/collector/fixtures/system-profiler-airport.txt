@@ -1,0 +1,41 @@
+Wi-Fi:
+
+      Software Versions:
+          CoreWLAN: 16.0 (1657)
+          CoreWLANKit: 16.0 (1657)
+      Interfaces:
+        en0:
+          Card Type: Wi-Fi  (0x14E4, 0x4387)
+          MAC Address: a6:2c:10:3b:5f:f5
+          Locale: Unknown
+          Country Code: GB
+          Supported PHY Modes: 802.11 a/b/g/n/ac/ax/be
+          Wake On Wireless: Supported
+          Status: Connected
+          Current Network Information:
+            HomeNet:
+              PHY Mode: 802.11ax
+              Channel: 100 (5GHz, 80MHz)
+              Country Code: GB
+              Network Type: Infrastructure
+              Security: WPA2/WPA3 Personal
+              Signal / Noise: -33 dBm / -97 dBm
+              Transmit Rate: 1200
+              MCS Index: 11
+          Other Local Wi-Fi Networks:
+            <redacted>:
+              PHY Mode: 802.11b/g/n
+              Channel: 1 (2GHz, 20MHz)
+              Network Type: Infrastructure
+              Security: WPA2 Personal
+              Signal / Noise: -71 dBm / -95 dBm
+            CafeGuest:
+              PHY Mode: 802.11a/n/ac
+              Channel: 36 (5GHz, 80MHz)
+              Network Type: Infrastructure
+              Security: None
+              Signal / Noise: -80 dBm / -96 dBm
+        awdl0:
+          MAC Address: 2a:9d:1f:aa:bb:cc
+          Supported PHY Modes: 802.11 a/g/n/ac/ax
+          Status: Off
