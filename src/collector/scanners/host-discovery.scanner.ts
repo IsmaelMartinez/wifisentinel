@@ -1,6 +1,7 @@
 import { run } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 import { lookupVendor } from "../oui-lookup.js";
+import { isMulticastMac, isValidMac, normaliseMac } from "../mac.js";
 
 interface ArpEntry {
   ip: string;
@@ -8,7 +9,7 @@ interface ArpEntry {
   iface: string;
 }
 
-function parseArpOutput(output: string): ArpEntry[] {
+export function parseArpOutput(output: string): ArpEntry[] {
   const entries: ArpEntry[] = [];
   // Format: ? (192.168.68.1) at 48:22:54:b:d0:90 on en0 ifscope [ethernet]
   const lineRe = /\S+\s+\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)\s+on\s+(\S+)/;
@@ -16,9 +17,11 @@ function parseArpOutput(output: string): ArpEntry[] {
   for (const line of output.split("\n")) {
     const match = line.match(lineRe);
     if (!match) continue;
-    const [, ip, mac, iface] = match;
-    // Skip incomplete entries where mac is "ff:ff:ff:ff:ff:ff" or "(incomplete)"
-    if (mac === "ff:ff:ff:ff:ff:ff" || line.includes("(incomplete)")) continue;
+    const [, ip, rawMac, iface] = match;
+    const mac = normaliseMac(rawMac);
+    // Skip incomplete entries and broadcast/multicast group MACs
+    // (e.g. 224.0.0.251 at 1:0:5e:0:0:fb) — they are not hosts.
+    if (line.includes("(incomplete)") || !isValidMac(mac) || isMulticastMac(mac)) continue;
     entries.push({ ip, mac, iface });
   }
 
