@@ -66,20 +66,21 @@ export function renderReport(
 }
 
 /**
- * Analyses the scan once, renders it and saves it to history. Returns the
- * rendered report so the caller decides where it goes.
+ * Analyses the scan once, renders and delivers the report, then saves it to
+ * history. Delivery comes first so a failing save never costs the user the
+ * report.
  */
 export function reportAndSave(
   result: NetworkScanResult,
   opts: ReportOptions,
+  deliver: (output: string) => void,
   deps: ReportDeps = defaultDeps,
-): string {
+): void {
   const computed = deps.computeAnalysis(result);
-  const output = renderReport(result, computed, opts);
+  deliver(renderReport(result, computed, opts));
   if (opts.save) {
     deps.saveScan(result, computed.compliance, computed.analysis, computed.rfAnalysis);
   }
-  return output;
 }
 
 type ScanCommandOptions = ScanCliOptions & {
@@ -119,14 +120,14 @@ async function runScan(opts: ScanCommandOptions, label: string): Promise<void> {
       ? await runScanWithProgress(scanOpts)
       : await collectNetworkScan(scanOpts);
 
-    const output = reportAndSave(result, opts);
-
-    if (opts.file) {
-      writeFileSync(opts.file, output, "utf-8");
-      console.error(`[wifisentinel] Report written to ${opts.file}`);
-    } else {
-      console.log(output);
-    }
+    reportAndSave(result, opts, (output) => {
+      if (opts.file) {
+        writeFileSync(opts.file, output, "utf-8");
+        console.error(`[wifisentinel] Report written to ${opts.file}`);
+      } else {
+        console.log(output);
+      }
+    });
     if (opts.save && opts.verbose) {
       console.error("[wifisentinel] Scan saved to history.");
     }
