@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { WpaTier } from "../security.js";
 
 export const StandardId = z.enum([
   "cis-wireless",
@@ -62,6 +63,14 @@ export const SEVERITY_WEIGHTS: Record<Severity, number> = {
   low: 1,
   info: 0,
 };
+
+/** Status for a "WPA3, else at least WPA2" encryption check. */
+export function wpaTierStatus(tier: WpaTier): FindingStatus {
+  if (tier === "wpa3") return "pass";
+  if (tier === "wpa2") return "partial";
+  if (tier === "unknown") return "not-applicable";
+  return "fail";
+}
 
 export function computeGrade(score: number): Grade {
   if (score >= 90) return "A";

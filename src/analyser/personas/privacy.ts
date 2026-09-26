@@ -1,5 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isWeakSecurity } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
 import { riskFromInsights } from "./types.js";
 
@@ -203,7 +203,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
   }
 
   // --- Weak Wi-Fi encryption ---
-  if (isWeakSecurity(result.wifi.security)) {
+  if (classifySecurity(result.wifi.security).weak) {
     insights.push({
       id: "pr-weak-wifi-privacy",
       title:
