@@ -1,12 +1,24 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
 import { isPingLatency } from "../../collector/schema/latency.js";
-import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import type { Insight, PersonaAnalysis, PersonaSpec } from "./types.js";
+import { buildPersonaAnalysis } from "./types.js";
 
-const PERSONA_ID = "net-engineer" as const;
-const DISPLAY_NAME = "Network Engineer";
-const PERSPECTIVE =
-  "Analyses network health, performance bottlenecks, and infrastructure reliability to ensure optimal throughput and availability.";
+export const netEngineerSpec: PersonaSpec = {
+  persona: "net-engineer",
+  displayName: "Network Engineer",
+  perspective:
+    "Analyses network health, performance bottlenecks, and infrastructure reliability to ensure optimal throughput and availability.",
+  actions: {
+    "ne-poor-snr": { key: "improve-signal", text: "Improve signal-to-noise ratio — relocate AP, reduce interference sources" },
+    "ne-poor-speed": { key: "throughput", text: "Investigate throughput bottleneck — run wired test to isolate Wi-Fi vs backhaul" },
+    "ne-channel-congestion": { key: "change-channel", text: "Switch to a less congested Wi-Fi channel to reduce co-channel interference" },
+    "ne-packet-loss": { key: "packet-loss", text: "Diagnose and resolve packet loss on the local link" },
+    "ne-high-gateway-latency": { key: "gateway-latency", text: "Investigate gateway latency — check for bufferbloat and enable QoS" },
+    "ne-double-nat": { key: "double-nat", text: "Simplify network topology by eliminating double NAT" },
+    "ne-slow-dns": { key: "faster-dns", text: "Switch to a faster DNS resolver to reduce resolution latency" },
+  },
+  fallback: true,
+};
 
 export function analyseAsNetEngineer(
   result: NetworkScanResult,
@@ -26,7 +38,7 @@ export function analyseAsNetEngineer(
       recommendation:
         "Relocate the access point or client closer together. Check for interference sources. Consider adding access points to improve coverage.",
       affectedAssets: [result.wifi.bssid, result.meta.hostname],
-      references: ["IEEE-802.11-14.1"],
+      references: ["IEEE-3.1"],
     });
   } else if (snr < 15) {
     insights.push({
@@ -39,7 +51,7 @@ export function analyseAsNetEngineer(
       recommendation:
         "Improve signal path or reduce interference to achieve SNR above 25 dB for reliable performance.",
       affectedAssets: [result.wifi.bssid],
-      references: ["IEEE-802.11-14.1"],
+      references: ["IEEE-3.1"],
     });
   }
 
@@ -64,7 +76,7 @@ export function analyseAsNetEngineer(
       recommendation:
         "Switch to a less congested channel. On 5 GHz, use DFS channels if supported. Consider enabling automatic channel selection.",
       affectedAssets: [result.wifi.bssid],
-      references: ["IEEE-802.11-15.1"],
+      references: ["IEEE-5.1"],
     });
   }
 
@@ -96,7 +108,7 @@ export function analyseAsNetEngineer(
         recommendation:
           "Check for bottlenecks: backhaul capacity, ISP plan limits, Wi-Fi interference, or congested uplinks. Run a wired speed test to isolate Wi-Fi vs backhaul issues.",
         affectedAssets: [result.meta.hostname, result.network.gateway.ip],
-        references: ["IEEE-802.11-14.2"],
+        references: ["IEEE-3.3"],
       });
     }
 
@@ -118,7 +130,7 @@ export function analyseAsNetEngineer(
         recommendation:
           "Test wired throughput to determine if the bottleneck is the wireless link or the upstream connection. Check ISP plan limits.",
         affectedAssets: [result.meta.hostname],
-        references: ["IEEE-802.11-14.2"],
+        references: ["IEEE-3.3"],
       });
     }
 
@@ -142,7 +154,7 @@ export function analyseAsNetEngineer(
         recommendation:
           "If gateway loss is non-zero, check the local link (cables, AP, interference). For internet loss, contact the ISP or check routing via traceroute.",
         affectedAssets: [result.network.gateway.ip],
-        references: ["IEEE-802.11-14.3"],
+        references: ["IEEE-3.1"],
       });
     }
 
@@ -158,7 +170,7 @@ export function analyseAsNetEngineer(
         recommendation:
           "Check for bufferbloat (run a bufferbloat test). Reduce client contention. Consider enabling SQM/QoS on the router.",
         affectedAssets: [result.network.gateway.ip],
-        references: ["IEEE-802.11-14.3"],
+        references: [],
       });
     }
 
@@ -176,7 +188,7 @@ export function analyseAsNetEngineer(
         recommendation:
           "Enable QoS prioritisation for real-time traffic. Check for competing bandwidth-heavy transfers.",
         affectedAssets: [result.network.gateway.ip],
-        references: ["IEEE-802.11-14.3"],
+        references: [],
       });
     }
   }
@@ -196,7 +208,7 @@ export function analyseAsNetEngineer(
       recommendation:
         "Switch to a faster DNS resolver (e.g., 1.1.1.1 or 8.8.8.8). Consider a local caching resolver.",
       affectedAssets: result.network.dns.servers,
-      references: ["CIS-W-4.2"],
+      references: [],
     });
   }
 
@@ -215,7 +227,7 @@ export function analyseAsNetEngineer(
         result.network.gateway.ip,
         ...result.network.topology.hops.map((h) => h.ip),
       ],
-      references: ["NIST-800-153-4.1"],
+      references: ["NIST-W-4.1"],
     });
   }
 
@@ -231,7 +243,7 @@ export function analyseAsNetEngineer(
       recommendation:
         "Consider VLAN segmentation to reduce broadcast domain size. Evaluate the access point's maximum client recommendation.",
       affectedAssets: [result.network.gateway.ip],
-      references: ["IEEE-802.11-15.2"],
+      references: [],
     });
   }
 
@@ -247,21 +259,11 @@ export function analyseAsNetEngineer(
       recommendation:
         "Investigate each anomaly. Verify DNS configuration against expected behaviour. Consider alternative resolvers.",
       affectedAssets: result.network.dns.servers,
-      references: ["CIS-W-4.1"],
+      references: ["CIS-W-4.1", "OWASP-IoT-6"],
     });
   }
 
-  const priorityActions = deriveActions(result, insights);
-
-  return {
-    persona: PERSONA_ID,
-    displayName: DISPLAY_NAME,
-    perspective: PERSPECTIVE,
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildSummary(result, insights),
-    insights,
-    priorityActions,
-  };
+  return buildPersonaAnalysis(netEngineerSpec, insights, buildSummary(result, insights));
 }
 
 function buildSummary(
@@ -286,43 +288,4 @@ function buildSummary(
     return `The network is functional with ${insights.length} optimisation opportunity(ies). Signal quality and basic connectivity are acceptable, though addressing the identified issues would improve throughput, reduce latency, and enhance reliability under load.`;
   }
   return `The network is performing well across all measured dimensions. Signal quality, throughput, and latency are within acceptable ranges. No significant bottlenecks or reliability concerns were identified.`;
-}
-
-function deriveActions(
-  result: NetworkScanResult,
-  insights: Insight[],
-): string[] {
-  const actions: string[] = [];
-  const ids = new Set(insights.map((i) => i.id));
-
-  if (ids.has("ne-poor-snr"))
-    actions.push(
-      "Improve signal-to-noise ratio — relocate AP, reduce interference sources",
-    );
-  if (ids.has("ne-poor-speed"))
-    actions.push(
-      "Investigate throughput bottleneck — run wired test to isolate Wi-Fi vs backhaul",
-    );
-  if (ids.has("ne-channel-congestion"))
-    actions.push(
-      "Switch to a less congested Wi-Fi channel to reduce co-channel interference",
-    );
-  if (ids.has("ne-packet-loss"))
-    actions.push("Diagnose and resolve packet loss on the local link");
-  if (ids.has("ne-high-gateway-latency"))
-    actions.push(
-      "Investigate gateway latency — check for bufferbloat and enable QoS",
-    );
-  if (ids.has("ne-double-nat"))
-    actions.push(
-      "Simplify network topology by eliminating double NAT",
-    );
-  if (ids.has("ne-slow-dns"))
-    actions.push("Switch to a faster DNS resolver to reduce resolution latency");
-
-  if (actions.length === 0 && insights.length > 0) {
-    actions.push("Review DNS anomalies and optimise resolver configuration");
-  }
-
-  return actions.slice(0, 5);
 }
