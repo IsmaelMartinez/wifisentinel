@@ -1,31 +1,15 @@
 import { run } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
-import { isMulticastMac, isValidMac, normaliseMac } from "../mac.js";
+import { isValidMac, normaliseMac } from "../mac.js";
+import { arpMap, readArpTable, type ArpEntry } from "../platform/arp.js";
+import { bin } from "../platform/commands.js";
+import { parseNetstat, type NetstatEntry } from "../platform/netstat.js";
+import { sleep } from "../util.js";
 
 type IntrusionResult = NonNullable<NetworkScanResult["intrusionIndicators"]>;
 type ArpAnomaly = IntrusionResult["arpAnomalies"][number];
 type SuspiciousHost = IntrusionResult["suspiciousHosts"][number];
 type ScanDetection = IntrusionResult["scanDetection"][number];
-
-// Parse `arp -a` output into a map of ip -> normalised mac
-export function parseArpTable(output: string): Map<string, string> {
-  const table = new Map<string, string>();
-  // Format: ? (192.168.1.1) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]
-  const lineRe = /\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)/;
-  for (const line of output.split("\n")) {
-    const match = line.match(lineRe);
-    if (!match) continue;
-    const [, ip] = match;
-    const mac = normaliseMac(match[2]);
-    if (line.includes("(incomplete)") || !isValidMac(mac) || isMulticastMac(mac)) continue;
-    table.set(ip, mac);
-  }
-  return table;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export function detectArpAnomalies(
   snapshot1: Map<string, string>,
@@ -113,31 +97,7 @@ export function detectArpAnomalies(
   return anomalies;
 }
 
-interface NetstatEntry {
-  proto: string;
-  localAddr: string;
-  localPort: string;
-  remoteAddr: string;
-  remotePort: string;
-  state: string;
-}
-
-// Parse `netstat -an` output
-function parseNetstat(output: string): NetstatEntry[] {
-  const entries: NetstatEntry[] = [];
-  // Format: tcp4  0  0  192.168.1.5.54321  93.184.216.34.80  ESTABLISHED
-  // Or:     tcp   0  0  0.0.0.0.22         0.0.0.0.*         LISTEN
-  const lineRe = /^(tcp[46]?|udp[46]?)\s+\d+\s+\d+\s+(\S+)\.(\d+|\*)\s+(\S+)\.(\d+|\*)\s*(\S+)?/;
-  for (const line of output.split("\n")) {
-    const match = line.trim().match(lineRe);
-    if (!match) continue;
-    const [, proto, localAddr, localPort, remoteAddr, remotePort, state = ""] = match;
-    entries.push({ proto, localAddr, localPort, remoteAddr, remotePort, state });
-  }
-  return entries;
-}
-
-function detectScanPatterns(netstatEntries: NetstatEntry[]): ScanDetection[] {
+export function detectScanPatterns(netstatEntries: NetstatEntry[]): ScanDetection[] {
   const detections: ScanDetection[] = [];
 
   // Count SYN_SENT/SYN_RECV by remote source to detect outbound/inbound scans
@@ -240,21 +200,19 @@ function detectSuspiciousHosts(
 
 export async function scanForIntrusions(
   gatewayIp: string,
-  gatewayMac: string
+  gatewayMac: string,
+  baseline: ArpEntry[],
 ): Promise<IntrusionResult> {
-  // Take two ARP snapshots 3 seconds apart
-  const arp1Result = run("/usr/sbin/arp", ["-a"]);
-  const snapshot1 = parseArpTable(arp1Result.stdout);
-
+  // Compare the scan-wide ARP table (read once during discovery) against a
+  // second snapshot taken at least 3 seconds later.
+  const snapshot1 = arpMap(baseline);
   await sleep(3_000);
-
-  const arp2Result = run("/usr/sbin/arp", ["-a"]);
-  const snapshot2 = parseArpTable(arp2Result.stdout);
+  const snapshot2 = arpMap(readArpTable());
 
   const arpAnomalies = detectArpAnomalies(snapshot1, snapshot2, gatewayIp, gatewayMac);
 
   // Parse netstat for scan patterns
-  const netstatResult = run("/usr/sbin/netstat", ["-an"]);
+  const netstatResult = run(bin("netstat"), ["-an"]);
   const netstatEntries = parseNetstat(netstatResult.stdout);
   const scanDetection = detectScanPatterns(netstatEntries);
 
