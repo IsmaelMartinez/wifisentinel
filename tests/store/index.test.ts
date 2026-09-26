@@ -111,6 +111,15 @@ describe("scan index source fields", () => {
     assert.equal(listScans().length, 2);
   });
 
+  it("rebuilds an index that lists the same file twice", () => {
+    save(makeScan({ scanId: "7c7c7c7c-g", timestamp: "2026-07-03T14:00:00.000Z" }));
+    const indexPath = join(getStorePath(), "index.json");
+    const index = JSON.parse(readFileSync(indexPath, "utf-8"));
+    writeFileSync(indexPath, JSON.stringify([index[0], index[0]]));
+
+    assert.equal(listScans().length, 1);
+  });
+
   it("rebuilds a same-size index that names a phantom file", () => {
     save(makeScan({ scanId: "5a5a5a5a-e", timestamp: "2026-07-03T12:00:00.000Z" }));
     save(makeScan({ scanId: "6b6b6b6b-f", timestamp: "2026-07-03T13:00:00.000Z" }));

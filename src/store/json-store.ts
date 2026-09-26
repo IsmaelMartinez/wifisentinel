@@ -121,11 +121,12 @@ export function createJsonStore<E, S>(config: JsonStoreConfig<E, S>): JsonStore<
     const index = readIndex();
     // A concurrent writer can drop another's entry between read and rename, and
     // files can be added or removed by hand, so rebuild unless the index names
-    // exactly the files in the data directory.
+    // exactly the files in the data directory, each once.
     if (index === null) return rebuildIndex();
     const files = new Set(dataFiles());
     const indexed = new Set(index.map(config.filenameOf));
-    if (indexed.size !== files.size || [...indexed].some(f => !files.has(f))) {
+    const duplicates = indexed.size !== index.length;
+    if (duplicates || indexed.size !== files.size || [...indexed].some(f => !files.has(f))) {
       return rebuildIndex();
     }
     return index;
