@@ -55,7 +55,7 @@ Beyond `scan` / `analyse` (registered directly in `cli.ts`), each file in `src/c
 
 ### `src/store/` — Scan persistence
 
-`src/store/index.ts` persists scans to `~/.wifisentinel/scans/` as JSON files with a validated index. `recon-store.ts` does the same for recon results. `diff.ts` computes structural deltas between two stored scans.
+`src/store/index.ts` persists scans to `~/.wifisentinel/scans/` (or `$XDG_DATA_HOME/wifisentinel/scans/` on Linux when set) as JSON files with a validated index. `recon-store.ts` does the same for recon results. `diff.ts` computes structural deltas between two stored scans.
 
 ### `src/telemetry/` — OpenTelemetry instrumentation
 

@@ -14,7 +14,7 @@ Multi-persona WiFi and network security analyser with compliance scoring, RF int
 
 **External reconnaissance** — `recon <domain>` maps the external attack surface of a domain: DNS enumeration (brute + certificate transparency), WHOIS, TLS/SSL grading, and HTTP security header analysis. Results are scored and analysed through the same persona layer.
 
-**Scan history and observability** — scans are persisted to `~/.wifisentinel/scans/`. `history`, `trend`, and `diff` commands let you review past scans, track compliance over time, and compare two scan snapshots. `devices` aggregates scan history into per-MAC presence timelines. Scheduled scanning via launchd/cron is available through the `schedule` command, and `watch` runs continuous scans with alerting on changes.
+**Scan history and observability** — scans are persisted to `~/.wifisentinel/scans/` (under `$XDG_DATA_HOME/wifisentinel/` on Linux when that is set). `history`, `trend`, and `diff` commands let you review past scans, track compliance over time, and compare two scan snapshots. `devices` aggregates scan history into per-MAC presence timelines. Scheduled scanning via launchd/cron is available through the `schedule` command, and `watch` runs continuous scans with alerting on changes.
 
 **Dashboard** — Next.js app (dark theme, shadcn/ui) showing scan details, real-time persona perspectives, historical trends, and compliance tracking. HTML report export from both CLI and dashboard.
 
@@ -114,7 +114,7 @@ wifisentinel recon example.com
 --skip-traffic              Skip traffic capture (tshark, falling back to tcpdump)
 --traffic-duration <secs>   Traffic capture duration in seconds (default: 8)
 --skip-speed                Skip speed test
---no-vendor-lookup          Skip MAC vendor lookups (resolved offline from a bundled OUI database)
+--no-vendor-lookup          Skip the gateway's MAC vendor lookup (all lookups use a bundled offline OUI database)
 --stealth                   Passive host discovery, randomised port timing, skip speed/traffic
 --monitor-interface <iface> (scan only) Enable deauth detection via monitor mode on this interface
 --events                    (scan only) Output scan events as NDJSON instead of a report
@@ -133,7 +133,7 @@ wifisentinel recon example.com
 --no-alert-security-change       Disable alerts on security/WiFi changes
 --events                         Output NDJSON events to stdout instead of a rendered report
 --skip-ports / --skip-speed / --skip-traffic   Reduce per-cycle cost
---no-vendor-lookup               Skip MAC vendor lookups
+--no-vendor-lookup               Skip the gateway's MAC vendor lookup
 --stealth                        Passive, randomised scanning
 --otel <exporter>                OTEL exporter: console, otlp, none (default: none)
 --no-save                        Skip saving scan results to history
@@ -189,7 +189,7 @@ The pipeline flows: **CLI** (commander) → **Collector** → **Analyser** → *
 
 `src/reporter/` provides the output formatters: `terminal.reporter.ts` (coloured ASCII scorecard), `analysis.reporter.ts` (adds persona and standards output), `json.reporter.ts` (structured JSON including analysis) and `html.reporter.ts` (shareable HTML export), plus specialised reporters for RF, recon and watch mode.
 
-`src/store/` persists scans to `~/.wifisentinel/scans/` as JSON files, indexed for history and trend queries.
+`src/store/` persists scans to `~/.wifisentinel/scans/` (or `$XDG_DATA_HOME/wifisentinel/scans/` on Linux when set) as JSON files, indexed for history and trend queries.
 
 `src/telemetry/` wraps scan phases in OTEL spans via `withSpan()` and records tool resolution tier metrics.
 
@@ -246,7 +246,7 @@ wifisentinel devices
 
 If you haven't run `npm link`, use `npm run dev -- <command>` instead.
 
-All scan data is stored locally in `~/.wifisentinel/` (or `$XDG_DATA_HOME/wifisentinel/` on Linux when that variable is set) and is never uploaded. Beyond the scan's own network probes, the only external requests are the speed test (Cloudflare and OVH; skip it with `--skip-speed`) and the `recon` command's lookups.
+All scan data is stored locally in `~/.wifisentinel/` (or `$XDG_DATA_HOME/wifisentinel/` on Linux when that variable is set) and is never uploaded. Beyond the scan's own network probes, the only external requests are the speed test (Cloudflare, OVH and Tele2; skip it with `--skip-speed`), the `recon` command's lookups, and trace export to your configured collector when `--otel otlp` is enabled.
 
 ## Contributing
 
