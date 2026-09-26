@@ -54,7 +54,7 @@ npm run typecheck  # tsc -p tsconfig.check.json (src and tests, no emit)
 npm run lint       # eslint
 ```
 
-CI runs on every PR to `main`: `npm audit`, typecheck, build, a CLI help smoke check, lint and tests on Node 20 and 22; a dashboard build; Android JVM unit tests plus a debug APK build; and Android instrumented tests on an emulator. CodeQL and OSV-Scanner also run on pull requests.
+CI runs on every PR to `main`: `npm audit`, typecheck, build, a CLI help smoke check, lint and tests on Node 22 and 24; a dashboard build; Android JVM unit tests plus a debug APK build; and Android instrumented tests on an emulator. CodeQL and OSV-Scanner also run on pull requests.
 
 ## Adding a Scanner
 
