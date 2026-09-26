@@ -98,6 +98,10 @@ export function buildCronLine(t: ScheduleTarget): string {
       `Interval ${n}h does not divide 24; cron supports 1, 2, 3, 4, 6, 8, 12 or 24.`,
     );
   }
+  // Crontab is line-based, so a line break in a path would end the entry.
+  for (const p of [t.nodePath, t.binaryPath, t.logPath]) {
+    if (/[\r\n]/.test(p)) throw new Error(`Cannot schedule a path containing a line break: ${JSON.stringify(p)}`);
+  }
   const hours = n === 24 ? "0" : `*/${n}`;
   return `0 ${hours} * * * ${cronQuote(t.nodePath)} ${cronQuote(t.binaryPath)} scan --analyse > /dev/null 2>> ${cronQuote(t.logPath)}`;
 }

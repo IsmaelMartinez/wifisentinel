@@ -75,6 +75,17 @@ describe("schedule", () => {
     assert.ok(line.includes(`2>> ${shellQuote(awkward.logPath)}`));
   });
 
+  it("rejects paths containing line breaks", () => {
+    for (const key of ["nodePath", "binaryPath", "logPath"] as const) {
+      for (const br of ["\n", "\r"]) {
+        assert.throws(
+          () => buildCronLine({ ...awkward, [key]: `/a${br}* * * * * evil` }),
+          /line break/,
+        );
+      }
+    }
+  });
+
   it("survives cron's % handling and the shell for %, backslash and quote paths", () => {
     for (const path of ["/home/a%b/cli.js", "/x\\%y/cli.js", "/p\\q'r%/s\\\\", "/end\\"]) {
       const cmd = cronCommand(`printf '%s\\n' ${cronQuote(path)}`.replace("'%s", "'\\%s"));
