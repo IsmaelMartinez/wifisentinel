@@ -54,7 +54,7 @@ npm run typecheck  # tsc type-checking (includes tests)
 npm run lint       # eslint
 ```
 
-CI runs typecheck, build, lint, and tests on Node 20 and 22, plus a dashboard build, on every PR.
+CI runs typecheck, build, lint, and tests on Node 22 and 24, plus a dashboard build, on every PR.
 
 ## Adding a Scanner
 
