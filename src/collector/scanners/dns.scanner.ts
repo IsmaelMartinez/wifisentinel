@@ -24,7 +24,7 @@ const DNSSEC_SIGNED_DOMAIN = "cloudflare.com";
  * Parse DNS server IPs from `scutil --dns` output.
  * Looks for lines like: "  nameserver[0] : 192.168.1.1"
  */
-function parseScutilDns(output: string): string[] {
+export function parseScutilDns(output: string): string[] {
   const servers: string[] = [];
   const re = /nameserver\[\d+\]\s*:\s*([\d.:a-fA-F]+)/g;
   let m: RegExpExecArray | null;
@@ -152,7 +152,7 @@ async function detectDnsLeakAnomalies(gatewayServers: string[], gateway: string)
 /**
  * Parse nslookup output for DNS server info.
  */
-function parseNslookupServer(output: string): string[] {
+export function parseNslookupServer(output: string): string[] {
   const servers: string[] = [];
   const re = /^Server:\s*([\d.:a-fA-F]+)/im;
   const m = output.match(re);

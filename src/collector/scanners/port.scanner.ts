@@ -52,7 +52,7 @@ interface LsofEntry {
   bindAddress: string;
 }
 
-function parseLsofOutput(output: string): LsofEntry[] {
+export function parseLsofOutput(output: string): LsofEntry[] {
   const entries: LsofEntry[] = [];
   // Example line:
   // node    1234 user   22u  IPv4 0x...  0t0  TCP 127.0.0.1:3000 (LISTEN)

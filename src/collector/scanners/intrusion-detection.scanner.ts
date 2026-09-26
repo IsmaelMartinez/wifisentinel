@@ -156,7 +156,7 @@ export function detectScanPatterns(netstatEntries: NetstatEntry[]): ScanDetectio
   return detections;
 }
 
-function detectSuspiciousHosts(
+export function detectSuspiciousHosts(
   snapshot1: Map<string, string>,
   snapshot2: Map<string, string>
 ): SuspiciousHost[] {
