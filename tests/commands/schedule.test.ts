@@ -4,10 +4,32 @@ import { execFileSync } from "node:child_process";
 import {
   buildCronLine,
   buildPlist,
+  cronQuote,
   getBinaryPath,
   shellQuote,
   type ScheduleTarget,
 } from "../../src/commands/schedule.js";
+
+/**
+ * Mirrors Vixie cron's command preprocessing (do_command.c): `\%` becomes
+ * `%`, a backslash before anything else is kept along with that character,
+ * and the first unescaped `%` ends the command.
+ */
+function cronCommand(line: string): { command: string; split: boolean } {
+  let out = "";
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "\\" && i + 1 < line.length) {
+      out += line[i + 1] === "%" ? "%" : ch + line[i + 1];
+      i++;
+    } else if (ch === "%") {
+      return { command: out, split: true };
+    } else {
+      out += ch;
+    }
+  }
+  return { command: out, split: false };
+}
 
 const awkward: ScheduleTarget = {
   nodePath: "/opt/node dir/bin/node",
@@ -53,11 +75,13 @@ describe("schedule", () => {
     assert.ok(line.includes(`2>> ${shellQuote(awkward.logPath)}`));
   });
 
-  it("escapes % in cron paths so cron doesn't split the command", () => {
-    const line = buildCronLine({ ...awkward, binaryPath: "/home/a%b/dist/cli.js" });
-    assert.ok(line.includes("'/home/a\\%b/dist/cli.js'"), line);
-    // Every % in the line must be backslash-escaped.
-    assert.ok(!/(^|[^\\])%/.test(line), line);
+  it("survives cron's % handling and the shell for %, backslash and quote paths", () => {
+    for (const path of ["/home/a%b/cli.js", "/x\\%y/cli.js", "/p\\q'r%/s\\\\", "/end\\"]) {
+      const cmd = cronCommand(`printf '%s\\n' ${cronQuote(path)}`.replace("'%s", "'\\%s"));
+      assert.ok(!cmd.split, `cron split the command for ${path}`);
+      const out = execFileSync("sh", ["-c", cmd.command], { encoding: "utf-8" });
+      assert.equal(out, path + "\n");
+    }
   });
 
   it("rejects cron intervals that do not divide 24", () => {

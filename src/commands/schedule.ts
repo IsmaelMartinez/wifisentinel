@@ -38,13 +38,20 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-/**
- * Shell-quote a value for a crontab command. Cron turns an unescaped `%` into
- * a newline before the shell sees it (quotes don't help), so escape it as
- * `\%`, which cron unescapes back to `%`.
- */
+const CRON_QUOTED: Record<string, string> = {
+  // Close the single-quoted run, emit an escaped quote, reopen.
+  "'": "'\\''",
+  // Emit backslashes outside the quotes as `\\` so a path backslash can never
+  // sit directly before a `%` and swallow cron's `\%` escape.
+  "\\": "'\\\\'",
+  // Cron turns an unescaped `%` into a newline before the shell runs (quotes
+  // don't help); it unescapes `\%` back to `%`.
+  "%": "\\%",
+};
+
+/** Shell-quote a value for a crontab command line, escaping for cron too. */
 export function cronQuote(value: string): string {
-  return shellQuote(value).replace(/%/g, "\\%");
+  return `'${value.replace(/['\\%]/g, (c) => CRON_QUOTED[c])}'`;
 }
 
 export interface ScheduleTarget {
