@@ -246,6 +246,21 @@ describe("tool-resolver", () => {
     }
   });
 
+  it("prefers iw for Linux Wi-Fi and reports nmcli alone as minimal", () => {
+    const both = fakePath(["iw", "nmcli"]);
+    const nmcliOnly = fakePath(["nmcli"]);
+    try {
+      assert.equal(resolveCapability("wifiAnalysis", "linux", both.dir)?.name, "iw");
+      assert.deepEqual(
+        [resolveCapability("wifiAnalysis", "linux", nmcliOnly.dir)?.name, resolveCapability("wifiAnalysis", "linux", nmcliOnly.dir)?.tier],
+        ["nmcli", "minimal"],
+      );
+    } finally {
+      both.cleanup();
+      nmcliOnly.cleanup();
+    }
+  });
+
   it("reports none when no candidate exists", () => {
     const tools = resolveAllTools("linux", "");
     assert.deepEqual(tools.get("packetAnalysis"), { capability: "packetAnalysis", name: "none", path: "", tier: "minimal" });
