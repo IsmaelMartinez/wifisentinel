@@ -1,4 +1,4 @@
-import { run, runAsync } from "../exec.js";
+import { runAsync } from "../exec.js";
 import { isMulticastMac, normaliseMac } from "../mac.js";
 
 export interface DeauthScanOptions {
@@ -131,7 +131,7 @@ function parseTcpdumpOutput(output: string): Pick<DeauthResult, "detected" | "fr
 async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
   if (process.platform === "darwin") {
     // macOS: use log show to query the last 5 minutes of Wi-Fi subsystem logs
-    const result = run(
+    const result = await runAsync(
       "log",
       [
         "show",
@@ -152,7 +152,7 @@ async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
   }
 
   // Linux: try journalctl first, fall back to dmesg
-  const journalResult = run(
+  const journalResult = await runAsync(
     "journalctl",
     ["-k", "--no-pager", "--since", "5 minutes ago", "-g", "deauth|disassoc"],
     30_000
@@ -162,7 +162,7 @@ async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
 
   if (journalResult.exitCode !== 0 || !logOutput.trim()) {
     // Fallback: dmesg
-    const dmesgResult = run("dmesg", [], 10_000);
+    const dmesgResult = await runAsync("dmesg", [], 10_000);
     logOutput = dmesgResult.stdout;
   }
 

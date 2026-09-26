@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 import { isValidMac, normaliseMac } from "../mac.js";
 import { arpMap, readArpTable, type ArpEntry } from "../platform/arp.js";
@@ -207,12 +207,12 @@ export async function scanForIntrusions(
   // second snapshot taken at least 3 seconds later.
   const snapshot1 = arpMap(baseline);
   await sleep(3_000);
-  const snapshot2 = arpMap(readArpTable());
+  const snapshot2 = arpMap(await readArpTable());
 
   const arpAnomalies = detectArpAnomalies(snapshot1, snapshot2, gatewayIp, gatewayMac);
 
   // Parse netstat for scan patterns
-  const netstatResult = run(bin("netstat"), ["-an"]);
+  const netstatResult = await runAsync(bin("netstat"), ["-an"]);
   const netstatEntries = parseNetstat(netstatResult.stdout);
   const scanDetection = detectScanPatterns(netstatEntries);
 

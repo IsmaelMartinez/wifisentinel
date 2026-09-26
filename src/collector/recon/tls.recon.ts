@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { runAsync } from "../exec.js";
 import type { TlsRecon } from "./schema.js";
 
 const DOMAIN_REGEX = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*\.?$/;
@@ -76,27 +76,20 @@ function computeGrade(
   return "C";
 }
 
-export function scanTls(domain: string): TlsRecon {
+export async function scanTls(domain: string): Promise<TlsRecon> {
   if (!DOMAIN_REGEX.test(domain)) {
     return emptyResult(domain, ["Invalid domain"]);
   }
 
-  // Pass empty stdin so openssl doesn't hang
-  let connStdout: string;
-  let connStderr: string;
-  let connExitCode = 0;
-  try {
-    connStdout = execFileSync(
-      "openssl",
-      ["s_client", "-connect", `${domain}:443`, "-servername", domain],
-      { input: "", encoding: "utf-8", timeout: 15_000, stdio: ["pipe", "pipe", "pipe"] },
-    );
-    connStderr = "";
-  } catch (err: any) {
-    connStdout = (err.stdout ?? "").toString();
-    connStderr = (err.stderr ?? "").toString();
-    connExitCode = err.status ?? 1;
-  }
+  // runAsync closes stdin straight away, so openssl doesn't hang
+  const conn = await runAsync(
+    "openssl",
+    ["s_client", "-connect", `${domain}:443`, "-servername", domain],
+    15_000,
+  );
+  const connStdout = conn.stdout;
+  const connStderr = conn.stderr;
+  const connExitCode = conn.exitCode;
 
   if (!connStdout && connExitCode !== 0) {
     return emptyResult(domain, ["Connection failed: unable to reach host"]);
@@ -113,16 +106,14 @@ export function scanTls(domain: string): TlsRecon {
   const chainDepth = depthMatch ? parseInt(depthMatch[1], 10) : 0;
 
   // Parse the certificate from the s_client output (reuse connStdout, no second connection)
-  let certOutput: string;
-  try {
-    certOutput = execFileSync(
+  const certOutput = (
+    await runAsync(
       "openssl",
       ["x509", "-noout", "-subject", "-issuer", "-dates", "-ext", "subjectAltName"],
-      { input: connStdout, encoding: "utf-8", timeout: 10_000, stdio: ["pipe", "pipe", "pipe"] },
-    );
-  } catch (err: any) {
-    certOutput = (err.stdout ?? "").toString();
-  }
+      10_000,
+      connStdout,
+    )
+  ).stdout;
 
   // certOutput now comes from the two-step openssl pipeline above
 

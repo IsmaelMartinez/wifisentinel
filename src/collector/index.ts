@@ -63,8 +63,8 @@ export async function collectNetworkScan(
       "network-bootstrap",
       { "tool.resolved": tools.get("hostDiscovery")?.name ?? "none" },
       async () => {
-        const net = detectNetwork();
-        const arpEntries = discoverArpTable({
+        const net = await detectNetwork();
+        const arpEntries = await discoverArpTable({
           stealth: options.stealth,
           broadcastAddr: net.broadcastAddr,
         });
@@ -266,7 +266,7 @@ export async function collectNetworkScan(
     // Step 7: Look up gateway vendor
     const gatewayVendor = options.skipVendorLookup
       ? undefined
-      : lookupVendor(bootstrap.gateway.mac);
+      : await lookupVendor(bootstrap.gateway.mac);
 
     const duration = Date.now() - startTime;
     recordScanDuration("total", duration);

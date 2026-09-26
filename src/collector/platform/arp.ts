@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import { isMulticastMac, isValidMac, normaliseMac } from "../mac.js";
 import { bin, type Platform } from "./commands.js";
 
@@ -30,8 +30,8 @@ export function parseArp(output: string): ArpEntry[] {
 }
 
 /** Read the ARP table once. */
-export function readArpTable(platform?: Platform): ArpEntry[] {
-  return parseArp(run(bin("arp", platform), ["-a"]).stdout);
+export async function readArpTable(platform?: Platform): Promise<ArpEntry[]> {
+  return parseArp((await runAsync(bin("arp", platform), ["-a"])).stdout);
 }
 
 /** ip -> mac map, the shape the intrusion detector compares. */
