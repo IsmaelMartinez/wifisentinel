@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { parseArp } from "../../src/collector/platform/arp.js";
 import { parseNetstat, splitNetstatAddr } from "../../src/collector/platform/netstat.js";
 import { parsePingStats } from "../../src/collector/platform/ping.js";
+import { parsePingOutput } from "../../src/collector/scanners/speed.scanner.js";
 import { bin, broadcastPingArgs, singlePingArgs } from "../../src/collector/platform/commands.js";
 import {
   parseIwDevInterface,
@@ -139,6 +140,14 @@ round-trip min/avg/max/stddev = 9.621/10.047/10.474/0.427 ms`;
 3 packets transmitted, 3 received, 0% packet loss, time 2003ms
 rtt min/avg/max/mdev = 2.123/2.456/2.789/0.271 ms`;
     assert.deepEqual(parsePingStats(out), { minMs: 2.123, avgMs: 2.456, maxMs: 2.789, jitterMs: 0.271, lossPercent: 0 });
+  });
+
+  it("is the parser the speed test uses, so Linux mdev latency is read", () => {
+    const out = `--- 1.1.1.1 ping statistics ---
+10 packets transmitted, 10 received, 0% packet loss, time 9012ms
+rtt min/avg/max/mdev = 11.204/12.873/15.990/1.338 ms`;
+    assert.equal(parsePingOutput, parsePingStats);
+    assert.deepEqual(parsePingOutput(out), { minMs: 11.204, avgMs: 12.873, maxMs: 15.99, jitterMs: 1.338, lossPercent: 0 });
   });
 
   it("reports total loss when there is no summary", () => {
