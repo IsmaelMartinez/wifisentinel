@@ -93,6 +93,14 @@ describe("scan command options", () => {
     assert.ok(watchFlags.includes("--no-alert-new-hosts"));
   });
 
+  it("validates --otel against the known exporters on every command that accepts it", () => {
+    for (const name of ["scan", "analyse", "watch"]) {
+      const otel = cmd(name).options.find(o => o.long === "--otel")!;
+      assert.deepEqual(otel.argChoices, ["console", "otlp", "none"], name);
+      assert.equal(otel.defaultValue, "none");
+    }
+  });
+
   it("rejects non-positive or non-numeric counts", () => {
     assert.equal(parsePositiveInt("5"), 5);
     for (const bad of ["0", "abc", "-3", "2.5"]) {
