@@ -158,6 +158,11 @@ describe("client isolation target", () => {
     assert.equal(pickIsolationTarget(MACOS_ARP, "192.168.1.1", "192.168.1.23"), "192.168.1.40");
   });
 
+  it("returns undefined when the gateway IP is unknown", () => {
+    assert.equal(pickIsolationTarget(MACOS_ARP, "unknown", "192.168.1.23"), undefined);
+    assert.equal(pickIsolationTarget(MACOS_ARP), undefined);
+  });
+
   it("returns undefined when only the gateway is known", () => {
     const arp = MACOS_ARP.split("\n").filter((l) => !l.includes("192.168.1.23") && !l.includes("192.168.1.40")).join("\n");
     assert.equal(pickIsolationTarget(arp, "192.168.1.1"), undefined);
