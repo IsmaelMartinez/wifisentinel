@@ -23,7 +23,7 @@ export function addScanOptions(cmd: Command): Command {
     .option("--skip-traffic", "Skip traffic analysis")
     .option("--traffic-duration <seconds>", "Traffic capture duration in seconds (default 8)", parsePositiveInt)
     .option("--skip-speed", "Skip speed test")
-    .option("--no-vendor-lookup", "Skip MAC vendor lookups (prevents sending OUI data to api.macvendors.com)")
+    .option("--no-vendor-lookup", "Skip the gateway MAC vendor lookup (bundled OUI database; no network calls)")
     .option("--monitor-interface <iface>", "Enable deauth detection via monitor mode on this interface")
     .option("--stealth", "Reduce network footprint: passive host discovery, randomised port timing, random DNS test domains, skip speed test")
     .option("--events", "Output scan events as NDJSON instead of a report")
