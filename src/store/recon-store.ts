@@ -48,7 +48,7 @@ const store = createJsonStore<ReconIndexEntry, StoredRecon>({
   }),
 });
 
-export function saveRecon(result: ReconResult, analysis: FullReconAnalysis): void {
+export function saveRecon(result: ReconResult, analysis?: FullReconAnalysis): void {
   store.save({ recon: result, analysis });
 }
 

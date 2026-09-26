@@ -119,9 +119,15 @@ export function createJsonStore<E, S>(config: JsonStoreConfig<E, S>): JsonStore<
 
   function list(): E[] {
     const index = readIndex();
-    // A concurrent writer can drop another's entry between read and rename, so
-    // treat a count mismatch with the data directory as a stale index.
-    if (index === null || index.length !== dataFiles().length) return rebuildIndex();
+    // A concurrent writer can drop another's entry between read and rename, and
+    // files can be added or removed by hand, so rebuild unless the index names
+    // exactly the files in the data directory.
+    if (index === null) return rebuildIndex();
+    const files = new Set(dataFiles());
+    const indexed = new Set(index.map(config.filenameOf));
+    if (indexed.size !== files.size || [...indexed].some(f => !files.has(f))) {
+      return rebuildIndex();
+    }
     return index;
   }
 

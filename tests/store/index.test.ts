@@ -111,6 +111,19 @@ describe("scan index source fields", () => {
     assert.equal(listScans().length, 2);
   });
 
+  it("rebuilds a same-size index that names a phantom file", () => {
+    save(makeScan({ scanId: "5a5a5a5a-e", timestamp: "2026-07-03T12:00:00.000Z" }));
+    save(makeScan({ scanId: "6b6b6b6b-f", timestamp: "2026-07-03T13:00:00.000Z" }));
+    const indexPath = join(getStorePath(), "index.json");
+    const index = JSON.parse(readFileSync(indexPath, "utf-8"));
+    index[0].filename = "2026-01-01T00-00-00_deadbeef.json";
+    writeFileSync(indexPath, JSON.stringify(index));
+
+    const entries = listScans();
+    assert.equal(entries.length, 2);
+    assert.doesNotThrow(() => loadScans(entries));
+  });
+
   it("writes atomically, leaving no temp files behind", () => {
     save(makeScan({ scanId: "77777777-g", timestamp: "2026-07-04T10:00:00.000Z" }));
     const stray = [
