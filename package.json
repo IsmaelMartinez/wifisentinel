@@ -44,7 +44,6 @@
     "listr2": "^11.1.0",
     "log-update": "^8.0.0",
     "oui-data": "^2.1.23",
-    "sparkly": "^6.0.1",
     "terminal-link": "^5.0.0",
     "zod": "^4.6.5"
   },
