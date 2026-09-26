@@ -2,19 +2,13 @@
 import chalk from "chalk";
 import type { RFAnalysis } from "../analyser/rf/index.js";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
-import { pad } from "./render-helpers.js";
+import { pad, TEAL, AMBER, RED, severityColor } from "./render-helpers.js";
 
 function saturationBar(score: number): string {
   const filled = Math.round(score / 10);
   const empty = 10 - filled;
-  const color = score <= 30 ? chalk.green : score <= 60 ? chalk.yellow : chalk.red;
+  const color = score <= 30 ? TEAL : score <= 60 ? AMBER : RED;
   return color("█".repeat(filled)) + chalk.gray("░".repeat(empty));
-}
-
-function severityColor(severity: "high" | "medium" | "low"): (s: string) => string {
-  if (severity === "high") return chalk.red;
-  if (severity === "medium") return chalk.yellow;
-  return chalk.dim;
 }
 
 function renderChannelMap(analysis: RFAnalysis): string {
@@ -46,9 +40,9 @@ function renderChannelMap(analysis: RFAnalysis): string {
   lines.push("");
 
   if (channelMap.recommendedChannel === channelMap.currentChannel) {
-    lines.push(chalk.green(`  ${channelMap.recommendationReason}`));
+    lines.push(TEAL(`  ${channelMap.recommendationReason}`));
   } else {
-    lines.push(chalk.yellow(`  Recommendation: Switch to channel ${channelMap.recommendedChannel}`));
+    lines.push(AMBER(`  Recommendation: Switch to channel ${channelMap.recommendedChannel}`));
     lines.push(chalk.dim(`  ${channelMap.recommendationReason}`));
   }
 
@@ -64,11 +58,11 @@ function renderRogueAPs(analysis: RFAnalysis): string {
   lines.push("");
 
   if (rogueAPs.findings.length === 0) {
-    lines.push(chalk.green("  No rogue APs detected."));
+    lines.push(TEAL("  No rogue APs detected."));
     return lines.join("\n");
   }
 
-  const riskColor = rogueAPs.riskLevel === "danger" ? chalk.red : chalk.yellow;
+  const riskColor = rogueAPs.riskLevel === "danger" ? RED : AMBER;
   lines.push(riskColor(`  Risk: ${rogueAPs.riskLevel.toUpperCase()}`));
   lines.push("");
 
@@ -95,7 +89,7 @@ function renderEnvironment(analysis: RFAnalysis): string {
   lines.push("");
 
   if (environment.changes.length === 0) {
-    lines.push(chalk.green("  No environment changes detected."));
+    lines.push(TEAL("  No environment changes detected."));
     return lines.join("\n");
   }
 
@@ -105,7 +99,7 @@ function renderEnvironment(analysis: RFAnalysis): string {
   for (const c of environment.changes) {
     const sc = severityColor(c.severity);
     const icon = c.type === "new_ap" ? "+" : c.type === "disappeared_ap" ? "-" : "~";
-    const iconColor = c.type === "new_ap" ? chalk.green : c.type === "disappeared_ap" ? chalk.red : chalk.yellow;
+    const iconColor = c.type === "new_ap" ? TEAL : c.type === "disappeared_ap" ? RED : AMBER;
     const ssid = c.ssid ?? "(hidden)";
     lines.push(`  ${iconColor(icon)} ${sc("[" + c.severity.toUpperCase() + "]")} ${ssid}: ${c.detail}`);
   }
@@ -121,17 +115,17 @@ function renderDeauthDetection(deauth: NonNullable<NetworkScanResult["deauthDete
   lines.push("");
 
   if (!deauth.detected) {
-    lines.push(chalk.green("  No deauthentication events detected."));
+    lines.push(TEAL("  No deauthentication events detected."));
     return lines.join("\n");
   }
 
-  lines.push(chalk.yellow(`  ${deauth.frameCount} deauth/disassoc event(s) detected`));
+  lines.push(AMBER(`  ${deauth.frameCount} deauth/disassoc event(s) detected`));
   lines.push("");
 
   if (deauth.sources.length > 0) {
     lines.push(chalk.dim("  Sources:"));
     for (const src of deauth.sources.slice(0, 10)) {
-      lines.push(`    ${chalk.cyan(src.mac.padEnd(18))} ${chalk.yellow(String(src.count))} event(s)`);
+      lines.push(`    ${chalk.cyan(src.mac.padEnd(18))} ${AMBER(String(src.count))} event(s)`);
     }
   }
 
@@ -154,27 +148,27 @@ export function renderRFSummary(analysis: RFAnalysis, deauth?: NetworkScanResult
   const { channelMap, rogueAPs } = analysis;
   const lines: string[] = [];
 
-  const satColor = channelMap.currentSaturation <= 30 ? chalk.green
-    : channelMap.currentSaturation <= 60 ? chalk.yellow : chalk.red;
+  const satColor = channelMap.currentSaturation <= 30 ? TEAL
+    : channelMap.currentSaturation <= 60 ? AMBER : RED;
 
   let channelLine = `Channel ${channelMap.currentChannel} saturation: ${satColor(channelMap.currentSaturation + "%")}`;
   if (channelMap.recommendedChannel !== channelMap.currentChannel) {
-    channelLine += chalk.yellow(` — consider channel ${channelMap.recommendedChannel}`);
+    channelLine += AMBER(` — consider channel ${channelMap.recommendedChannel}`);
   }
   lines.push(channelLine);
 
   if (rogueAPs.findings.length === 0) {
-    lines.push(`Rogue APs: ${chalk.green("clear")}`);
+    lines.push(`Rogue APs: ${TEAL("clear")}`);
   } else {
-    const riskColor = rogueAPs.riskLevel === "danger" ? chalk.red : chalk.yellow;
+    const riskColor = rogueAPs.riskLevel === "danger" ? RED : AMBER;
     lines.push(`Rogue APs: ${riskColor(rogueAPs.riskLevel.toUpperCase())} (${rogueAPs.findings.length} finding${rogueAPs.findings.length > 1 ? "s" : ""})`);
   }
 
   if (deauth) {
     if (deauth.detected) {
-      lines.push(`Deauth events: ${chalk.yellow(String(deauth.frameCount) + " detected")} via ${chalk.dim(deauth.method)}`);
+      lines.push(`Deauth events: ${AMBER(String(deauth.frameCount) + " detected")} via ${chalk.dim(deauth.method)}`);
     } else {
-      lines.push(`Deauth events: ${chalk.green("none")} via ${chalk.dim(deauth.method)}`);
+      lines.push(`Deauth events: ${TEAL("none")} via ${chalk.dim(deauth.method)}`);
     }
   }
 

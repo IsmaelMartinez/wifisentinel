@@ -23,7 +23,6 @@ import {
 
 import type { RFAnalysis } from "../analyser/rf/types.js";
 import { renderRFSummary } from "./rf.reporter.js";
-import { renderScoreTrend, renderSignalTrend } from "./sparklines.js";
 
 // ─── Section renderers ─────────────────────────────────────────────────────
 
@@ -57,7 +56,7 @@ function renderNetworkMap(result: NetworkScanResult): string {
     sectionHeader("NETWORK MAP"),
     row(""),
     row(chalk.bold("  GATEWAY")),
-    row(`  ┌─ ${chalk.yellow(gw.ip)}  ${chalk.dim(gw.mac)}  ${chalk.cyan(gw.vendor ?? "unknown vendor")}`),
+    row(`  ┌─ ${AMBER(gw.ip)}  ${chalk.dim(gw.mac)}  ${chalk.cyan(gw.vendor ?? "unknown vendor")}`),
     row("  │"),
   ];
 
@@ -93,7 +92,7 @@ function renderNetworkMap(result: NetworkScanResult): string {
   lines.push(row(""));
 
   if (network.topology.doubleNat) {
-    lines.push(row(chalk.yellow("  ⚠  Double NAT detected — you are behind multiple routers")));
+    lines.push(row(AMBER("  ⚠  Double NAT detected — you are behind multiple routers")));
   }
 
   if (network.topology.hops.length > 0) {
@@ -108,9 +107,8 @@ function renderNetworkMap(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
-function renderWifiDetails(result: NetworkScanResult, options?: { signalHistory?: number[] }): string {
+function renderWifiDetails(result: NetworkScanResult): string {
   const w = result.wifi;
-  const { signalHistory } = options ?? {};
   const lines: string[] = [
     sectionHeader("WI-FI DETAILS"),
     row(""),
@@ -119,13 +117,10 @@ function renderWifiDetails(result: NetworkScanResult, options?: { signalHistory?
     row(`  Security     ${chalk.bold(w.security)}`),
     row(`  Signal       ${signalBar(w.signal)}`),
   ];
-  if (signalHistory && signalHistory.length >= 2) {
-    lines.push(row(`  Trend      ${renderSignalTrend(signalHistory)}`));
-  }
   lines.push(
     row(`  Noise        ${chalk.dim(`${w.noise} dBm`)}   SNR: ${chalk.bold(String(w.snr))} dB  →  ${snrLabel(w.snr)}`),
     row(`  TX Rate      ${chalk.dim(`${w.txRate} Mbps`)}`),
-    row(`  MAC Random   ${w.macRandomised ? chalk.green("enabled") : chalk.yellow("disabled")}`),
+    row(`  MAC Random   ${w.macRandomised ? TEAL("enabled") : AMBER("disabled")}`),
     row(`  Country      ${chalk.dim(w.countryCode)}`),
     row(""),
   );
@@ -161,7 +156,7 @@ function renderSecurityPosture(result: NetworkScanResult): string {
     row(`    ${boolStatus(vpn.installed, true)}  Installed    ${boolStatus(vpn.active, true)}  Active${vpn.provider ? chalk.dim(`   (${vpn.provider})`) : ""}`),
     row(""),
     row(chalk.bold("  Proxy")),
-    row(`    ${boolStatus(!sec.proxy.enabled, true)}  Proxy ${sec.proxy.enabled ? chalk.yellow("ENABLED") + chalk.dim(` → ${sec.proxy.server ?? ""}:${sec.proxy.port ?? ""}`) : chalk.green("disabled")}`),
+    row(`    ${boolStatus(!sec.proxy.enabled, true)}  Proxy ${sec.proxy.enabled ? AMBER("ENABLED") + chalk.dim(` → ${sec.proxy.server ?? ""}:${sec.proxy.port ?? ""}`) : TEAL("disabled")}`),
     row(""),
     row(chalk.bold("  Kernel Parameters")),
     row(`    ${boolStatus(!sec.kernelParams.ipForwarding, true)}  IP forwarding    ${boolStatus(!sec.kernelParams.icmpRedirects, true)}  ICMP redirects`),
@@ -169,7 +164,7 @@ function renderSecurityPosture(result: NetworkScanResult): string {
   ];
 
   if (sec.clientIsolation !== null) {
-    const label = sec.clientIsolation ? chalk.green("enabled") : chalk.red("disabled — hosts can reach each other");
+    const label = sec.clientIsolation ? TEAL("enabled") : RED("disabled — hosts can reach each other");
     lines.push(row(`  ${boolStatus(sec.clientIsolation ?? false, true)}  Client isolation: ${label}`));
     lines.push(row(""));
   }
@@ -181,10 +176,10 @@ function renderDnsAudit(result: NetworkScanResult): string {
   const dns = result.network.dns;
   const hijackColor =
     dns.hijackTestResult === "clean"
-      ? chalk.green
+      ? TEAL
       : dns.hijackTestResult === "intercepted"
-      ? chalk.red
-      : chalk.yellow;
+      ? RED
+      : AMBER;
 
   const lines: string[] = [
     sectionHeader("DNS AUDIT"),
@@ -197,8 +192,8 @@ function renderDnsAudit(result: NetworkScanResult): string {
   ];
 
   if (dns.anomalies.length > 0) {
-    lines.push(row(chalk.yellow("  Anomalies detected:")));
-    dns.anomalies.forEach(a => lines.push(row(chalk.yellow(`    ⚠  ${a}`))));
+    lines.push(row(AMBER("  Anomalies detected:")));
+    dns.anomalies.forEach(a => lines.push(row(AMBER(`    ⚠  ${a}`))));
     lines.push(row(""));
   }
 
@@ -214,26 +209,26 @@ function renderHiddenDeviceAlerts(result: NetworkScanResult): string {
   const lines: string[] = [sectionHeader("HIDDEN DEVICE ALERTS"), row("")];
 
   if (hd.suspectedCameras.length > 0) {
-    lines.push(row(chalk.red.bold("  ██  SUSPECTED SURVEILLANCE CAMERAS DETECTED  ██")));
+    lines.push(row(RED.bold("  ██  SUSPECTED SURVEILLANCE CAMERAS DETECTED  ██")));
     lines.push(row(""));
     hd.suspectedCameras.forEach(cam => {
       const indicators = cam.cameraIndicators ?? [];
       const confidence =
         indicators.length >= 3
-          ? chalk.red("HIGH")
+          ? RED("HIGH")
           : indicators.length === 2
-          ? chalk.yellow("MEDIUM")
+          ? AMBER("MEDIUM")
           : chalk.dim("LOW");
-      lines.push(row(chalk.red(`  ⚠  ${cam.ip}  ${chalk.dim(cam.mac)}  ${chalk.cyan(cam.vendor ?? "unknown vendor")}  — confidence: ${confidence}`)));
+      lines.push(row(RED(`  ⚠  ${cam.ip}  ${chalk.dim(cam.mac)}  ${chalk.cyan(cam.vendor ?? "unknown vendor")}  — confidence: ${confidence}`)));
       indicators.forEach(ind => lines.push(row(chalk.dim(`       • ${ind}`))));
     });
     lines.push(row(""));
   }
 
   if (hd.unknownDevices.length > 0) {
-    lines.push(row(chalk.yellow(`  Unknown devices (${hd.unknownDevices.length}):`)));
+    lines.push(row(AMBER(`  Unknown devices (${hd.unknownDevices.length}):`)));
     hd.unknownDevices.forEach(d => {
-      lines.push(row(chalk.yellow(`    ?  ${d.ip}  ${chalk.dim(d.mac)}  ${chalk.dim(d.vendor ?? "unknown vendor")}${d.hostname ? chalk.dim(` (${d.hostname})`) : ""}`)));
+      lines.push(row(AMBER(`    ?  ${d.ip}  ${chalk.dim(d.mac)}  ${chalk.dim(d.vendor ?? "unknown vendor")}${d.hostname ? chalk.dim(` (${d.hostname})`) : ""}`)));
     });
     lines.push(row(""));
   }
@@ -254,7 +249,7 @@ function renderIntrusionIndicators(result: NetworkScanResult): string {
     return [
       sectionHeader("INTRUSION INDICATORS"),
       row(""),
-      row(chalk.green("  No intrusion indicators detected.")),
+      row(TEAL("  No intrusion indicators detected.")),
       row(""),
     ].join("\n");
   }
@@ -282,7 +277,7 @@ function renderIntrusionIndicators(result: NetworkScanResult): string {
   if (ii.scanDetection.length > 0) {
     lines.push(row(chalk.bold("  Scan Detection:")));
     ii.scanDetection.forEach(s => {
-      lines.push(row(chalk.red(`    ${s.type.toUpperCase()} from ${s.source} — ${s.detail}`)));
+      lines.push(row(RED(`    ${s.type.toUpperCase()} from ${s.source} — ${s.detail}`)));
     });
     lines.push(row(""));
   }
@@ -295,12 +290,12 @@ function renderExposedServices(result: NetworkScanResult): string {
   const lines: string[] = [sectionHeader("EXPOSED SERVICES"), row("")];
 
   if (exposed.length === 0) {
-    lines.push(row(chalk.green("  No services exposed to the network (0.0.0.0).")));
+    lines.push(row(TEAL("  No services exposed to the network (0.0.0.0).")));
   } else {
-    lines.push(row(chalk.yellow(`  ${exposed.length} service(s) bound to 0.0.0.0 — visible to all network hosts:`)));
+    lines.push(row(AMBER(`  ${exposed.length} service(s) bound to 0.0.0.0 — visible to all network hosts:`)));
     lines.push(row(""));
     exposed.forEach(svc => {
-      lines.push(row(chalk.yellow(`    ⚠  port ${String(svc.port).padEnd(6)} ${svc.process.padEnd(28)} ${chalk.dim(svc.bindAddress)}`)));
+      lines.push(row(AMBER(`    ⚠  port ${String(svc.port).padEnd(6)} ${svc.process.padEnd(28)} ${chalk.dim(svc.bindAddress)}`)));
     });
   }
 
@@ -346,13 +341,13 @@ function renderConnectionsSummary(result: NetworkScanResult): string {
       lines.push(row(chalk.dim(`  Protocols: ${protoEntries}`)));
     }
     if (t.unencrypted.length > 0) {
-      lines.push(row(chalk.red(`  ⚠  ${t.unencrypted.length} unencrypted flow(s) detected`)));
+      lines.push(row(RED(`  ⚠  ${t.unencrypted.length} unencrypted flow(s) detected`)));
       t.unencrypted.slice(0, 3).forEach(u =>
-        lines.push(row(chalk.red(`       ${u.protocol.toUpperCase()}  →  ${u.dest}:${u.port}`)))
+        lines.push(row(RED(`       ${u.protocol.toUpperCase()}  →  ${u.dest}:${u.port}`)))
       );
     }
     if (t.mdnsLeaks.length > 0) {
-      lines.push(row(chalk.yellow(`  ⚠  ${t.mdnsLeaks.length} mDNS leak(s): ${t.mdnsLeaks.slice(0, 3).map(m => m.service).join(", ")}`)));
+      lines.push(row(AMBER(`  ⚠  ${t.mdnsLeaks.length} mDNS leak(s): ${t.mdnsLeaks.slice(0, 3).map(m => m.service).join(", ")}`)));
     }
     lines.push(row(""));
   }
@@ -447,9 +442,8 @@ function renderSpeedTest(result: NetworkScanResult): string {
   return lines.join("\n");
 }
 
-function renderScorecard(result: NetworkScanResult, options?: { scoreHistory?: number[] }): string {
+function renderScorecard(result: NetworkScanResult): string {
   const score = computeSecurityScore(result);
-  const { scoreHistory } = options ?? {};
   const label =
     score >= 8
       ? TEAL("SECURE")
@@ -470,9 +464,6 @@ function renderScorecard(result: NetworkScanResult, options?: { scoreHistory?: n
     row(`  Score  ${bar}  ${chalk.bold(scoreStr)}`),
   ];
 
-  if (scoreHistory && scoreHistory.length >= 2) {
-    lines.push(row(`  Trend  ${renderScoreTrend(scoreHistory)}`));
-  }
 
   lines.push(row(""));
   lines.push(chalk.cyan(hRule("╚", "═", "╝")));
@@ -498,13 +489,12 @@ function renderRFIntelligence(result: NetworkScanResult, analysis: RFAnalysis): 
 export function renderTerminalReport(
   result: NetworkScanResult,
   rfAnalysis: RFAnalysis,
-  options?: { scoreHistory?: number[]; signalHistory?: number[] },
 ): string {
   refreshWidth();
   const sections: string[] = [
     renderHeader(result),
     renderNetworkMap(result),
-    renderWifiDetails(result, options),
+    renderWifiDetails(result),
     renderRFIntelligence(result, rfAnalysis),
     renderSecurityPosture(result),
     renderDnsAudit(result),
@@ -513,7 +503,7 @@ export function renderTerminalReport(
     renderExposedServices(result),
     renderConnectionsSummary(result),
     renderSpeedTest(result),
-    renderScorecard(result, options),
+    renderScorecard(result),
   ].filter(Boolean);
 
   return sections.join("\n");

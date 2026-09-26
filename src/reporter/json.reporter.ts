@@ -5,15 +5,10 @@ import type { FullAnalysis } from "../analyser/personas/types.js";
 export function renderJsonReport(
   result: NetworkScanResult,
   computed: { compliance: ComplianceReport; analysis: FullAnalysis },
-  options?: { pretty?: boolean },
 ): string {
-  const combined = {
-    scan: result,
-    compliance: computed.compliance,
-    analysis: computed.analysis,
-  };
-
-  return options?.pretty !== false
-    ? JSON.stringify(combined, null, 2)
-    : JSON.stringify(combined);
+  return JSON.stringify(
+    { scan: result, compliance: computed.compliance, analysis: computed.analysis },
+    null,
+    2,
+  );
 }
