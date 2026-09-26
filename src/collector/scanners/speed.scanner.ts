@@ -108,32 +108,34 @@ async function measureDownload(): Promise<DownloadResult> {
   return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: "none" };
 }
 
-async function measureUpload(): Promise<DownloadResult> {
-  // Generate 1MB of random-ish data and POST it to Cloudflare's speed test endpoint
-  const size = 1_000_000;
+export function uploadCurlArgs(url: string): string[] {
+  return [
+    "-s", "-o", "/dev/null",
+    "-w", "%{size_upload} %{time_total} %{speed_upload}",
+    "--max-time", "15",
+    "-X", "POST",
+    "-H", "Content-Type: application/octet-stream",
+    "--data-binary", "@-",
+    url,
+  ];
+}
+
+export async function measureUpload(url = UPLOAD_URL): Promise<DownloadResult> {
+  const payload = Buffer.alloc(1_000_000, 0x78);
   const result = await runAsync(
     "curl",
-    [
-      "-s", "-o", "/dev/null",
-      "-w", "%{size_upload} %{time_total} %{speed_upload}",
-      "--max-time", "15",
-      "-X", "POST",
-      "-H", "Content-Type: application/octet-stream",
-      "--data-binary", "@/dev/urandom",
-      "--limit-rate", "0",
-      "-d", "x".repeat(Math.min(size, 100000)), // 100KB test payload
-      UPLOAD_URL,
-    ],
-    20_000
+    uploadCurlArgs(url),
+    20_000,
+    payload
   );
 
   if (result.exitCode !== 0 || !result.stdout.trim()) {
-    return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: UPLOAD_URL };
+    return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: url };
   }
 
   const parts = result.stdout.trim().split(/\s+/);
   if (parts.length < 3) {
-    return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: UPLOAD_URL };
+    return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: url };
   }
 
   const bytesTransferred = parseInt(parts[0], 10);
@@ -144,7 +146,7 @@ async function measureUpload(): Promise<DownloadResult> {
     speedMbps: Math.round((speedBytesPerSec * 8 / 1_000_000) * 100) / 100,
     bytesTransferred,
     durationMs: Math.round(timeTotal * 1000),
-    testUrl: UPLOAD_URL,
+    testUrl: url,
   };
 }
 
