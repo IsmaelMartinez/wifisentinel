@@ -4,26 +4,19 @@ import { useState, useCallback, useMemo, useRef, type ComponentProps } from "rea
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { NetworkTopology } from "./network-topology";
+import type { ScanEvent } from "@wifisentinel/collector/scan-events.js";
 
-type ScanEvent = {
-  type: string;
-  scanner?: string;
-  summary?: string;
-  ip?: string;
-  mac?: string;
-  vendor?: string;
-  port?: number;
-  service?: string;
-  scanId?: string;
-  hostCount?: number;
-  exitCode?: number;
-  error?: string;
-  gateway?: string;
-  indicators?: string[];
-  sessionId?: string;
-  cycle?: number;
-  changes?: number;
-};
+// The run route wraps the CLI's NDJSON scan events with its own stream
+// envelope events.
+type StreamEvent =
+  | ScanEvent
+  | { type: "session:start"; sessionId: string }
+  | { type: "stream:end"; exitCode: number }
+  | { type: "stream:error"; error: string; exitCode?: number };
+
+function isType<T extends StreamEvent["type"]>(type: T) {
+  return (e: StreamEvent): e is Extract<StreamEvent, { type: T }> => e.type === type;
+}
 
 interface ScanOptions {
   skipPorts: boolean;
@@ -45,7 +38,7 @@ export function ScanRunner() {
     watch: false,
     interval: 5,
   });
-  const [events, setEvents] = useState<ScanEvent[]>([]);
+  const [events, setEvents] = useState<StreamEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [cycleCount, setCycleCount] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
@@ -118,16 +111,16 @@ export function ScanRunner() {
             const dataMatch = line.match(/^data: (.+)$/m);
             if (dataMatch) {
               try {
-                const event = JSON.parse(dataMatch[1]) as ScanEvent;
+                const event = JSON.parse(dataMatch[1]) as StreamEvent;
 
                 if (event.type === "session:start") {
-                  sessionIdRef.current = event.sessionId ?? null;
+                  sessionIdRef.current = event.sessionId;
                   continue;
                 }
 
                 // For watch mode, reset scanner events each cycle
                 if (event.type === "watch:cycle-start") {
-                  setCycleCount(event.cycle ?? 0);
+                  setCycleCount(event.cycle);
                   setEvents((prev) => prev.filter(
                     (e) => e.type === "host:found" || e.type === "host:enriched" ||
                            e.type === "host:camera-detected" || e.type === "port:found" ||
@@ -165,32 +158,31 @@ export function ScanRunner() {
     }
   }, [options, router]);
 
-  const completedScanners = events
-    .filter((e) => e.type === "scanner:complete")
-    .map((e) => ({ scanner: e.scanner!, summary: e.summary! }));
+  const completedScanners = events.filter(isType("scanner:complete"));
 
   const activeScanners = events
-    .filter((e) => e.type === "scanner:start")
-    .map((e) => e.scanner!)
+    .filter(isType("scanner:start"))
+    .map((e) => e.scanner)
     .filter((s) => !completedScanners.some((c) => c.scanner === s));
 
-  const alerts = events.filter((e) => e.type === "watch:alert");
+  const alerts = events.filter(isType("watch:alert"));
 
   // Serialise the host data so its identity only changes when the host set
   // (or a host's vendor/ports/camera flag) changes, not on every streamed
   // event; otherwise the topology restarts its d3 simulation each time.
   const hostsKey = useMemo(() => JSON.stringify(
-    events.filter((e) => e.type === "host:found").map((h) => {
-      const enrichment = events.find((e) => e.type === "host:enriched" && e.ip === h.ip);
-      const cameraEvent = events.find((e) => e.type === "host:camera-detected" && e.ip === h.ip);
+    events.filter(isType("host:found")).map((h) => {
+      const enrichment = events.filter(isType("host:enriched")).find((e) => e.ip === h.ip);
+      const isCamera = events.filter(isType("host:camera-detected")).some((e) => e.ip === h.ip);
       const hostPorts = events
-        .filter((e) => e.type === "port:found" && e.ip === h.ip)
-        .map((e) => ({ port: e.port!, service: e.service! }));
+        .filter(isType("port:found"))
+        .filter((e) => e.ip === h.ip)
+        .map((e) => ({ port: e.port, service: e.service }));
       return {
-        ip: h.ip!,
-        mac: h.mac!,
+        ip: h.ip,
+        mac: h.mac,
         vendor: enrichment?.vendor,
-        isCamera: !!cameraEvent,
+        isCamera,
         ports: hostPorts,
       };
     }),
@@ -201,7 +193,7 @@ export function ScanRunner() {
   );
 
   const gatewayEvent = useMemo(
-    () => events.find((e) => e.type === "bootstrap:complete"),
+    () => events.find(isType("bootstrap:complete")),
     [events],
   );
 
@@ -314,7 +306,7 @@ export function ScanRunner() {
               <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Alerts</div>
               {alerts.map((a, i) => (
                 <div key={i} className="text-amber-400">
-                  ▲ {JSON.stringify((a as any).change)}
+                  ▲ {JSON.stringify(a.change)}
                 </div>
               ))}
             </div>
@@ -329,7 +321,7 @@ export function ScanRunner() {
           </CardHeader>
           <CardContent>
             <NetworkTopology
-              gateway={(gatewayEvent as any).gateway}
+              gateway={gatewayEvent.gateway}
               hosts={enrichedHosts}
             />
           </CardContent>
