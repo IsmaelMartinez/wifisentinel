@@ -124,19 +124,24 @@ export function buildUploadArgs(payloadPath: string): string[] {
   ];
 }
 
-async function measureUpload(): Promise<DownloadResult> {
-  // POST a bounded 1MB random payload to Cloudflare's speed test endpoint
-  const dir = await mkdtemp(join(tmpdir(), "wifisentinel-upload-"));
-  const payloadPath = join(dir, "payload.bin");
+export async function measureUpload(): Promise<DownloadResult> {
+  // POST a bounded 1MB random payload to Cloudflare's speed test endpoint.
+  // A temp-file setup failure (e.g. full or missing tmpdir) degrades to a zero result
+  // rather than aborting the whole scan.
+  let dir: string | undefined;
   let result;
   try {
+    dir = await mkdtemp(join(tmpdir(), "wifisentinel-upload-"));
+    const payloadPath = join(dir, "payload.bin");
     await writeFile(payloadPath, randomBytes(UPLOAD_BYTES));
     result = await runAsync("curl", buildUploadArgs(payloadPath), 20_000);
+  } catch {
+    result = undefined;
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 
-  if (result.exitCode !== 0 || !result.stdout.trim()) {
+  if (!result || result.exitCode !== 0 || !result.stdout.trim()) {
     return { speedMbps: 0, bytesTransferred: 0, durationMs: 0, testUrl: UPLOAD_URL };
   }
 
