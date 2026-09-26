@@ -1,11 +1,12 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, unlinkSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   saveScan,
   listScans,
+  loadScans,
   rebuildIndex,
   getStorePath,
 } from "../../src/store/index.js";
@@ -80,6 +81,60 @@ describe("scan index source fields", () => {
     assert.equal(entries[1].scanId, "aaaaaaaa-1111");
     assert.equal(entries[1].platform, "android");
     assert.equal(entries[1].partial, true);
+  });
+
+  it("recovers every scan after the index is truncated", () => {
+    save(makeScan({ scanId: "11111111-a", timestamp: "2026-07-02T10:00:00.000Z" }));
+    save(makeScan({ scanId: "22222222-b", timestamp: "2026-07-02T11:00:00.000Z" }));
+    save(makeScan({ scanId: "33333333-c", timestamp: "2026-07-02T12:00:00.000Z" }));
+    const indexPath = join(getStorePath(), "index.json");
+    const raw = readFileSync(indexPath, "utf-8");
+    writeFileSync(indexPath, raw.slice(0, raw.length / 2));
+
+    save(makeScan({ scanId: "44444444-d", timestamp: "2026-07-02T13:00:00.000Z" }));
+
+    const entries = listScans();
+    assert.equal(entries.length, 4);
+    assert.deepEqual(
+      entries.map(e => e.scanId),
+      ["44444444-d", "33333333-c", "22222222-b", "11111111-a"],
+    );
+  });
+
+  it("rebuilds a stale index that is missing an entry", () => {
+    save(makeScan({ scanId: "55555555-e", timestamp: "2026-07-03T10:00:00.000Z" }));
+    save(makeScan({ scanId: "66666666-f", timestamp: "2026-07-03T11:00:00.000Z" }));
+    const indexPath = join(getStorePath(), "index.json");
+    const index = JSON.parse(readFileSync(indexPath, "utf-8"));
+    writeFileSync(indexPath, JSON.stringify(index.slice(0, 1)));
+
+    assert.equal(listScans().length, 2);
+  });
+
+  it("writes atomically, leaving no temp files behind", () => {
+    save(makeScan({ scanId: "77777777-g", timestamp: "2026-07-04T10:00:00.000Z" }));
+    const stray = [
+      ...readdirSync(getStorePath()),
+      ...readdirSync(join(getStorePath(), "scans")),
+    ].filter(f => f.endsWith(".tmp"));
+    assert.deepEqual(stray, []);
+  });
+
+  it("bulk-loads listed scans without re-reading the index", () => {
+    save(makeScan({ scanId: "88888888-h", timestamp: "2026-07-05T10:00:00.000Z" }));
+    save(makeScan({ scanId: "99999999-i", timestamp: "2026-07-05T11:00:00.000Z" }));
+    const entries = listScans();
+    // Corrupt the index after listing: a per-entry index lookup would now fail.
+    writeFileSync(join(getStorePath(), "index.json"), "{");
+    const stored = loadScans(entries);
+    assert.deepEqual(stored.map(s => s.scan.meta.scanId), ["99999999-i", "88888888-h"]);
+  });
+
+  it("names a real recovery command when a scan file is missing", () => {
+    save(makeScan({ scanId: "aaaa0000-j", timestamp: "2026-07-06T10:00:00.000Z" }));
+    const [entry] = listScans();
+    unlinkSync(join(getStorePath(), "scans", entry.filename));
+    assert.throws(() => loadScans([entry]), /wifisentinel history --reindex/);
   });
 
   it("backfills platform and partial on rebuild", () => {
