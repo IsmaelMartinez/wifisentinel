@@ -30,10 +30,12 @@ export async function lookupVendor(mac: string): Promise<string | undefined> {
   const text = await loadDbText();
 
   // index.json holds one entry per line: ` "001B63": "Apple, Inc.\n1 Infinite Loop…",`
-  const at = text.indexOf(`\n "${prefix}": `);
+  // Find the key without assuming the indentation. Quotes inside values are
+  // escaped (\"), so an unescaped `"001B63": ` can only be a key.
+  const at = text.indexOf(`"${prefix}": `);
   if (at < 0) return undefined;
-  const end = text.indexOf("\n", at + 1);
-  let line = text.slice(at + 1, end < 0 ? undefined : end).trimEnd();
+  const end = text.indexOf("\n", at);
+  let line = text.slice(at, end < 0 ? undefined : end).trimEnd();
   if (line.endsWith(",")) line = line.slice(0, -1);
   try {
     const entry: unknown = Object.values(JSON.parse(`{${line}}`))[0];
