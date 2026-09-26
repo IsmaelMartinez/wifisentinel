@@ -37,6 +37,13 @@ export function bin(name: BinName, platform: Platform = currentPlatform()): stri
   return platform === "darwin" ? DARWIN_PATHS[name] : name;
 }
 
+/** The fixed absolute path `bin()` runs for this tool on this platform, if any. */
+export function fixedPath(name: string, platform: Platform): string | undefined {
+  return platform === "darwin" && Object.hasOwn(DARWIN_PATHS, name)
+    ? DARWIN_PATHS[name as BinName]
+    : undefined;
+}
+
 /**
  * Broadcast ping to stimulate ARP replies. macOS `-t` is a timeout in
  * seconds; on Linux `-t` is the TTL, so use `-w` and allow broadcast with `-b`.
