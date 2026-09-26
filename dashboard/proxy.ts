@@ -11,6 +11,8 @@ export function proxy(request: NextRequest) {
     host: request.headers.get("host"),
     origin: request.headers.get("origin"),
     contentType: request.headers.get("content-type"),
+    // Next's start-server sets PORT to the port it actually bound (including
+    // one passed via -p/--port), so this matches the configured port.
     port: process.env.PORT ?? "3000",
   });
 
