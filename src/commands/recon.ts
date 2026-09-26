@@ -5,12 +5,13 @@ import { analyseReconAllPersonas } from "../analyser/recon-personas.js";
 import { renderReconReport, renderReconAnalysisReport } from "../reporter/recon.reporter.js";
 import { renderReconJsonReport } from "../reporter/recon-json.reporter.js";
 import { saveRecon } from "../store/recon-store.js";
+import { outputFormatOption } from "./options.js";
 
 export function registerReconCommand(program: Command): void {
   program
     .command("recon <domain>")
     .description("External reconnaissance scan of a domain")
-    .option("-o, --output <format>", "Output format: terminal, json", "terminal")
+    .addOption(outputFormatOption())
     .option("-f, --file <path>", "Write output to file")
     .option("--analyse", "Include multi-persona analysis")
     .option("--no-save", "Skip saving to history")
@@ -29,18 +30,17 @@ export function registerReconCommand(program: Command): void {
           censysSecret: opts.censysSecret,
         });
 
+        const analysis = opts.analyse || opts.save ? analyseReconAllPersonas(result) : undefined;
+
         let output: string;
         if (opts.output === "json") {
-          output = opts.analyse
-            ? renderReconJsonReport(result)
+          output = opts.analyse && analysis
+            ? renderReconJsonReport(result, analysis)
             : JSON.stringify(result, null, 2);
         } else {
-          if (opts.analyse) {
-            const analysis = analyseReconAllPersonas(result);
-            output = renderReconAnalysisReport(result, analysis, opts.verbose);
-          } else {
-            output = renderReconReport(result);
-          }
+          output = opts.analyse && analysis
+            ? renderReconAnalysisReport(result, analysis, opts.verbose)
+            : renderReconReport(result);
         }
 
         if (opts.file) {
@@ -51,8 +51,7 @@ export function registerReconCommand(program: Command): void {
           console.log(output);
         }
 
-        if (opts.save) {
-          const analysis = analyseReconAllPersonas(result);
+        if (opts.save && analysis) {
           saveRecon(result, analysis);
           if (opts.verbose) {
             console.error("[wifisentinel] Recon saved to history.");

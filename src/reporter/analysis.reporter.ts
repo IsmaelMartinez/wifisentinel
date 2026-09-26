@@ -1,9 +1,8 @@
 import chalk from "chalk";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
-import { scoreAllStandards } from "../analyser/standards/index.js";
 import type { ComplianceReport, FindingStatus } from "../analyser/standards/types.js";
-import { analyseAllPersonas } from "../analyser/personas/index.js";
 import type { FullAnalysis, PersonaId } from "../analyser/personas/types.js";
+import type { RFAnalysis } from "../analyser/rf/types.js";
 import { W, hRule, sectionHeader, row, scoreBar, link } from "./render-helpers.js";
 import { renderTerminalReport } from "./terminal.reporter.js";
 
@@ -206,17 +205,15 @@ export function renderPersonaDetails(analysis: FullAnalysis): string {
 
 export function renderFullAnalysisReport(
   result: NetworkScanResult,
-  compliance: ComplianceReport,
-  analysis: FullAnalysis,
+  computed: { compliance: ComplianceReport; analysis: FullAnalysis; rfAnalysis: RFAnalysis },
   verbose = false,
 ): string {
+  const { compliance, analysis } = computed;
+  // The scan report ends with ╚═╝ from the scorecard; the analysis sections
+  // follow it.
   const sections: string[] = [
-    renderTerminalReport(result),
+    renderTerminalReport(result, computed.rfAnalysis),
   ];
-
-  // Remove the closing box border from the scan report so we can continue
-  // Actually, the scan report ends with ╚═╝ from the scorecard. We'll just
-  // append the analysis sections after it.
 
   sections.push(renderComplianceSummary(compliance));
   sections.push(renderPersonaSummary(analysis));
@@ -230,15 +227,4 @@ export function renderFullAnalysisReport(
   sections.push(chalk.cyan(hRule("╚", "═", "╝")));
 
   return sections.filter(Boolean).join("\n");
-}
-
-// ─── Main export ──────────────────────────────────────────────────────────
-
-export function renderAnalysisReport(
-  result: NetworkScanResult,
-  options?: { verbose?: boolean },
-): string {
-  const compliance = scoreAllStandards(result);
-  const analysis = analyseAllPersonas(result);
-  return renderFullAnalysisReport(result, compliance, analysis, options?.verbose);
 }
