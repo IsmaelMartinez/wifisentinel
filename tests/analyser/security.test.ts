@@ -3,8 +3,13 @@ import assert from "node:assert/strict";
 import {
   classifySecurity,
   isSecurityDowngrade,
+  securityChanged,
   type WpaTier,
 } from "../../src/analyser/security.js";
+import {
+  isWeakerSecurity,
+  securityChanged as collectorSecurityChanged,
+} from "../../src/collector/schema/security.js";
 import {
   analyseAsCompliance,
   analyseAsPrivacy,
@@ -117,5 +122,17 @@ describe("isSecurityDowngrade", () => {
 
   it("treats Enterprise -> Personal as a downgrade", () => {
     assert.equal(isSecurityDowngrade("WPA2 Enterprise", "WPA3 Personal"), true);
+  });
+});
+
+describe("RF comparison helpers derive from classifySecurity", () => {
+  it("keep the collector's comparison semantics for every label pair", () => {
+    const labels = TABLE.map((row) => row[1]);
+    for (const a of labels) {
+      for (const b of labels) {
+        assert.equal(isSecurityDowngrade(a, b), isWeakerSecurity(b, a), `downgrade ${a} -> ${b}`);
+        assert.equal(securityChanged(a, b), collectorSecurityChanged(a, b), `changed ${a} / ${b}`);
+      }
+    }
   });
 });
