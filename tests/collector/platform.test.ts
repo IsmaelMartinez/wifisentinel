@@ -168,6 +168,8 @@ describe("platform/commands", () => {
     assert.equal(bin("lsof", "darwin"), "/usr/sbin/lsof");
     assert.equal(bin("arp", "linux"), "arp");
     assert.equal(bin("lsof", "linux"), "lsof");
+    assert.equal(bin("system_profiler", "darwin"), "/usr/sbin/system_profiler");
+    assert.equal(bin("nslookup", "darwin"), "/usr/bin/nslookup");
   });
 
   it("builds ping args per platform", () => {
@@ -242,6 +244,21 @@ describe("tool-resolver", () => {
       assert.equal(resolveCapability("wifiAnalysis", "linux", dir)?.name, "iw");
     } finally {
       cleanup();
+    }
+  });
+
+  it("prefers iw for Linux Wi-Fi and reports nmcli alone as minimal", () => {
+    const both = fakePath(["iw", "nmcli"]);
+    const nmcliOnly = fakePath(["nmcli"]);
+    try {
+      assert.equal(resolveCapability("wifiAnalysis", "linux", both.dir)?.name, "iw");
+      assert.deepEqual(
+        [resolveCapability("wifiAnalysis", "linux", nmcliOnly.dir)?.name, resolveCapability("wifiAnalysis", "linux", nmcliOnly.dir)?.tier],
+        ["nmcli", "minimal"],
+      );
+    } finally {
+      both.cleanup();
+      nmcliOnly.cleanup();
     }
   });
 
