@@ -16,11 +16,11 @@ export interface SecurityPostureOptions {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseEnabled(output: string): boolean {
+export function parseEnabled(output: string): boolean {
   return /enabled/i.test(output);
 }
 
-function parseSysctlBool(output: string): boolean {
+export function parseSysctlBool(output: string): boolean {
   // e.g. "net.inet.ip.forwarding: 0"  or  "net.inet.ip.forwarding: 1"
   const match = output.match(/:\s*(\d+)/);
   return match ? match[1] !== "0" : false;
@@ -50,22 +50,28 @@ async function scanFirewall(): Promise<NetworkScanResult["security"]["firewall"]
 // VPN
 // ---------------------------------------------------------------------------
 
-async function scanVpn(): Promise<NetworkScanResult["security"]["vpn"]> {
-  // scutil --nc list shows configured VPN connections and their state
-  const ncList = (await runAsync(bin("scutil"), ["--nc", "list"])).stdout;
-
-  // A connected entry looks like:
-  //   * (Connected)    <UUID>  "My VPN"   [VPNType]
+/**
+ * Parse `scutil --nc list`. A connected entry looks like:
+ *   * (Connected)    <UUID> PPP --> L2TP  "My VPN"   [PPP:L2TP]
+ * Returns null when no VPN service is configured.
+ */
+export function parseNcList(ncList: string): NetworkScanResult["security"]["vpn"] | null {
   const connectedMatch = ncList.match(/\(Connected\)[^\n]*"([^"]+)"/i);
   if (connectedMatch) {
     return { installed: true, active: true, provider: connectedMatch[1] };
   }
-
   // Any entry (connected or not) means VPN is installed
-  const hasAny = /\(Connected\)|\(Disconnected\)|\(Connecting\)/i.test(ncList);
-  if (hasAny) {
+  if (/\(Connected\)|\(Disconnected\)|\(Connecting\)/i.test(ncList)) {
     return { installed: true, active: false };
   }
+  return null;
+}
+
+async function scanVpn(): Promise<NetworkScanResult["security"]["vpn"]> {
+  // scutil --nc list shows configured VPN connections and their state
+  const ncList = (await runAsync(bin("scutil"), ["--nc", "list"])).stdout;
+  const fromNc = parseNcList(ncList);
+  if (fromNc) return fromNc;
 
   // Also check networksetup for VPN-named services as a fallback
   const services = (await runAsync(bin("networksetup"), [
@@ -86,27 +92,32 @@ async function scanVpn(): Promise<NetworkScanResult["security"]["vpn"]> {
 // Proxy
 // ---------------------------------------------------------------------------
 
-async function scanProxy(service: string): Promise<NetworkScanResult["security"]["proxy"]> {
-  const out = (await runAsync(bin("networksetup"), ["-getwebproxy", service])).stdout;
+/**
+ * Parse `networksetup -getwebproxy <service>`:
+ *   Enabled: Yes
+ *   Server: proxy.example.com
+ *   Port: 8080
+ * A disabled proxy prints an empty "Server:" and "Port: 0"; match within the
+ * line only so the empty value does not swallow the next line.
+ */
+export function parseWebProxy(out: string): NetworkScanResult["security"]["proxy"] {
+  const enabledMatch = out.match(/^Enabled:[ \t]*(\S+)/im);
+  const serverMatch = out.match(/^Server:[ \t]*(\S+)/im);
+  const portMatch = out.match(/^Port:[ \t]*(\d+)/im);
 
-  // Output format:
-  //   Enabled: Yes
-  //   Server: proxy.example.com
-  //   Port: 8080
-  const enabledMatch = out.match(/^Enabled:\s*(\S+)/im);
-  const serverMatch = out.match(/^Server:\s*(\S+)/im);
-  const portMatch = out.match(/^Port:\s*(\d+)/im);
-
-  const enabled =
-    enabledMatch ? /yes/i.test(enabledMatch[1]) : false;
+  const enabled = enabledMatch ? /yes/i.test(enabledMatch[1]) : false;
   const server = serverMatch ? serverMatch[1] : undefined;
   const port = portMatch ? parseInt(portMatch[1], 10) : undefined;
 
   return {
     enabled,
     ...(server ? { server } : {}),
-    ...(port !== undefined && !isNaN(port) ? { port } : {}),
+    ...(port ? { port } : {}),
   };
+}
+
+async function scanProxy(service: string): Promise<NetworkScanResult["security"]["proxy"]> {
+  return parseWebProxy((await runAsync(bin("networksetup"), ["-getwebproxy", service])).stdout);
 }
 
 // ---------------------------------------------------------------------------

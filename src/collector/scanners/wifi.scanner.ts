@@ -63,7 +63,7 @@ function parseMacRandomised(raw: string): boolean {
 /**
  * Parse system_profiler SPAirPortDataType output.
  */
-function parseSystemProfiler(output: string): WifiResult {
+export function parseSystemProfiler(output: string): WifiResult {
   const defaults = emptyWifiResult();
 
   const get = (key: string): string => {
@@ -177,7 +177,7 @@ function parseSystemProfiler(output: string): WifiResult {
  * Fallback: parse networksetup -getairportnetwork output.
  * Only gives SSID; other fields will be defaults.
  */
-function parseNetworksetup(output: string): Partial<WifiResult> {
+export function parseNetworksetup(output: string): Partial<WifiResult> {
   // "Current Wi-Fi Network: MySSID"
   const match = output.match(/Current Wi-Fi Network:\s*(.+)/i);
   return { ssid: match ? match[1].trim() : null };
