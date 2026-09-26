@@ -102,6 +102,14 @@ describe("box alignment", () => {
       chalk.level = saved;
     }
   });
+
+  it("does not count OSC 8 hyperlink sequences as visible columns", () => {
+    const bel = "\x1B]8;;https://example.com\x07docs\x1B]8;;\x07";
+    const st = "\x1B]8;;https://example.com\x1B\\docs\x1B]8;;\x1B\\";
+    assert.equal(visibleLength(bel), 4);
+    assert.equal(visibleLength(st), 4);
+    assert.equal(visibleLength(row(`see ${bel}`)), W + 4);
+  });
 });
 
 describe("boolStatus", () => {

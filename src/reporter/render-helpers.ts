@@ -85,9 +85,12 @@ export function sectionHeader(title: string): string {
 
 // eslint-disable-next-line no-control-regex
 const ANSI_SGR = /\x1B\[[0-9;]*m/g;
+// OSC 8 hyperlink open/close (`link()` via terminal-link), terminated by BEL or ESC \.
+// eslint-disable-next-line no-control-regex
+const OSC8 = /\x1B\]8;[^\x07\x1B]*(?:\x07|\x1B\\)/g;
 
 export function visibleLength(s: string): number {
-  return s.replace(ANSI_SGR, "").length;
+  return s.replace(ANSI_SGR, "").replace(OSC8, "").length;
 }
 
 export function pad(s: string, width: number): string {
