@@ -18,21 +18,55 @@ export function refreshWidth(): void {
   W = Math.max(40, getTerminalWidth() - 8);
 }
 
-export type Status = "pass" | "fail" | "warn" | "info" | "n/a";
+type Colour = (s: string) => string;
 
-export function statusIcon(status: Status): string {
+/**
+ * Status glyph for compliance findings (pass/fail/partial/not-applicable),
+ * recon header checks (pass/fail/missing) and generic warn/info states.
+ */
+export function statusIcon(status: string): string {
   switch (status) {
     case "pass":
-      return TEAL(`${figures.tick} Pass`);
+      return TEAL(figures.tick);
     case "fail":
-      return RED(`${figures.cross} Fail`);
+      return RED(figures.cross);
+    case "partial":
+      return AMBER("◐");
     case "warn":
-      return AMBER(`${figures.warning} Warn`);
+      return AMBER(figures.warning);
     case "info":
-      return BLUE(`${figures.info} Info`);
-    case "n/a":
-      return chalk.dim(`${figures.circleDotted} N/A`);
+      return BLUE(figures.info);
+    default:
+      return chalk.dim("—");
   }
+}
+
+/** Letter grades: A/B good, C/D fair, anything else poor. */
+export function gradeColor(grade: string): Colour {
+  if (grade === "A" || grade === "B") return TEAL;
+  if (grade === "C" || grade === "D") return AMBER;
+  return RED;
+}
+
+/** Consensus or persona risk ratings. */
+export function riskColor(rating: string): Colour {
+  if (rating === "critical") return RED.bold;
+  if (rating === "high") return RED;
+  if (rating === "medium") return AMBER;
+  if (rating === "low" || rating === "minimal") return TEAL;
+  return chalk.dim;
+}
+
+const PERSONA_ACCENTS: Record<string, Colour> = {
+  "red-team": RED,
+  "blue-team": BLUE,
+  "compliance": TEAL,
+  "net-engineer": AMBER,
+  "privacy": chalk.magenta,
+};
+
+export function personaAccent(persona: string): Colour {
+  return PERSONA_ACCENTS[persona] ?? chalk.white;
 }
 
 export function hRule(left: string, fill: string, right: string, width = W + 2): string {
@@ -40,20 +74,24 @@ export function hRule(left: string, fill: string, right: string, width = W + 2):
 }
 
 export function boxLine(content: string): string {
-  return "║" + " " + content.padEnd(W) + " " + "║";
+  return "║" + " " + pad(content, W) + " " + "║";
 }
 
 export function sectionHeader(title: string): string {
   const bar = chalk.cyan(hRule("├", "─", "┤"));
-  const label = chalk.cyan("│") + " " + chalk.cyan.bold(` ${title} `).padEnd(W + 10) + chalk.cyan("│");
+  const label = chalk.cyan("│") + " " + pad(chalk.cyan.bold(` ${title} `), W) + " " + chalk.cyan("│");
   return bar + "\n" + label;
 }
 
+// eslint-disable-next-line no-control-regex
+const ANSI_SGR = /\x1B\[[0-9;]*m/g;
+
+export function visibleLength(s: string): number {
+  return s.replace(ANSI_SGR, "").length;
+}
+
 export function pad(s: string, width: number): string {
-  // strip ANSI before measuring
-  // eslint-disable-next-line no-control-regex
-  const plain = s.replace(/\x1B\[[0-9;]*m/g, "");
-  const diff = width - plain.length;
+  const diff = width - visibleLength(s);
   return s + (diff > 0 ? " ".repeat(diff) : "");
 }
 
@@ -73,7 +111,8 @@ export function boolStatus(value: boolean, goodWhenTrue: boolean): string {
   return good ? TEAL("✔") : RED("✘");
 }
 
-export function severityColor(severity: "critical" | "high" | "medium" | "low"): ChalkInstance {
+/** Finding, insight, alert and RF severities; low and info are muted. */
+export function severityColor(severity: string): ChalkInstance {
   if (severity === "critical") return RED.bold;
   if (severity === "high") return RED;
   if (severity === "medium") return AMBER;

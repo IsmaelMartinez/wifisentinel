@@ -1,6 +1,19 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import chalk from "chalk";
 import {
+  W,
+  TEAL,
+  AMBER,
+  RED,
+  hRule,
+  boxLine,
+  sectionHeader,
+  row,
+  visibleLength,
+  gradeColor,
+  riskColor,
+  personaAccent,
   statusIcon,
   severityColor,
   scoreBar,
@@ -20,47 +33,74 @@ function stripAnsi(s: string): string {
 }
 
 describe("statusIcon", () => {
-  it("pass: contains tick icon and 'Pass' label", () => {
+  it("pass: tick", () => {
     const plain = stripAnsi(statusIcon("pass"));
-    assert.ok(plain.includes("✔") || plain.includes("√") || plain.includes("v"), `expected tick in: ${plain}`);
-    assert.ok(plain.toLowerCase().includes("pass"), `expected 'pass' in: ${plain}`);
+    assert.ok(["✔", "√"].some((c) => plain.includes(c)), `expected tick in: ${plain}`);
   });
 
-  it("fail: contains cross icon and 'Fail' label", () => {
+  it("fail: cross", () => {
     const plain = stripAnsi(statusIcon("fail"));
     // figures emits the heavy cross (✖) on unicode terminals and the ASCII
     // fallback (×) elsewhere, e.g. non-TTY CI runs.
-    assert.ok(
-      ["✘", "✖", "×", "x", "X"].some((c) => plain.includes(c)),
-      `expected cross in: ${plain}`
-    );
-    assert.ok(plain.toLowerCase().includes("fail"), `expected 'fail' in: ${plain}`);
+    assert.ok(["✘", "✖", "×"].some((c) => plain.includes(c)), `expected cross in: ${plain}`);
   });
 
-  it("warn: contains warning icon and 'Warn' label", () => {
-    const plain = stripAnsi(statusIcon("warn"));
-    assert.ok(
-      plain.includes("⚠") || plain.includes("!") || plain.includes("‼"),
-      `expected warning symbol in: ${plain}`
-    );
-    assert.ok(plain.toLowerCase().includes("warn"), `expected 'warn' in: ${plain}`);
+  it("partial and warn use amber glyphs", () => {
+    assert.equal(stripAnsi(statusIcon("partial")), "◐");
+    const warn = stripAnsi(statusIcon("warn"));
+    assert.ok(["⚠", "‼"].some((c) => warn.includes(c)), `expected warning symbol in: ${warn}`);
   });
 
-  it("info: contains info icon and 'Info' label", () => {
-    const plain = stripAnsi(statusIcon("info"));
-    // figures emits ℹ on unicode terminals and the ASCII fallback "i"
-    // elsewhere; the "Info" label itself has no lowercase i, so requiring the
-    // glyph still verifies an icon is present.
-    assert.ok(
-      ["ℹ", "ⓘ", "·", "i"].some((c) => plain.includes(c)),
-      `expected info symbol in: ${plain}`
-    );
-    assert.ok(plain.toLowerCase().includes("info"), `expected 'info' in: ${plain}`);
+  it("not-applicable, missing and unknown statuses render a dim dash", () => {
+    for (const s of ["not-applicable", "missing", "n/a"]) {
+      assert.equal(stripAnsi(statusIcon(s)), "—");
+    }
   });
+});
 
-  it("n/a: contains n/a label", () => {
-    const plain = stripAnsi(statusIcon("n/a"));
-    assert.ok(plain.toLowerCase().includes("n/a"), `expected 'n/a' in: ${plain}`);
+describe("palette helpers", () => {
+  it("grade, risk and persona colours use the accessible palette, not plain ANSI green/red", () => {
+    const saved = chalk.level;
+    chalk.level = 3;
+    try {
+      for (const out of [
+        gradeColor("A")("A"),
+        gradeColor("F")("F"),
+        riskColor("low")("low"),
+        riskColor("minimal")("minimal"),
+        riskColor("high")("high"),
+        personaAccent("red-team")("x"),
+      ]) {
+        assert.ok(!out.includes("\x1B[32m") && !out.includes("\x1B[31m"), JSON.stringify(out));
+      }
+      assert.equal(gradeColor("A")("A"), TEAL("A"));
+      assert.equal(riskColor("medium")("m"), AMBER("m"));
+      assert.equal(riskColor("critical")("c"), RED.bold("c"));
+    } finally {
+      chalk.level = saved;
+    }
+  });
+});
+
+describe("box alignment", () => {
+  it("every box line is exactly W+4 visible columns, even with ANSI content", () => {
+    const saved = chalk.level;
+    chalk.level = 3;
+    try {
+      const lines = [
+        hRule("╔", "═", "╗"),
+        boxLine(chalk.dim("Scan ID  : abc")),
+        boxLine(TEAL.bold("coloured") + " and " + RED("more")),
+        ...sectionHeader("SECURITY SCORECARD").split("\n"),
+        row(`  Score  ${scoreBar(7)}  ${chalk.bold("7.0 / 10")}`),
+        row(""),
+      ];
+      for (const line of lines) {
+        assert.equal(visibleLength(line), W + 4, JSON.stringify(line));
+      }
+    } finally {
+      chalk.level = saved;
+    }
   });
 });
 

@@ -1,49 +1,21 @@
 import chalk from "chalk";
 import type { ReconResult } from "../collector/recon/schema.js";
 import type { FullReconAnalysis } from "../analyser/recon-personas.js";
-import type { PersonaId } from "../analyser/personas/types.js";
-import { W, TEAL, AMBER, RED, hRule, boxLine, sectionHeader, pad, row, scoreBar } from "./render-helpers.js";
-
-// ─── Colour helpers ───────────────────────────────────────────────────────
-
-function gradeColor(grade: string): (s: string) => string {
-  if (grade === "A" || grade === "B") return chalk.green;
-  if (grade === "C" || grade === "D") return chalk.yellow;
-  return chalk.red;
-}
-
-function statusIcon(status: string): string {
-  if (status === "pass") return chalk.green("✔");
-  if (status === "fail") return chalk.red("✘");
-  return chalk.dim("—");
-}
-
-function riskColor(rating: string): (s: string) => string {
-  if (rating === "critical") return chalk.red.bold;
-  if (rating === "high") return chalk.red;
-  if (rating === "medium") return chalk.yellow;
-  if (rating === "low") return chalk.green;
-  return chalk.dim;
-}
-
-function personaAccent(persona: PersonaId): (s: string) => string {
-  const map: Record<PersonaId, (s: string) => string> = {
-    "red-team": chalk.red,
-    "blue-team": chalk.blue,
-    "compliance": chalk.cyan,
-    "net-engineer": chalk.yellow,
-    "privacy": chalk.magenta,
-  };
-  return map[persona] ?? chalk.white;
-}
-
-function findingSeverityColor(severity: string): (s: string) => string {
-  if (severity === "critical") return chalk.red.bold;
-  if (severity === "high") return chalk.red;
-  if (severity === "medium") return chalk.yellow;
-  if (severity === "low") return chalk.dim;
-  return chalk.dim;
-}
+import {
+  W,
+  TEAL,
+  AMBER,
+  RED,
+  hRule,
+  boxLine,
+  sectionHeader,
+  pad,
+  row,
+  scoreBar,
+  gradeColor,
+  statusIcon,
+} from "./render-helpers.js";
+import { renderPersonaSummary, renderPersonaDetails } from "./analysis.reporter.js";
 
 // ─── Section renderers ────────────────────────────────────────────────────
 
@@ -99,7 +71,7 @@ function renderDns(result: ReconResult): string {
     lines.push(row(chalk.dim("    (none resolved)")));
   } else {
     for (const sub of dns.subdomains.slice(0, 15)) {
-      lines.push(row(`    ${chalk.green(sub.name)}  ${chalk.dim(sub.ips.join(", "))}`));
+      lines.push(row(`    ${TEAL(sub.name)}  ${chalk.dim(sub.ips.join(", "))}`));
     }
     if (dns.subdomains.length > 15) {
       lines.push(row(chalk.dim(`    ... and ${dns.subdomains.length - 15} more`)));
@@ -108,9 +80,9 @@ function renderDns(result: ReconResult): string {
 
   lines.push(row(""));
   const ztStatus = dns.zoneTransfer.vulnerable
-    ? chalk.red("VULNERABLE — zone transfer succeeded")
+    ? RED("VULNERABLE — zone transfer succeeded")
     : dns.zoneTransfer.attempted
-      ? chalk.green("secure — zone transfer refused")
+      ? TEAL("secure — zone transfer refused")
       : chalk.dim("not tested");
   lines.push(row(`  Zone Transfer  ${ztStatus}`));
   if (dns.zoneTransfer.server) {
@@ -137,8 +109,8 @@ function renderTls(result: ReconResult): string {
     row(`    Subject      ${tls.certificate.subject}`),
     row(`    Valid From   ${tls.certificate.validFrom}`),
     row(`    Valid To     ${tls.certificate.validTo}`),
-    row(`    Expiry       ${tls.certificate.daysUntilExpiry > 30 ? chalk.green(tls.certificate.daysUntilExpiry + " days") : tls.certificate.daysUntilExpiry > 0 ? chalk.yellow(tls.certificate.daysUntilExpiry + " days") : chalk.red("EXPIRED")}`),
-    row(`    Self-signed  ${tls.certificate.selfSigned ? chalk.red("yes") : chalk.green("no")}`),
+    row(`    Expiry       ${tls.certificate.daysUntilExpiry > 30 ? TEAL(tls.certificate.daysUntilExpiry + " days") : tls.certificate.daysUntilExpiry > 0 ? AMBER(tls.certificate.daysUntilExpiry + " days") : RED("EXPIRED")}`),
+    row(`    Self-signed  ${tls.certificate.selfSigned ? RED("yes") : TEAL("no")}`),
   ];
 
   if (tls.certificate.sans.length > 0) {
@@ -147,9 +119,9 @@ function renderTls(result: ReconResult): string {
 
   if (tls.issues.length > 0) {
     lines.push(row(""));
-    lines.push(row(chalk.yellow("  Issues:")));
+    lines.push(row(AMBER("  Issues:")));
     for (const issue of tls.issues) {
-      lines.push(row(chalk.yellow(`    ⚠  ${issue}`)));
+      lines.push(row(AMBER(`    ⚠  ${issue}`)));
     }
   }
 
@@ -188,7 +160,7 @@ function renderWhois(result: ReconResult): string {
     row(`  Created      ${whois.createdDate ?? chalk.dim("unknown")}`),
     row(`  Expires      ${whois.expiryDate ?? chalk.dim("unknown")}`),
     row(`  Updated      ${whois.updatedDate ?? chalk.dim("unknown")}`),
-    row(`  DNSSEC       ${whois.dnssec ? chalk.green("enabled") : chalk.yellow("not enabled")}`),
+    row(`  DNSSEC       ${whois.dnssec ? TEAL("enabled") : AMBER("not enabled")}`),
     row(`  Registrant   ${whois.registrant ?? chalk.dim("redacted")}`),
   ];
 
@@ -324,85 +296,6 @@ function renderScorecard(result: ReconResult): string {
     row(""),
     chalk.cyan(hRule("╚", "═", "╝")),
   ].join("\n");
-}
-
-// ─── Persona renderers (for analysis variant) ─────────────────────────────
-
-function renderPersonaSummary(analysis: FullReconAnalysis): string {
-  const rc = riskColor(analysis.consensusRating);
-  const lines: string[] = [
-    sectionHeader("PERSONA ANALYSIS SUMMARY"),
-    row(""),
-    row(`  Consensus Risk: ${rc(analysis.consensusRating.toUpperCase())}`),
-    row(""),
-  ];
-
-  if (analysis.consensusActions.length > 0) {
-    lines.push(row(chalk.bold("  Priority Actions (consensus):")));
-    for (const action of analysis.consensusActions.slice(0, 8)) {
-      lines.push(row(`    ${chalk.yellow("→")} ${action}`));
-    }
-    lines.push(row(""));
-  }
-
-  for (const pa of analysis.analyses) {
-    const accent = personaAccent(pa.persona);
-    const rc2 = riskColor(pa.riskRating);
-    lines.push(row(`  ${accent("●")} ${accent(pa.displayName)}  ${chalk.dim("risk:")} ${rc2(pa.riskRating.toUpperCase())}`));
-    lines.push(row(chalk.dim(`    ${pa.executiveSummary}`)));
-  }
-
-  lines.push(row(""));
-  return lines.join("\n");
-}
-
-function renderPersonaDetails(analysis: FullReconAnalysis): string {
-  const severityOrder = ["critical", "high", "medium", "low", "info"];
-  const lines: string[] = [
-    sectionHeader("PERSONA ANALYSIS DETAILS"),
-    row(""),
-  ];
-
-  for (const pa of analysis.analyses) {
-    const accent = personaAccent(pa.persona);
-    const rc = riskColor(pa.riskRating);
-
-    lines.push(row(chalk.cyan(hRule("┌", "─", "┐", W - 2))));
-    lines.push(row(`${accent("█")} ${accent(pa.displayName)} — ${chalk.dim(pa.perspective)}`));
-    lines.push(row(`  Risk: ${rc(pa.riskRating.toUpperCase())}`));
-    lines.push(row(""));
-
-    const sorted = [...pa.insights].sort(
-      (a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity),
-    );
-
-    for (const insight of sorted) {
-      const sev = findingSeverityColor(insight.severity);
-      lines.push(row(`  ${sev(`[${insight.severity.toUpperCase()}]`)} ${chalk.bold(insight.title)}`));
-      lines.push(row(chalk.dim(`    ${insight.description}`)));
-      if (insight.technicalDetail) {
-        lines.push(row(chalk.dim(`    Technical: ${insight.technicalDetail}`)));
-      }
-      lines.push(row(chalk.dim(`    → ${insight.recommendation}`)));
-      if (insight.affectedAssets.length > 0) {
-        lines.push(row(chalk.dim(`    Assets: ${insight.affectedAssets.join(", ")}`)));
-      }
-      lines.push(row(""));
-    }
-
-    if (pa.priorityActions.length > 0) {
-      lines.push(row(chalk.bold("  Priority Actions:")));
-      for (const action of pa.priorityActions) {
-        lines.push(row(`    ${accent("→")} ${action}`));
-      }
-      lines.push(row(""));
-    }
-
-    lines.push(row(chalk.cyan(hRule("└", "─", "┘", W - 2))));
-    lines.push(row(""));
-  }
-
-  return lines.join("\n");
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────

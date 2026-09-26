@@ -17,18 +17,12 @@ function scoreColour(score: number): string {
   return "#ef4444";
 }
 
-function severityColour(sev: string): string {
-  switch (sev) {
-    case "critical": return "#ef4444";
-    case "high": return "#f97316";
-    case "medium": return "#eab308";
-    case "low": return "#3b82f6";
-    default: return "#a1a1aa";
-  }
-}
+// CSS colours for the standalone HTML export (also served by the dashboard);
+// the terminal palette lives in render-helpers.ts.
 
-function riskColour(risk: string): string {
-  switch (risk) {
+/** Severity and risk-rating colour; shared scale, "minimal" only occurs as a risk. */
+function levelColour(level: string): string {
+  switch (level) {
     case "critical": return "#ef4444";
     case "high": return "#f97316";
     case "medium": return "#eab308";
@@ -215,7 +209,7 @@ ${rfAnalysis ? `
     ? `<p style="color:var(--green)">No rogue APs detected.</p>`
     : rfAnalysis.rogueAPs.findings.map(f => `
       <div class="finding-item">
-        <span class="severity" style="color:${severityColour(f.severity)}">[${esc(f.severity.toUpperCase())}]</span>
+        <span class="severity" style="color:${levelColour(f.severity)}">[${esc(f.severity.toUpperCase())}]</span>
         ${esc(f.description)}
         ${f.ssid ? `<br><span class="meta">SSID: ${esc(f.ssid)} — Ch ${f.channel} — ${f.signal} dBm</span>` : ""}
       </div>`).join("")}
@@ -288,16 +282,16 @@ ${scan.speed ? `
 
 <!-- Persona Analyses -->
 <h2>Persona Analyses</h2>
-<p class="meta" style="margin-bottom:.75rem">Consensus: <span style="color:${riskColour(analysis.consensusRating)};font-weight:600">${esc(analysis.consensusRating.toUpperCase())}</span></p>
+<p class="meta" style="margin-bottom:.75rem">Consensus: <span style="color:${levelColour(analysis.consensusRating)};font-weight:600">${esc(analysis.consensusRating.toUpperCase())}</span></p>
 ${analysis.analyses.map(a => `
 <div class="card">
-  <h3>${esc(a.displayName)} — <span style="color:${riskColour(a.riskRating)}">${esc(a.riskRating.toUpperCase())}</span></h3>
+  <h3>${esc(a.displayName)} — <span style="color:${levelColour(a.riskRating)}">${esc(a.riskRating.toUpperCase())}</span></h3>
   <p style="margin:.5rem 0">${esc(a.executiveSummary)}</p>
   ${a.insights.length > 0 ? `
   <h3 style="margin-top:.75rem">Insights</h3>
   ${a.insights.map(i => `
-  <div class="insight-block" style="border-color:${severityColour(i.severity)}">
-    <p><span class="severity" style="color:${severityColour(i.severity)}">${esc(i.severity.toUpperCase())}</span> — ${esc(i.title)}</p>
+  <div class="insight-block" style="border-color:${levelColour(i.severity)}">
+    <p><span class="severity" style="color:${levelColour(i.severity)}">${esc(i.severity.toUpperCase())}</span> — ${esc(i.title)}</p>
     <p class="meta" style="margin:.25rem 0">${esc(i.description)}</p>
     <p style="font-size:.85rem">Recommendation: ${esc(i.recommendation)}</p>
   </div>`).join("")}` : ""}
@@ -325,7 +319,7 @@ ${compliance.standards.map(s => `
     ${s.findings.map(f => `<tr>
       <td style="color:${statusColour(f.status)}">${statusIcon(f.status)}</td>
       <td>${esc(f.title)}</td>
-      <td><span class="severity" style="color:${severityColour(f.severity)}">${esc(f.severity)}</span></td>
+      <td><span class="severity" style="color:${levelColour(f.severity)}">${esc(f.severity)}</span></td>
       <td>${esc(f.status)}</td>
     </tr>`).join("")}
   </table>` : ""}
