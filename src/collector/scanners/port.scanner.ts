@@ -29,6 +29,10 @@ interface PortResult {
   state: string;
 }
 
+export function openPortsOnly(results: PortResult[]): PortResult[] {
+  return results.filter((r) => r.state === "open");
+}
+
 function scanHostPort(ip: string, port: number): PortResult {
   const service = PORT_SERVICE_MAP[port] ?? `port-${port}`;
   // nc -z: zero-I/O mode (scan only), -w 2: 2-second timeout
@@ -119,7 +123,8 @@ export async function scanPorts(
       }
       results.push(scanHostPort(host.ip, port));
     }
-    hostPorts.set(host.ip, results);
+    // Only open ports are reported; closed probes are not findings.
+    hostPorts.set(host.ip, openPortsOnly(results));
   }
 
   // 2. Discover local listening services via lsof
