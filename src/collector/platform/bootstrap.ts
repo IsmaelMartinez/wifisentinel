@@ -11,6 +11,18 @@ export interface NetworkBootstrap {
   broadcastAddr: string;
 }
 
+/** Network address in CIDR form, e.g. 10.0.5.7 + 16 -> "10.0.0.0/16". */
+export function subnetCidr(ip: string, cidrBits: number): string {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) {
+    return `${ip}/${cidrBits}`;
+  }
+  const ipNum = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  const mask = cidrBits <= 0 ? 0 : (0xffffffff << (32 - Math.min(cidrBits, 32))) >>> 0;
+  const net = (ipNum & mask) >>> 0;
+  return `${net >>> 24}.${(net >>> 16) & 0xff}.${(net >>> 8) & 0xff}.${net & 0xff}/${cidrBits}`;
+}
+
 /**
  * Find the Wi-Fi port in `networksetup -listallhardwareports` output:
  *   Hardware Port: Wi-Fi
@@ -62,7 +74,7 @@ function detectNetworkDarwin(): NetworkBootstrap {
   const maskHex = inetMatch?.[2] ?? "0xffffff00";
   const maskNum = parseInt(maskHex, 16);
   const cidrBits = maskNum.toString(2).split("1").length - 1;
-  const subnet = `${ip.split(".").slice(0, 3).join(".")}.0/${cidrBits}`;
+  const subnet = subnetCidr(ip, cidrBits);
 
   // Use networksetup for reliable gateway detection (works even with VPN active)
   let gatewayIp = "unknown";
@@ -98,7 +110,7 @@ function detectNetworkLinux(): NetworkBootstrap {
     cidrBits = parseInt(addrMatch[2], 10);
   }
 
-  const subnet = `${ip.split(".").slice(0, 3).join(".")}.0/${cidrBits}`;
+  const subnet = subnetCidr(ip, cidrBits);
 
   // Compute broadcast from IP and CIDR
   const ipParts = ip.split(".").map(Number);
