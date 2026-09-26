@@ -1,5 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isUnencrypted, securityFamily } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import {
   type Finding,
   type StandardScore,
@@ -107,7 +107,7 @@ function checkInsecureInterfaces(result: NetworkScanResult): Finding {
 
 function checkUpdateMechanism(result: NetworkScanResult): Finding {
   // Infer from protocol version — older protocols suggest unmaintained firmware
-  const isLegacy = isUnencrypted(result.wifi.security);
+  const isLegacy = classifySecurity(result.wifi.security).unencrypted;
   const generation = wifiGeneration(result.wifi.protocol);
   const isOldProto = generation !== undefined && generation <= LAST_LEGACY_GENERATION;
 
@@ -133,12 +133,12 @@ function checkUpdateMechanism(result: NetworkScanResult): Finding {
 }
 
 function checkOutdatedComponents(result: NetworkScanResult): Finding {
-  const family = securityFamily(result.wifi.security);
+  const { family } = classifySecurity(result.wifi.security);
   const isWep = family === "wep";
   const isWpa1 = family === "wpa";
 
   const nearby = result.wifi.nearbyNetworks;
-  const insecureNearby = nearby.filter((n) => isUnencrypted(n.security));
+  const insecureNearby = nearby.filter((n) => classifySecurity(n.security).unencrypted);
 
   return {
     id: "OWASP-IoT-5",

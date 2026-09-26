@@ -1,10 +1,11 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import {
   type Finding,
   type StandardScore,
   computeGrade,
   computeScore,
+  wpaTierStatus,
 } from "./types.js";
 import { wifiGeneration } from "./protocol.js";
 
@@ -176,22 +177,24 @@ function checkSignalStrength(result: NetworkScanResult): Finding {
 }
 
 function checkSecurityProtocol(result: NetworkScanResult): Finding {
-  const isWpa3 = supportsWpa3(result.wifi.security);
-  const isWpa2 = supportsWpa2(result.wifi.security);
+  const { wpaTier } = classifySecurity(result.wifi.security);
 
   return {
     id: "IEEE-4.1",
     standard: STANDARD,
     title: "Security protocol compliance",
     severity: "high",
-    status: isWpa3 ? "pass" : isWpa2 ? "partial" : "fail",
+    status: wpaTierStatus(wpaTier),
     description:
       "IEEE 802.11 mandates robust security. WPA3 (802.11-2020) is the current standard; WPA2 remains acceptable.",
-    recommendation: isWpa3
-      ? "No action needed."
-      : isWpa2
-        ? "Plan migration to WPA3 for enhanced security."
-        : "Immediately upgrade to WPA2 or WPA3.",
+    recommendation:
+      wpaTier === "wpa3"
+        ? "No action needed."
+        : wpaTier === "wpa2"
+          ? "Plan migration to WPA3 for enhanced security."
+          : wpaTier === "unknown"
+            ? "Security mode was not reported — confirm the access point uses WPA3, or WPA2 at minimum."
+            : "Immediately upgrade to WPA2 or WPA3.",
     evidence: `Security: ${result.wifi.security}`,
   };
 }
