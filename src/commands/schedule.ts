@@ -106,6 +106,12 @@ export function buildCronLine(t: ScheduleTarget): string {
   return `0 ${hours} * * * ${cronQuote(t.nodePath)} ${cronQuote(t.binaryPath)} scan --analyse > /dev/null 2>> ${cronQuote(t.logPath)}`;
 }
 
+/** Parse `--interval`; undefined unless it is a whole number of hours ≥ 1 (no `1.5` or `6foo`). */
+export function parseIntervalHours(raw: string): number | undefined {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
+}
+
 function resolveTarget(intervalHours: number): ScheduleTarget {
   const binaryPath = getBinaryPath();
   if (!existsSync(binaryPath)) {
@@ -253,8 +259,8 @@ export function registerScheduleCommand(program: Command): void {
     .description("Enable periodic scanning")
     .option("-i, --interval <hours>", "Scan interval in hours", "6")
     .action((opts) => {
-      const interval = parseInt(opts.interval, 10);
-      if (isNaN(interval) || interval < 1) {
+      const interval = parseIntervalHours(opts.interval);
+      if (interval === undefined) {
         console.error(chalk.red("Interval must be a positive integer (hours)."));
         process.exit(1);
       }

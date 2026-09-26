@@ -6,6 +6,7 @@ import {
   buildPlist,
   cronQuote,
   getBinaryPath,
+  parseIntervalHours,
   shellQuote,
   type ScheduleTarget,
 } from "../../src/commands/schedule.js";
@@ -101,5 +102,15 @@ describe("schedule", () => {
     }
     assert.ok(buildCronLine({ ...awkward, intervalHours: 24 }).startsWith("0 0 * * * "));
     assert.ok(buildCronLine({ ...awkward, intervalHours: 8 }).startsWith("0 */8 * * * "));
+  });
+});
+
+describe("parseIntervalHours", () => {
+  it("accepts whole hours and rejects fractional, suffixed or non-positive values", () => {
+    assert.equal(parseIntervalHours("6"), 6);
+    assert.equal(parseIntervalHours("24"), 24);
+    for (const bad of ["1.5", "6foo", "0", "-3", "", "abc"]) {
+      assert.equal(parseIntervalHours(bad), undefined, bad);
+    }
   });
 });
