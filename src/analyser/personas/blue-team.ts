@@ -1,11 +1,23 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import type { Insight, PersonaAnalysis, PersonaSpec } from "./types.js";
+import { buildPersonaAnalysis } from "./types.js";
 
-const PERSONA_ID = "blue-team" as const;
-const DISPLAY_NAME = "Blue Team";
-const PERSPECTIVE =
-  "Evaluates defensive posture, detection capabilities, and incident response readiness to stop and contain threats.";
+export const blueTeamSpec: PersonaSpec = {
+  persona: "blue-team",
+  displayName: "Blue Team",
+  perspective:
+    "Evaluates defensive posture, detection capabilities, and incident response readiness to stop and contain threats.",
+  actions: {
+    "bt-firewall-disabled": { key: "firewall", text: "Enable the host firewall and stealth mode immediately" },
+    "bt-intrusion-detected": { key: "intrusion-triage", text: "Triage intrusion indicators and correlate with SIEM data" },
+    "bt-no-client-isolation": { key: "client-isolation", text: "Enable client isolation to limit lateral movement and contain breaches" },
+    "bt-ip-forwarding": { key: "ip-forwarding", text: "Disable IP forwarding on endpoint hosts" },
+    "bt-dns-intercepted": { key: "encrypted-dns", text: "Deploy encrypted DNS (DoH/DoT) to restore DNS integrity" },
+    "bt-unencrypted-flows": { key: "enforce-tls", text: "Create detection rules for cleartext protocols and enforce TLS" },
+    "bt-unknown-devices": { key: "identify-devices", text: "Investigate and classify all unknown network devices" },
+    "bt-no-intrusion-monitoring": { key: "intrusion-monitoring", text: "Deploy network intrusion detection and ARP monitoring" },
+  },
+};
 
 export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
   const insights: Insight[] = [];
@@ -23,7 +35,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enable the firewall immediately. Enable stealth mode. Disable auto-allow for signed and downloaded applications to enforce explicit allow-listing.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.1", "NIST-800-153-5.1"],
+      references: ["CIS-W-2.1", "NIST-W-4.2"],
     });
   } else {
     if (fw.autoAllowSigned || fw.autoAllowDownloaded) {
@@ -37,7 +49,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
         recommendation:
           "Disable auto-allow for both signed and downloaded applications. Maintain an explicit firewall allow-list.",
         affectedAssets: [result.meta.hostname],
-        references: ["CIS-W-5.1.2"],
+        references: ["CIS-W-2.1"],
       });
     }
   }
@@ -54,7 +66,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enforce always-on VPN policy on untrusted networks. Configure VPN kill-switch to prevent traffic leaks.",
       affectedAssets: [result.meta.hostname],
-      references: ["NIST-800-153-4.3"],
+      references: ["CIS-W-3.1"],
     });
   }
 
@@ -70,7 +82,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Disable IP forwarding via sysctl: net.inet.ip.forwarding=0.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.3"],
+      references: ["NIST-W-4.3"],
     });
   }
 
@@ -85,7 +97,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Disable ICMP redirect acceptance via sysctl configuration.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.4", "NIST-800-153-5.2"],
+      references: ["NIST-W-4.4"],
     });
   }
 
@@ -118,7 +130,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
           ...result.intrusionIndicators.suspiciousHosts.map((h) => h.ip),
           ...result.intrusionIndicators.arpAnomalies.map((a) => a.detail),
         ],
-        references: ["NIST-800-153-6.1"],
+        references: ["NIST-W-3.2", "CIS-W-5.1"],
       });
     }
   } else {
@@ -132,7 +144,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Deploy ARP monitoring, network anomaly detection, and port scan detection. Feed alerts into a centralised SIEM.",
       affectedAssets: [result.meta.hostname],
-      references: ["NIST-800-153-6.1", "CIS-W-6.1"],
+      references: ["NIST-W-3.1"],
     });
   }
 
@@ -149,7 +161,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Configure a DNSSEC-validating resolver. Enable DoH or DoT for encrypted DNS transport.",
       affectedAssets: dns.servers,
-      references: ["CIS-W-4.1", "NIST-800-153-3.3"],
+      references: ["CIS-W-4.2"],
     });
   }
 
@@ -180,7 +192,7 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enable client isolation on the access point. Deploy VLAN segmentation for different device classes.",
       affectedAssets: result.network.hosts.map((h) => h.ip),
-      references: ["CIS-W-2.3", "NIST-800-153-4.1"],
+      references: ["CIS-W-1.3", "NIST-W-1.2"],
     });
   }
 
@@ -215,21 +227,11 @@ export function analyseAsBlueTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Investigate and classify all unknown devices. Implement 802.1X network access control to prevent unauthorised devices.",
       affectedAssets: unknownDevices.map((d) => d.ip),
-      references: ["CIS-W-2.1", "NIST-800-153-2.1"],
+      references: ["OWASP-IoT-8"],
     });
   }
 
-  const priorityActions = deriveActions(insights);
-
-  return {
-    persona: PERSONA_ID,
-    displayName: DISPLAY_NAME,
-    perspective: PERSPECTIVE,
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildSummary(insights),
-    insights,
-    priorityActions,
-  };
+  return buildPersonaAnalysis(blueTeamSpec, insights, buildSummary(insights));
 }
 
 function buildSummary(insights: Insight[]): string {
@@ -249,36 +251,4 @@ function buildSummary(insights: Insight[]): string {
     return `The defensive posture is reasonable with ${insights.length} finding(s) requiring attention. Most defence-in-depth layers are active, though hardening improvements and detection tuning would strengthen overall resilience.`;
   }
   return `The host demonstrates strong defensive posture with active firewall, VPN, and monitoring layers. Defence in depth is well-implemented across network, host, and application layers.`;
-}
-
-function deriveActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  const ids = new Set(insights.map((i) => i.id));
-
-  if (ids.has("bt-firewall-disabled"))
-    actions.push("Enable the host firewall and stealth mode immediately");
-  if (ids.has("bt-intrusion-detected"))
-    actions.push(
-      "Triage intrusion indicators and correlate with SIEM data",
-    );
-  if (ids.has("bt-no-client-isolation"))
-    actions.push(
-      "Enable client isolation to limit lateral movement and contain breaches",
-    );
-  if (ids.has("bt-ip-forwarding"))
-    actions.push("Disable IP forwarding on endpoint hosts");
-  if (ids.has("bt-dns-intercepted"))
-    actions.push("Deploy encrypted DNS (DoH/DoT) to restore DNS integrity");
-  if (ids.has("bt-unencrypted-flows"))
-    actions.push(
-      "Create detection rules for cleartext protocols and enforce TLS",
-    );
-  if (ids.has("bt-unknown-devices"))
-    actions.push("Investigate and classify all unknown network devices");
-  if (ids.has("bt-no-intrusion-monitoring"))
-    actions.push(
-      "Deploy network intrusion detection and ARP monitoring",
-    );
-
-  return actions.slice(0, 5);
 }
