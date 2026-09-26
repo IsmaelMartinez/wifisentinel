@@ -168,6 +168,7 @@ describe("platform/commands", () => {
     assert.equal(bin("lsof", "darwin"), "/usr/sbin/lsof");
     assert.equal(bin("arp", "linux"), "arp");
     assert.equal(bin("lsof", "linux"), "lsof");
+    assert.equal(bin("system_profiler", "darwin"), "/usr/sbin/system_profiler");
   });
 
   it("builds ping args per platform", () => {

@@ -15,7 +15,8 @@ type BinName =
   | "ifconfig"
   | "networksetup"
   | "scutil"
-  | "sysctl";
+  | "sysctl"
+  | "system_profiler";
 
 // macOS ships these at fixed paths; calling them by absolute path avoids a
 // PATH-hijacked binary. Linux distributions vary, so resolve from PATH there.
@@ -31,6 +32,7 @@ const DARWIN_PATHS: Record<BinName, string> = {
   networksetup: "/usr/sbin/networksetup",
   scutil: "/usr/sbin/scutil",
   sysctl: "/usr/sbin/sysctl",
+  system_profiler: "/usr/sbin/system_profiler",
 };
 
 export function bin(name: BinName, platform: Platform = currentPlatform()): string {
