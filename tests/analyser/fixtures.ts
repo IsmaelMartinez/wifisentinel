@@ -1,4 +1,5 @@
 import type { NetworkScanResult } from "../../src/collector/schema/scan-result.js";
+import type { ReconResult } from "../../src/collector/recon/schema.js";
 
 /** A hardened scan: every persona and standard check should come out clean. */
 export function cleanScan(): NetworkScanResult {
@@ -164,4 +165,102 @@ export function noisyScan(): NetworkScanResult {
     rating: "poor",
   };
   return scan;
+}
+
+function header(name: string, status: "pass" | "fail" | "missing", value: string | null = null) {
+  return { header: name, present: status !== "missing", value, status, detail: `${name}: ${status}` };
+}
+
+/** A recon result that fails every recon persona check. */
+export function weakRecon(): ReconResult {
+  return {
+    meta: { reconId: "recon-weak", timestamp: "2026-01-01T12:00:00Z", duration: 1000, domain: "example.com" },
+    dns: {
+      domain: "example.com",
+      records: [
+        { type: "A", name: "example.com", value: "203.0.113.1", ttl: 60 },
+        { type: "AAAA", name: "www.example.com", value: "2001:db8::1", ttl: 172800 },
+        { type: "TXT", name: "example.com", value: "hello", ttl: 3600 },
+      ],
+      subdomains: [],
+      zoneTransfer: { attempted: true, vulnerable: true, server: "ns1.example.com" },
+      nameservers: ["ns1.example.com"],
+    },
+    tls: {
+      domain: "example.com",
+      protocol: "TLSv1.0",
+      cipher: "RC4-SHA",
+      certificate: {
+        issuer: "example.com",
+        subject: "example.com",
+        validFrom: "2025-01-01",
+        validTo: "2026-01-20",
+        daysUntilExpiry: 19,
+        selfSigned: true,
+        sans: [],
+      },
+      chainDepth: 1,
+      grade: "F",
+      issues: ["TLS 1.0 enabled"],
+    },
+    headers: {
+      domain: "example.com",
+      url: "https://example.com",
+      statusCode: 200,
+      headers: [
+        header("Strict-Transport-Security", "missing"),
+        header("Content-Security-Policy", "fail", "default-src *"),
+        header("Referrer-Policy", "missing"),
+        header("Permissions-Policy", "missing"),
+        header("X-Frame-Options", "pass", "DENY"),
+        header("Server", "fail", "Apache/2.4.1"),
+      ],
+      score: 20,
+      grade: "D",
+    },
+    whois: {
+      domain: "example.com",
+      registrar: "Registrar Inc",
+      createdDate: null,
+      expiryDate: null,
+      updatedDate: null,
+      nameservers: ["ns1.example.com"],
+      dnssec: false,
+      registrant: "Jane Doe",
+    },
+    crt: {
+      domain: "example.com",
+      entries: [],
+      uniqueSubdomains: ["www.example.com", "staging.example.com", "admin.example.com"],
+    },
+  };
+}
+
+/** A recon result that passes every recon persona check. */
+export function strongRecon(): ReconResult {
+  const r = weakRecon();
+  r.meta.reconId = "recon-strong";
+  r.dns.records = [
+    { type: "A", name: "example.com", value: "203.0.113.1", ttl: 3600 },
+    { type: "MX", name: "example.com", value: "10 mail.example.com", ttl: 3600 },
+    { type: "TXT", name: "example.com", value: "v=spf1 -all", ttl: 3600 },
+  ];
+  r.dns.zoneTransfer = { attempted: true, vulnerable: false };
+  r.dns.nameservers = ["ns1.example.com", "ns2.example.com"];
+  r.tls = {
+    ...r.tls,
+    protocol: "TLSv1.3",
+    cipher: "TLS_AES_256_GCM_SHA384",
+    certificate: { ...r.tls.certificate, issuer: "Let's Encrypt", daysUntilExpiry: 80, selfSigned: false },
+    grade: "A",
+    issues: [],
+  };
+  r.headers.headers = r.headers.headers.map((h) =>
+    h.header === "Server" ? header("Server", "pass") : header(h.header, "pass", "set"),
+  );
+  r.headers.grade = "A";
+  r.whois.dnssec = true;
+  r.whois.registrant = "REDACTED FOR PRIVACY";
+  r.crt.uniqueSubdomains = ["www.example.com"];
+  return r;
 }

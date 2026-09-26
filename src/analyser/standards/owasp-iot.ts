@@ -2,13 +2,16 @@ import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
 import { classifySecurity } from "../security.js";
 import {
   type Finding,
+  type FindingSpec,
+  type FindingStatus,
   type StandardScore,
-  computeGrade,
-  computeScore,
+  buildStandardScore,
+  finding,
 } from "./types.js";
 import { wifiGeneration } from "./protocol.js";
 
 const STANDARD = "owasp-iot" as const;
+const check = (spec: FindingSpec): Finding => finding(STANDARD, spec);
 
 /** 802.11a/b/g — generations that predate WPA2-era firmware support. */
 const LAST_LEGACY_GENERATION = 3;
@@ -28,56 +31,39 @@ function checkWeakPasswords(result: NetworkScanResult): Finding {
   const hostsWithAdmin = result.network.hosts.filter((h) =>
     h.ports?.some((p) => (p.port === 23 || p.port === 80) && p.state === "open")
   );
-
-  return {
+  return check({
     id: "OWASP-IoT-1",
-    standard: STANDARD,
     title: "Weak, guessable, or hardcoded passwords",
     severity: "critical",
     status: hostsWithAdmin.length === 0 ? "pass" : "fail",
     description:
       "Devices with open Telnet or HTTP management ports are often accessible with default credentials.",
-    recommendation:
-      hostsWithAdmin.length === 0
-        ? "No action needed."
-        : "Change default credentials on all devices. Disable Telnet and use SSH/HTTPS for management.",
+    fix: "Change default credentials on all devices. Disable Telnet and use SSH/HTTPS for management.",
     evidence:
       hostsWithAdmin.length > 0
         ? `${hostsWithAdmin.length} host(s) with open admin ports (e.g. ${hostsWithAdmin[0].ip}${hostsWithAdmin[0].vendor ? ` - ${hostsWithAdmin[0].vendor}` : ""})`
         : "No hosts with exposed default management ports",
-  };
+  });
 }
 
 function checkInsecureServices(result: NetworkScanResult): Finding {
-  const insecureHosts = result.network.hosts.filter((h) =>
-    h.ports?.some(
-      (p) => INSECURE_SERVICE_PORTS.has(p.port) && p.state === "open"
-    )
-  );
-  const insecurePorts = result.network.hosts.flatMap(
-    (h) =>
-      h.ports?.filter(
-        (p) => INSECURE_SERVICE_PORTS.has(p.port) && p.state === "open"
-      ) ?? []
-  );
-
-  return {
+  const isInsecure = (p: { port: number; state: string }) =>
+    INSECURE_SERVICE_PORTS.has(p.port) && p.state === "open";
+  const insecureHosts = result.network.hosts.filter((h) => h.ports?.some(isInsecure));
+  const insecurePorts = result.network.hosts.flatMap((h) => h.ports?.filter(isInsecure) ?? []);
+  return check({
     id: "OWASP-IoT-2",
-    standard: STANDARD,
     title: "Insecure network services",
     severity: "high",
     status: insecurePorts.length === 0 ? "pass" : "fail",
     description:
       "Unnecessary or insecure services (Telnet, FTP, unencrypted MQTT) increase the attack surface.",
-    recommendation:
-      insecurePorts.length === 0
-        ? "No action needed."
-        : "Disable unnecessary services. Replace plaintext protocols with encrypted alternatives (SSH, SFTP, MQTTS).",
+    fix: "Disable unnecessary services. Replace plaintext protocols with encrypted alternatives (SSH, SFTP, MQTTS).",
     evidence:
       insecurePorts.length > 0
         ? `${insecurePorts.length} insecure service(s) across ${insecureHosts.length} host(s)`
         : "No insecure network services detected",
-  };
+  });
 }
 
 function checkInsecureInterfaces(result: NetworkScanResult): Finding {
@@ -85,24 +71,19 @@ function checkInsecureInterfaces(result: NetworkScanResult): Finding {
   const exposedMgmt = result.localServices.filter(
     (s) => MANAGEMENT_PORTS.has(s.port) && s.exposedToNetwork
   );
-
-  return {
+  return check({
     id: "OWASP-IoT-3",
-    standard: STANDARD,
     title: "Insecure ecosystem interfaces",
     severity: "high",
     status: exposedMgmt.length === 0 ? "pass" : "fail",
     description:
       "Management interfaces exposed to the network can be exploited if not properly secured.",
-    recommendation:
-      exposedMgmt.length === 0
-        ? "No action needed."
-        : "Bind management services to localhost only or restrict access with firewall rules.",
+    fix: "Bind management services to localhost only or restrict access with firewall rules.",
     evidence:
       exposedMgmt.length > 0
         ? `${exposedMgmt.length} management port(s) exposed (e.g. ${exposedMgmt[0].port}/${exposedMgmt[0].process})`
         : "No management ports exposed to network",
-  };
+  });
 }
 
 function checkUpdateMechanism(result: NetworkScanResult): Finding {
@@ -110,157 +91,129 @@ function checkUpdateMechanism(result: NetworkScanResult): Finding {
   const isLegacy = classifySecurity(result.wifi.security).unencrypted;
   const generation = wifiGeneration(result.wifi.protocol);
   const isOldProto = generation !== undefined && generation <= LAST_LEGACY_GENERATION;
-
   const outdated = isLegacy || isOldProto;
   // With a usable cipher and no PHY reading there is nothing to infer from.
   const unmeasured = !outdated && generation === undefined;
 
-  return {
+  return check({
     id: "OWASP-IoT-4",
-    standard: STANDARD,
     title: "Lack of secure update mechanism",
     severity: "high",
     status: outdated ? "fail" : unmeasured ? "not-applicable" : "pass",
     description:
       "Devices running outdated protocols likely lack automated secure update mechanisms, leaving known vulnerabilities unpatched.",
-    recommendation: outdated
+    ok: "No action needed — current protocol versions suggest maintained devices.",
+    fix: outdated
       ? "Update device firmware. Replace end-of-life hardware that no longer receives security updates."
-      : unmeasured
-        ? "No action needed — the Wi-Fi protocol generation was not reported."
-        : "No action needed — current protocol versions suggest maintained devices.",
+      : "No action needed — the Wi-Fi protocol generation was not reported.",
     evidence: `Protocol: ${result.wifi.protocol}, security: ${result.wifi.security}`,
-  };
+  });
 }
 
 function checkOutdatedComponents(result: NetworkScanResult): Finding {
   const { family } = classifySecurity(result.wifi.security);
-  const isWep = family === "wep";
-  const isWpa1 = family === "wpa";
-
-  const nearby = result.wifi.nearbyNetworks;
-  const insecureNearby = nearby.filter((n) => classifySecurity(n.security).unencrypted);
-
-  return {
+  const deprecated = family === "wep" || family === "wpa";
+  const insecureNearby = result.wifi.nearbyNetworks.filter(
+    (n) => classifySecurity(n.security).unencrypted,
+  );
+  return check({
     id: "OWASP-IoT-5",
-    standard: STANDARD,
     title: "Use of insecure or outdated components",
     severity: "high",
-    status: isWep || isWpa1 ? "fail" : insecureNearby.length > 0 ? "partial" : "pass",
+    status: deprecated ? "fail" : insecureNearby.length > 0 ? "partial" : "pass",
     description:
       "Deprecated protocols (WEP, WPA1) have known exploits. Nearby insecure networks can also pose risks.",
-    recommendation:
-      isWep || isWpa1
-        ? "Immediately upgrade to WPA2 or WPA3."
-        : insecureNearby.length > 0
-          ? "Your network is secure, but nearby insecure networks could be used for evil twin attacks."
-          : "No action needed.",
+    fix: deprecated
+      ? "Immediately upgrade to WPA2 or WPA3."
+      : "Your network is secure, but nearby insecure networks could be used for evil twin attacks.",
     evidence: `Current: ${result.wifi.security}. Nearby insecure networks: ${insecureNearby.length}`,
-  };
+  });
 }
 
 function checkPrivacyProtection(result: NetworkScanResult): Finding {
   const macRandom = result.wifi.macRandomised;
-  const traffic = result.traffic;
-  const mdnsLeaks = traffic?.mdnsLeaks.length ?? 0;
+  const mdnsLeaks = result.traffic?.mdnsLeaks.length ?? 0;
   const dnsAnomalies = result.network.dns.anomalies.length;
+  const noLeaks = mdnsLeaks === 0 && dnsAnomalies === 0;
 
-  let status: Finding["status"];
-  if (macRandom && mdnsLeaks === 0 && dnsAnomalies === 0) status = "pass";
-  else if (macRandom || (mdnsLeaks === 0 && dnsAnomalies === 0))
-    status = "partial";
+  let status: FindingStatus;
+  if (macRandom && noLeaks) status = "pass";
+  else if (macRandom || noLeaks) status = "partial";
   else status = "fail";
 
-  const evidenceParts = [
-    `MAC randomisation: ${macRandom ? "enabled" : "disabled"}`,
-    `mDNS leaks: ${mdnsLeaks}`,
-    `DNS anomalies: ${dnsAnomalies}`,
-  ];
-
-  return {
+  return check({
     id: "OWASP-IoT-6",
-    standard: STANDARD,
     title: "Insufficient privacy protection",
     severity: "medium",
     status,
     description:
       "Privacy leaks through MAC addresses, mDNS broadcasts, and DNS queries expose device identity and user behaviour.",
-    recommendation:
-      status === "pass"
-        ? "No action needed."
-        : "Enable MAC randomisation, configure mDNS scope, and use encrypted DNS.",
-    evidence: evidenceParts.join(", "),
-  };
+    fix: "Enable MAC randomisation, configure mDNS scope, and use encrypted DNS.",
+    evidence: [
+      `MAC randomisation: ${macRandom ? "enabled" : "disabled"}`,
+      `mDNS leaks: ${mdnsLeaks}`,
+      `DNS anomalies: ${dnsAnomalies}`,
+    ].join(", "),
+  });
 }
 
 function checkInsecureDataTransfer(result: NetworkScanResult): Finding {
   const traffic = result.traffic;
   if (!traffic) {
-    return {
+    return check({
       id: "OWASP-IoT-7",
-      standard: STANDARD,
       title: "Insecure data transfer and storage",
       severity: "high",
       status: "not-applicable",
       description: "Traffic capture was not performed during this scan.",
-      recommendation: "Run the scan with traffic capture enabled.",
-    };
+      fix: "Run the scan with traffic capture enabled.",
+    });
   }
 
   const unencrypted = traffic.unencrypted.length;
   const dohEnabled = result.network.dns.dohDotEnabled;
-
-  return {
+  return check({
     id: "OWASP-IoT-7",
-    standard: STANDARD,
     title: "Insecure data transfer and storage",
     severity: "high",
     status: unencrypted === 0 && dohEnabled ? "pass" : unencrypted === 0 ? "partial" : "fail",
     description:
       "Data in transit must be encrypted. Unencrypted HTTP, DNS, and other protocols leak sensitive information.",
-    recommendation:
-      unencrypted === 0 && dohEnabled
-        ? "No action needed."
-        : unencrypted === 0
-          ? "Enable DNS-over-HTTPS/TLS for full encryption coverage."
-          : "Eliminate unencrypted traffic. Enforce HTTPS and encrypted DNS.",
+    fix:
+      unencrypted === 0
+        ? "Enable DNS-over-HTTPS/TLS for full encryption coverage."
+        : "Eliminate unencrypted traffic. Enforce HTTPS and encrypted DNS.",
     evidence: `Unencrypted flows: ${unencrypted}, DoH/DoT: ${dohEnabled ? "enabled" : "disabled"}`,
-  };
+  });
 }
 
 function checkDeviceManagement(result: NetworkScanResult): Finding {
-  const hidden = result.hiddenDevices;
-  const unknownCount = hidden?.unknownDevices.length ?? 0;
+  const unknownCount = result.hiddenDevices?.unknownDevices.length ?? 0;
   const totalHosts = result.network.hosts.length;
   const identifiedHosts = result.network.hosts.filter(
     (h) => h.vendor || h.hostname || h.deviceType
   ).length;
+  const identificationRate = totalHosts > 0 ? identifiedHosts / totalHosts : 1;
 
-  const identificationRate =
-    totalHosts > 0 ? identifiedHosts / totalHosts : 1;
-
-  let status: Finding["status"];
+  let status: FindingStatus;
   if (unknownCount === 0 && identificationRate >= 0.8) status = "pass";
   else if (unknownCount <= 2 && identificationRate >= 0.5) status = "partial";
   else status = "fail";
 
-  return {
+  return check({
     id: "OWASP-IoT-8",
-    standard: STANDARD,
     title: "Lack of device management",
     severity: "medium",
     status,
     description:
       "All devices on the network should be identified and managed. Unknown devices may indicate unauthorised access.",
-    recommendation:
-      status === "pass"
-        ? "No action needed."
-        : "Identify all unknown devices. Implement network access control (NAC) or MAC filtering.",
+    fix: "Identify all unknown devices. Implement network access control (NAC) or MAC filtering.",
     evidence: `Total hosts: ${totalHosts}, identified: ${identifiedHosts}, unknown devices flagged: ${unknownCount}`,
-  };
+  });
 }
 
 export function scoreOwaspIot(result: NetworkScanResult): StandardScore {
-  const findings: Finding[] = [
+  return buildStandardScore(STANDARD, "OWASP IoT Top 10", "2018", [
     checkWeakPasswords(result),
     checkInsecureServices(result),
     checkInsecureInterfaces(result),
@@ -269,22 +222,5 @@ export function scoreOwaspIot(result: NetworkScanResult): StandardScore {
     checkPrivacyProtection(result),
     checkInsecureDataTransfer(result),
     checkDeviceManagement(result),
-  ];
-
-  const score = computeScore(findings);
-  const passing = findings.filter((f) => f.status === "pass").length;
-  const applicable = findings.filter(
-    (f) => f.status !== "not-applicable"
-  ).length;
-
-  return {
-    standard: STANDARD,
-    name: "OWASP IoT Top 10",
-    version: "2018",
-    score,
-    maxScore: 100,
-    grade: computeGrade(score),
-    findings,
-    summary: `${passing}/${applicable} applicable controls passed (score: ${score}/100).`,
-  };
+  ]);
 }

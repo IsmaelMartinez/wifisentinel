@@ -1,5 +1,8 @@
 import { z } from "zod";
 import type { WpaTier } from "../security.js";
+import { Severity } from "../personas/types.js";
+
+export { Severity };
 
 export const StandardId = z.enum([
   "cis-wireless",
@@ -8,9 +11,6 @@ export const StandardId = z.enum([
   "owasp-iot",
 ]);
 export type StandardId = z.infer<typeof StandardId>;
-
-export const Severity = z.enum(["critical", "high", "medium", "low", "info"]);
-export type Severity = z.infer<typeof Severity>;
 
 export const FindingStatus = z.enum([
   "pass",
@@ -51,7 +51,7 @@ export const ComplianceReport = z.object({
   scanId: z.string(),
   timestamp: z.string(),
   overallScore: z.number().min(0).max(100),
-  overallGrade: z.string(),
+  overallGrade: Grade,
   standards: z.array(StandardScore),
 });
 export type ComplianceReport = z.infer<typeof ComplianceReport>;
@@ -70,6 +70,56 @@ export function wpaTierStatus(tier: WpaTier): FindingStatus {
   if (tier === "wpa2") return "partial";
   if (tier === "unknown") return "not-applicable";
   return "fail";
+}
+
+export const UNKNOWN_SECURITY_FIX =
+  "Security mode was not reported — confirm the access point uses WPA3, or WPA2 at minimum.";
+
+export interface FindingSpec {
+  id: string;
+  title: string;
+  severity: Severity;
+  status: FindingStatus;
+  description: string;
+  /** Recommendation whenever the control does not pass. */
+  fix: string;
+  /** Recommendation when it passes. */
+  ok?: string;
+  evidence?: string;
+}
+
+export function finding(standard: StandardId, spec: FindingSpec): Finding {
+  return {
+    id: spec.id,
+    standard,
+    title: spec.title,
+    severity: spec.severity,
+    status: spec.status,
+    description: spec.description,
+    recommendation: spec.status === "pass" ? (spec.ok ?? "No action needed.") : spec.fix,
+    ...(spec.evidence === undefined ? {} : { evidence: spec.evidence }),
+  };
+}
+
+export function buildStandardScore(
+  standard: StandardId,
+  name: string,
+  version: string,
+  findings: Finding[],
+): StandardScore {
+  const score = computeScore(findings);
+  const passing = findings.filter((f) => f.status === "pass").length;
+  const applicable = findings.filter((f) => f.status !== "not-applicable").length;
+  return {
+    standard,
+    name,
+    version,
+    score,
+    maxScore: 100,
+    grade: computeGrade(score),
+    findings,
+    summary: `${passing}/${applicable} applicable controls passed (score: ${score}/100).`,
+  };
 }
 
 export function computeGrade(score: number): Grade {
