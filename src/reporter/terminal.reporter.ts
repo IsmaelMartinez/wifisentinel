@@ -21,7 +21,7 @@ import {
   RED,
 } from "./render-helpers.js";
 
-import { analyseRF } from "../analyser/rf/index.js";
+import type { RFAnalysis } from "../analyser/rf/types.js";
 import { renderRFSummary } from "./rf.reporter.js";
 import { renderScoreTrend, renderSignalTrend } from "./sparklines.js";
 
@@ -480,8 +480,7 @@ function renderScorecard(result: NetworkScanResult, options?: { scoreHistory?: n
   return lines.join("\n");
 }
 
-function renderRFIntelligence(result: NetworkScanResult): string {
-  const analysis = analyseRF(result);
+function renderRFIntelligence(result: NetworkScanResult, analysis: RFAnalysis): string {
   const summary = renderRFSummary(analysis, result.deauthDetection);
   const lines: string[] = [
     sectionHeader("RF INTELLIGENCE"),
@@ -498,6 +497,7 @@ function renderRFIntelligence(result: NetworkScanResult): string {
 
 export function renderTerminalReport(
   result: NetworkScanResult,
+  rfAnalysis: RFAnalysis,
   options?: { scoreHistory?: number[]; signalHistory?: number[] },
 ): string {
   refreshWidth();
@@ -505,7 +505,7 @@ export function renderTerminalReport(
     renderHeader(result),
     renderNetworkMap(result),
     renderWifiDetails(result, options),
-    renderRFIntelligence(result),
+    renderRFIntelligence(result, rfAnalysis),
     renderSecurityPosture(result),
     renderDnsAudit(result),
     renderHiddenDeviceAlerts(result),

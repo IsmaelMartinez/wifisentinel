@@ -1,6 +1,7 @@
 // src/commands/rf.ts
 import chalk from "chalk";
 import type { Command } from "commander";
+import { parsePositiveInt } from "./options.js";
 import { scanWifi } from "../collector/scanners/wifi.scanner.js";
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFReport } from "../reporter/rf.reporter.js";
@@ -87,12 +88,12 @@ export function registerRFCommand(program: Command): void {
     .option("--json", "Output as JSON")
     .option("--compare <scanId>", "Compare against a stored scan")
     .option("--trend", "Show WiFi signal trends over time")
-    .option("-n, --limit <count>", "Number of scans for --trend", "10")
+    .option("-n, --limit <count>", "Number of scans for --trend", parsePositiveInt, 10)
     .action(async (opts) => {
       try {
         // Trend mode: read from store, no live scan
         if (opts.trend) {
-          const entries = listScans({ limit: parseInt(opts.limit, 10) });
+          const entries = listScans({ limit: opts.limit });
           if (entries.length === 0) {
             console.log(chalk.dim("No scans in history. Run 'wifisentinel scan' first."));
             return;

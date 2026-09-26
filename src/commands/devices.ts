@@ -1,6 +1,7 @@
 // src/commands/devices.ts — Device presence timeline from scan history
 import chalk from "chalk";
 import type { Command } from "commander";
+import { parsePositiveInt } from "./options.js";
 import { listScans, loadScans } from "../store/index.js";
 import { buildPresenceReport, normaliseMac } from "../analyser/devices/tracker.js";
 import type { DeviceTimeline, PresenceReport } from "../analyser/devices/types.js";
@@ -109,16 +110,15 @@ export function registerDevicesCommand(program: Command): void {
   program
     .command("devices")
     .description("Track device presence across scan history (join/leave timeline)")
-    .option("-n, --limit <count>", "Number of scans to include", "50")
+    .option("-n, --limit <count>", "Number of scans to include", parsePositiveInt, 50)
     .option("--ssid <name>", "Filter by SSID")
     .option("--active", "Show only currently present devices")
     .option("--mac <mac>", "Show detailed timeline for a specific MAC (prefix match)")
     .option("--since <date>", "Only include scans at or after this ISO date")
     .option("--json", "Output as JSON")
     .action((opts) => {
-      const limit = parseInt(opts.limit, 10);
       const entries = listScans({
-        limit: Number.isFinite(limit) && limit > 0 ? limit : 50,
+        limit: opts.limit,
         ssid: opts.ssid,
       });
 

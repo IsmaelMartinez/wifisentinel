@@ -116,8 +116,8 @@ wifisentinel recon example.com
 --skip-speed                Skip speed test
 --no-vendor-lookup          Skip the gateway's MAC vendor lookup (all lookups use a bundled offline OUI database)
 --stealth                   Passive host discovery, randomised port timing, skip speed/traffic
---monitor-interface <iface> (scan only) Enable deauth detection via monitor mode on this interface
---events                    (scan only) Output scan events as NDJSON instead of a report
+--monitor-interface <iface> Enable deauth detection via monitor mode on this interface
+--events                    Output scan events as NDJSON instead of a report
 --otel <exporter>           OTEL exporter: console, otlp, none  (default: none)
 -v, --verbose               Verbose output
 --analyse                   (scan only) Include multi-persona analysis in the output
@@ -133,6 +133,8 @@ wifisentinel recon example.com
 --no-alert-security-change       Disable alerts on security/WiFi changes
 --events                         Output NDJSON events to stdout instead of a rendered report
 --skip-ports / --skip-speed / --skip-traffic   Reduce per-cycle cost
+--traffic-duration <secs>        Traffic capture duration in seconds (default: 8)
+--monitor-interface <iface>      Enable deauth detection via monitor mode on this interface
 --no-vendor-lookup               Skip the gateway's MAC vendor lookup
 --stealth                        Passive, randomised scanning
 --otel <exporter>                OTEL exporter: console, otlp, none (default: none)

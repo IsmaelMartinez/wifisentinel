@@ -1,6 +1,7 @@
 // src/commands/trend.ts
 import chalk from "chalk";
 import type { Command } from "commander";
+import { parsePositiveInt } from "./options.js";
 import { listScans, type IndexEntry } from "../store/index.js";
 import {
   isKnownSource,
@@ -42,12 +43,12 @@ export function registerTrendCommand(program: Command): void {
   program
     .command("trend")
     .description("Show security score trends over time")
-    .option("-n, --limit <count>", "Number of scans to show", "10")
+    .option("-n, --limit <count>", "Number of scans to show", parsePositiveInt, 10)
     .option("--ssid <name>", "Filter by SSID")
     .option("--json", "Output as JSON")
     .action((opts) => {
       const entries = listScans({
-        limit: parseInt(opts.limit, 10),
+        limit: opts.limit,
         ssid: opts.ssid,
       });
 
