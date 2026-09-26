@@ -2,11 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isMulticastMac, isValidMac, normaliseMac } from "../../src/collector/mac.js";
 import { lookupVendor } from "../../src/collector/oui-lookup.js";
-import { parseArpOutput } from "../../src/collector/scanners/host-discovery.scanner.js";
-import {
-  detectArpAnomalies,
-  parseArpTable,
-} from "../../src/collector/scanners/intrusion-detection.scanner.js";
+import { arpMap, parseArp } from "../../src/collector/platform/arp.js";
+import { detectArpAnomalies } from "../../src/collector/scanners/intrusion-detection.scanner.js";
 import { parseMacosLogs, parseTcpdumpOutput } from "../../src/collector/scanners/deauth.scanner.js";
 import { openPortsOnly } from "../../src/collector/scanners/port.scanner.js";
 import { hasAdFlag } from "../../src/collector/scanners/dns.scanner.js";
@@ -60,9 +57,9 @@ describe("lookupVendor", () => {
   });
 });
 
-describe("host-discovery parseArpOutput", () => {
+describe("ARP parsing for host discovery", () => {
   it("keeps unicast hosts with normalised MACs and skips multicast/broadcast", () => {
-    const entries = parseArpOutput(MACOS_ARP);
+    const entries = parseArp(MACOS_ARP);
     assert.deepEqual(
       entries.map((e) => [e.ip, e.mac]),
       [
@@ -75,26 +72,26 @@ describe("host-discovery parseArpOutput", () => {
 });
 
 describe("intrusion-detection", () => {
-  it("parseArpTable normalises MACs and skips multicast entries", () => {
-    const table = parseArpTable(MACOS_ARP);
+  it("arpMap normalises MACs and skips multicast entries", () => {
+    const table = arpMap(parseArp(MACOS_ARP));
     assert.equal(table.get("192.168.1.23"), "00:1b:63:84:45:e6");
     assert.equal(table.has("224.0.0.251"), false);
     assert.equal(table.has("192.168.1.255"), false);
   });
 
   it("does not raise gateway_mac_mismatch when the gateway MAC is unknown", () => {
-    const snap = parseArpTable(MACOS_ARP);
+    const snap = arpMap(parseArp(MACOS_ARP));
     const anomalies = detectArpAnomalies(snap, snap, "192.168.1.1", "unknown");
     assert.deepEqual(anomalies, []);
   });
 
   it("matches the gateway MAC regardless of zero-padding", () => {
-    const snap = parseArpTable("? (192.168.1.1) at 0:1b:63:84:45:e6 on en0 ifscope [ethernet]");
+    const snap = arpMap(parseArp("? (192.168.1.1) at 0:1b:63:84:45:e6 on en0 ifscope [ethernet]"));
     assert.deepEqual(detectArpAnomalies(snap, snap, "192.168.1.1", "00:1B:63:84:45:E6"), []);
   });
 
   it("still flags a real gateway MAC mismatch", () => {
-    const snap = parseArpTable(MACOS_ARP);
+    const snap = arpMap(parseArp(MACOS_ARP));
     const anomalies = detectArpAnomalies(snap, snap, "192.168.1.1", "aa:bb:cc:dd:ee:ff");
     assert.equal(anomalies.length, 1);
     assert.equal(anomalies[0].type, "gateway_mac_mismatch");
@@ -155,11 +152,11 @@ describe("DNSSEC AD flag", () => {
 
 describe("client isolation target", () => {
   it("skips the gateway, this host and multicast entries", () => {
-    assert.equal(pickIsolationTarget(MACOS_ARP, "192.168.1.1", "192.168.1.23"), "192.168.1.40");
+    assert.equal(pickIsolationTarget(parseArp(MACOS_ARP), "192.168.1.1", "192.168.1.23"), "192.168.1.40");
   });
 
   it("returns undefined when only the gateway is known", () => {
     const arp = MACOS_ARP.split("\n").filter((l) => !l.includes("192.168.1.23") && !l.includes("192.168.1.40")).join("\n");
-    assert.equal(pickIsolationTarget(arp, "192.168.1.1"), undefined);
+    assert.equal(pickIsolationTarget(parseArp(arp), "192.168.1.1"), undefined);
   });
 });
