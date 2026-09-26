@@ -18,9 +18,10 @@ import { SERVICE_NAME, SERVICE_VERSION } from "./service.js";
 let sdk: NodeSDK | null = null;
 
 export function initTracing(exportType: "console" | "otlp" | "none"): void {
-  // "none": start no SDK at all. The API's no-op tracer is used, so nothing is exported
-  // (an SDK without an exporter would fall back to its OTLP env default).
-  if (exportType === "none") return;
+  // Only an explicit "console" or "otlp" starts an SDK. "none" (or an unvalidated CLI
+  // value such as a typo) keeps the API's no-op tracer, so nothing is exported; an SDK
+  // without an exporter would fall back to its OTLP env default.
+  if (exportType !== "console" && exportType !== "otlp") return;
 
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: SERVICE_NAME,

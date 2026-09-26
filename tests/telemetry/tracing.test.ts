@@ -44,6 +44,13 @@ describe("initTracing('none')", () => {
     assert.equal(result, 42);
     assert.deepEqual(calls, []);
   });
+
+  it("treats an unknown export type (e.g. a CLI typo) as none", async () => {
+    initTracing("nope" as "none");
+    await withSpan("test-span", {}, async () => 1);
+    await shutdownTracing();
+    assert.deepEqual(calls, []);
+  });
 });
 
 describe("SERVICE_VERSION", () => {
