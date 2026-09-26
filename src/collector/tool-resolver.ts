@@ -56,8 +56,10 @@ export function toolChains(platform: Platform): ToolChain[] {
               { name: "networksetup", tier: "minimal" },
             ]
           : [
-              { name: "nmcli", tier: "preferred" },
-              { name: "iw", tier: "fallback" },
+              // iw supplies SSID/BSSID/signal for the current link; nmcli alone
+              // only yields nearby networks, so it is the minimal tier.
+              { name: "iw", tier: "preferred" },
+              { name: "nmcli", tier: "minimal" },
             ],
     },
     {

@@ -4,7 +4,7 @@ import type { Command } from "commander";
 import { scanWifi } from "../collector/scanners/wifi.scanner.js";
 import { analyseRF } from "../analyser/rf/index.js";
 import { renderRFReport } from "../reporter/rf.reporter.js";
-import { loadScan, listScans, type IndexEntry } from "../store/index.js";
+import { loadScan, loadScans, listScans, type IndexEntry } from "../store/index.js";
 import { partialTrendNote, sourceCell, splitBySource } from "../store/source.js";
 import { pad } from "../reporter/render-helpers.js";
 
@@ -97,10 +97,7 @@ export function registerRFCommand(program: Command): void {
             console.log(chalk.dim("No scans in history. Run 'wifisentinel scan' first."));
             return;
           }
-          const scans = entries.map(e => {
-            const stored = loadScan(e.scanId);
-            return stored.scan;
-          });
+          const scans = loadScans(entries).map(stored => stored.scan);
 
           if (opts.json) {
             const data = entries.map((e, i) => ({

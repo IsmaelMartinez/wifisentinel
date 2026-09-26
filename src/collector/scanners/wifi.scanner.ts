@@ -366,7 +366,7 @@ export async function scanWifi(iface?: string): Promise<WifiResult> {
 
   const defaults = emptyWifiResult();
 
-  const profilerResult = await runAsync("system_profiler", ["SPAirPortDataType"]);
+  const profilerResult = await runAsync(bin("system_profiler"), ["SPAirPortDataType"]);
   if (profilerResult.exitCode === 0 && profilerResult.stdout.length > 0) {
     try {
       return parseSystemProfiler(profilerResult.stdout);

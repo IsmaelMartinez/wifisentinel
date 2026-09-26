@@ -131,15 +131,17 @@ async function scanKernelParams(): Promise<NetworkScanResult["security"]["kernel
  * Pick a peer to test client isolation against: the first unicast ARP entry
  * that is neither the gateway nor this machine. The gateway always answers
  * even with isolation on, so pinging it would report isolation as off.
- * Without a known gateway IP (bootstrap reports "unknown") no peer can be
- * safely excluded, so no target is returned.
+ * Without a known gateway and local IP (bootstrap reports "unknown") neither
+ * can be safely excluded — macOS lists this host as a permanent ARP entry —
+ * so no target is returned.
  */
 export function pickIsolationTarget(
   arpEntries: ArpEntry[],
   gatewayIp?: string,
   localIp?: string,
 ): string | undefined {
-  if (!gatewayIp || !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(gatewayIp)) return undefined;
+  const ipv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+  if (!gatewayIp || !ipv4.test(gatewayIp) || !localIp || !ipv4.test(localIp)) return undefined;
   return arpEntries.find((e) => e.ip !== gatewayIp && e.ip !== localIp)?.ip;
 }
 
