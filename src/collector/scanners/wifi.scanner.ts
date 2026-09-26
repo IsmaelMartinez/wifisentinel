@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult, NearbyNetwork } from "../schema/scan-result.js";
 import { normaliseSecurity } from "../schema/security.js";
 import { bin } from "../platform/commands.js";
@@ -219,7 +219,7 @@ async function scanWifiLinux(iface: string): Promise<WifiResult> {
   let frequency = 0;
   let txRate = 0;
 
-  const linkResult = run("iw", ["dev", iface, "link"]);
+  const linkResult = await runAsync("iw", ["dev", iface, "link"]);
   if (linkResult.exitCode === 0 && !linkResult.stdout.includes("Not connected")) {
     const bssidMatch = linkResult.stdout.match(/Connected to ([0-9a-f:]+)/i);
     if (bssidMatch) bssid = bssidMatch[1];
@@ -241,7 +241,7 @@ async function scanWifiLinux(iface: string): Promise<WifiResult> {
   const band = frequency ? bandFromFrequency(frequency) : "unknown";
 
   // MAC randomisation check
-  const linkShowResult = run("ip", ["link", "show", iface]);
+  const linkShowResult = await runAsync("ip", ["link", "show", iface]);
   let macRandomised = false;
   const macShowMatch = linkShowResult.stdout.match(
     /link\/ether\s+([0-9a-f:]+)/i
@@ -254,7 +254,7 @@ async function scanWifiLinux(iface: string): Promise<WifiResult> {
   let security = "Unknown";
   const nearbyNetworks: NearbyNetwork[] = [];
 
-  const nmcliResult = run("nmcli", [
+  const nmcliResult = await runAsync("nmcli", [
     "-t",
     "-f",
     "SSID,SECURITY,SIGNAL,CHAN,MODE,BSSID",
@@ -296,7 +296,7 @@ async function scanWifiLinux(iface: string): Promise<WifiResult> {
     }
   } else {
     // Fallback: try iw scan (may need sudo, fail gracefully)
-    const scanResult = run("iw", ["dev", iface, "scan"]);
+    const scanResult = await runAsync("iw", ["dev", iface, "scan"]);
     if (scanResult.exitCode === 0) {
       const blocks = scanResult.stdout.split(/^BSS /m);
       for (const block of blocks) {
@@ -358,14 +358,15 @@ async function scanWifiLinux(iface: string): Promise<WifiResult> {
  * Scan the current Wi-Fi connection. `iface` comes from the scan bootstrap;
  * standalone callers (e.g. the rf command) let it be detected.
  */
-export async function scanWifi(iface: string = detectWifiInterface().iface): Promise<WifiResult> {
+export async function scanWifi(iface?: string): Promise<WifiResult> {
+  iface ??= (await detectWifiInterface()).iface;
   if (process.platform === "linux") {
     return scanWifiLinux(iface);
   }
 
   const defaults = emptyWifiResult();
 
-  const profilerResult = run(bin("system_profiler"), ["SPAirPortDataType"]);
+  const profilerResult = await runAsync(bin("system_profiler"), ["SPAirPortDataType"]);
   if (profilerResult.exitCode === 0 && profilerResult.stdout.length > 0) {
     try {
       return parseSystemProfiler(profilerResult.stdout);
@@ -375,7 +376,7 @@ export async function scanWifi(iface: string = detectWifiInterface().iface): Pro
   }
 
   // Fallback: networksetup
-  const nsResult = run(bin("networksetup"), ["-getairportnetwork", iface]);
+  const nsResult = await runAsync(bin("networksetup"), ["-getairportnetwork", iface]);
   if (nsResult.exitCode === 0 && nsResult.stdout.length > 0) {
     const partial = parseNetworksetup(nsResult.stdout);
     return { ...defaults, ...partial };

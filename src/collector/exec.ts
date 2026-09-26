@@ -8,7 +8,8 @@ export interface ExecResult {
 
 /**
  * Run a command safely using execFile (no shell injection risk).
- * Pass the binary and args separately.
+ * Pass the binary and args separately. Blocks the event loop — prefer
+ * runAsync on the scan path.
  */
 export function run(
   binary: string,
@@ -32,25 +33,35 @@ export function run(
 }
 
 /**
- * Async version of run using execFile (no shell).
+ * Async version of run using execFile (no shell). stdin receives `input`
+ * (or nothing) and is then closed, so tools such as `openssl s_client` do
+ * not wait for more.
  */
 export function runAsync(
   binary: string,
   args: string[] = [],
-  timeoutMs = 30_000
+  timeoutMs = 30_000,
+  input = "",
 ): Promise<ExecResult> {
   return new Promise((resolve) => {
-    execFileCb(
+    const child = execFileCb(
       binary,
       args,
       { encoding: "utf-8", timeout: timeoutMs },
       (error, stdout, stderr) => {
+        // error.code is the exit status for a non-zero exit, but a string
+        // (e.g. "ENOENT") when the binary could not be spawned.
+        const code = (error as { code?: unknown } | null)?.code;
         resolve({
           stdout: (stdout ?? "").trim(),
           stderr: (stderr ?? "").trim(),
-          exitCode: error ? (error as any).code ?? 1 : 0,
+          exitCode: error ? (typeof code === "number" ? code : 1) : 0,
         });
       }
     );
+    child.stdin?.on("error", () => {
+      // The child may exit before reading stdin (EPIPE); the callback reports the result.
+    });
+    child.stdin?.end(input);
   });
 }

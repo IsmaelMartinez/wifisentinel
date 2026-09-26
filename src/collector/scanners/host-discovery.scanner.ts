@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 import { lookupVendor } from "../oui-lookup.js";
 import { readArpTable, type ArpEntry } from "../platform/arp.js";
@@ -42,9 +42,9 @@ export interface ArpDiscoveryOptions {
  * Read the ARP table once for the whole scan. Outside stealth mode a
  * broadcast ping first stimulates replies (active — visible on the network).
  */
-export function discoverArpTable(options: ArpDiscoveryOptions): ArpEntry[] {
+export async function discoverArpTable(options: ArpDiscoveryOptions): Promise<ArpEntry[]> {
   if (!options.stealth) {
-    run(bin("ping"), broadcastPingArgs(options.broadcastAddr), 10_000);
+    await runAsync(bin("ping"), broadcastPingArgs(options.broadcastAddr), 10_000);
   }
   return readArpTable();
 }
@@ -62,18 +62,20 @@ export async function scanHosts(
   topology: NetworkScanResult["network"]["topology"];
 }> {
   // Vendor lookups from local OUI database (no network traffic)
-  const hosts: NetworkScanResult["network"]["hosts"] = arpEntries.map((entry) => ({
-    ip: entry.ip,
-    mac: entry.mac,
-    vendor: lookupVendor(entry.mac),
-  }));
+  const hosts: NetworkScanResult["network"]["hosts"] = await Promise.all(
+    arpEntries.map(async (entry) => ({
+      ip: entry.ip,
+      mac: entry.mac,
+      vendor: await lookupVendor(entry.mac),
+    })),
+  );
 
   let hops: TopologyHop[] = [];
   let doubleNat = false;
 
   if (!options.stealth) {
     // Topology: traceroute to 8.8.8.8 with max 5 hops (active — UDP probes)
-    const traceResult = run(bin("traceroute"), ["-m", "5", "-q", "1", "8.8.8.8"], 30_000);
+    const traceResult = await runAsync(bin("traceroute"), ["-m", "5", "-q", "1", "8.8.8.8"], 30_000);
     hops = parseTraceroute(traceResult.stdout);
 
     // Double NAT detection: hop 2 (index 1) is also a private IP

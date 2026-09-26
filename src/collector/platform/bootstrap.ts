@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import { bin, currentPlatform, type Platform } from "./commands.js";
 
 export interface NetworkBootstrap {
@@ -52,19 +52,21 @@ export function parseIwDevInterface(output: string): string | null {
 }
 
 /** The wireless interface to scan: the Wi-Fi hardware port on macOS, the default-route (or first iw) interface on Linux. */
-export function detectWifiInterface(platform: Platform = currentPlatform()): { iface: string; service?: string } {
+export async function detectWifiInterface(
+  platform: Platform = currentPlatform(),
+): Promise<{ iface: string; service?: string }> {
   if (platform === "darwin") {
-    const port = parseWifiHardwarePort(run(bin("networksetup", platform), ["-listallhardwareports"]).stdout);
+    const port = parseWifiHardwarePort((await runAsync(bin("networksetup", platform), ["-listallhardwareports"])).stdout);
     return port ? { iface: port.device, service: port.service } : { iface: "en0", service: "Wi-Fi" };
   }
-  const route = parseLinuxDefaultRoute(run("ip", ["route", "show", "default"]).stdout);
+  const route = parseLinuxDefaultRoute((await runAsync("ip", ["route", "show", "default"])).stdout);
   if (route) return { iface: route.iface };
-  return { iface: parseIwDevInterface(run("iw", ["dev"]).stdout) ?? "wlan0" };
+  return { iface: parseIwDevInterface((await runAsync("iw", ["dev"])).stdout) ?? "wlan0" };
 }
 
-function detectNetworkDarwin(): NetworkBootstrap {
-  const { iface, service } = detectWifiInterface("darwin");
-  const ifconfigResult = run(bin("ifconfig", "darwin"), [iface]);
+async function detectNetworkDarwin(): Promise<NetworkBootstrap> {
+  const { iface, service } = await detectWifiInterface("darwin");
+  const ifconfigResult = await runAsync(bin("ifconfig", "darwin"), [iface]);
   const inetMatch = ifconfigResult.stdout.match(
     /inet (\d+\.\d+\.\d+\.\d+) netmask (0x[0-9a-f]+) broadcast (\d+\.\d+\.\d+\.\d+)/
   );
@@ -78,13 +80,13 @@ function detectNetworkDarwin(): NetworkBootstrap {
 
   // Use networksetup for reliable gateway detection (works even with VPN active)
   let gatewayIp = "unknown";
-  const nsInfo = run(bin("networksetup", "darwin"), ["-getinfo", service ?? "Wi-Fi"]);
+  const nsInfo = await runAsync(bin("networksetup", "darwin"), ["-getinfo", service ?? "Wi-Fi"]);
   const routerMatch = nsInfo.stdout.match(/Router:\s+(\d+\.\d+\.\d+\.\d+)/);
   if (routerMatch) {
     gatewayIp = routerMatch[1];
   } else {
     // Fallback: the default route bound to this interface
-    const routeResult = run(bin("netstat", "darwin"), ["-rn"]);
+    const routeResult = await runAsync(bin("netstat", "darwin"), ["-rn"]);
     const ifaceDefault = routeResult.stdout
       .split("\n")
       .find((l) => l.startsWith("default") && l.trim().split(/\s+/).includes(iface));
@@ -95,13 +97,13 @@ function detectNetworkDarwin(): NetworkBootstrap {
   return { interface: iface, service, ip, subnet, gatewayIp, broadcastAddr };
 }
 
-function detectNetworkLinux(): NetworkBootstrap {
-  const route = parseLinuxDefaultRoute(run("ip", ["route", "show", "default"]).stdout);
-  const iface = route?.iface ?? detectWifiInterface("linux").iface;
+async function detectNetworkLinux(): Promise<NetworkBootstrap> {
+  const route = parseLinuxDefaultRoute((await runAsync("ip", ["route", "show", "default"])).stdout);
+  const iface = route?.iface ?? (await detectWifiInterface("linux")).iface;
   const gatewayIp = route?.gatewayIp ?? "unknown";
 
   // Get IP and CIDR from ip addr
-  const addrResult = run("ip", ["-o", "-4", "addr", "show", iface]);
+  const addrResult = await runAsync("ip", ["-o", "-4", "addr", "show", iface]);
   let ip = "unknown";
   let cidrBits = 24;
   const addrMatch = addrResult.stdout.match(/inet (\d+\.\d+\.\d+\.\d+)\/(\d+)/);
@@ -125,6 +127,6 @@ function detectNetworkLinux(): NetworkBootstrap {
   return { interface: iface, ip, subnet, gatewayIp, broadcastAddr };
 }
 
-export function detectNetwork(platform: Platform = currentPlatform()): NetworkBootstrap {
+export function detectNetwork(platform: Platform = currentPlatform()): Promise<NetworkBootstrap> {
   return platform === "linux" ? detectNetworkLinux() : detectNetworkDarwin();
 }

@@ -1,4 +1,4 @@
-import { run, runAsync } from "../exec.js";
+import { runAsync } from "../exec.js";
 import { bin } from "../platform/commands.js";
 import { parseNetstat, type NetstatEntry } from "../platform/netstat.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
@@ -79,7 +79,7 @@ async function reverseDns(ip: string): Promise<string | undefined> {
 export async function scanConnections(): Promise<
   NetworkScanResult["connections"]
 > {
-  const netstatOut = run(bin("netstat"), ["-an"]).stdout;
+  const netstatOut = (await runAsync(bin("netstat"), ["-an"])).stdout;
   const { established, listening, timeWait, establishedDestinations } =
     countNetstat(parseNetstat(netstatOut));
 

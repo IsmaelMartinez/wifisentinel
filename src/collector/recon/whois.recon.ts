@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { WhoisRecon } from "./schema.js";
 
 const DOMAIN_REGEX = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*\.?$/;
@@ -32,12 +32,12 @@ function parseDnssec(output: string): boolean {
   return lower.includes("signed") || lower === "yes" || lower === "true";
 }
 
-export function scanWhois(domain: string): WhoisRecon {
+export async function scanWhois(domain: string): Promise<WhoisRecon> {
   if (!DOMAIN_REGEX.test(domain)) {
     return { domain, registrar: null, createdDate: null, expiryDate: null, updatedDate: null, nameservers: [], dnssec: false, registrant: null };
   }
 
-  const result = run("whois", [domain], 20_000);
+  const result = await runAsync("whois", [domain], 20_000);
 
   if (result.exitCode !== 0 && !result.stdout) {
     return {

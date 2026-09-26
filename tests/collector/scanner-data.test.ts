@@ -43,17 +43,20 @@ describe("normaliseMac", () => {
 });
 
 describe("lookupVendor", () => {
-  it("resolves vendors from the bundled OUI database", () => {
-    assert.equal(lookupVendor("00:1b:63:84:45:e6"), "Apple, Inc.");
+  it("resolves vendors from the bundled OUI database", async () => {
+    assert.equal(await lookupVendor("00:1b:63:84:45:e6"), "Apple, Inc.");
   });
 
-  it("resolves macOS arp MACs with dropped leading zeros", () => {
-    assert.equal(lookupVendor("0:1b:63:84:45:e6"), "Apple, Inc.");
-    assert.equal(lookupVendor("48:22:54:b:d0:90"), "TP-Link Systems Inc");
+  it("resolves macOS arp MACs with dropped leading zeros", async () => {
+    assert.equal(await lookupVendor("0:1b:63:84:45:e6"), "Apple, Inc.");
+    assert.equal(await lookupVendor("48:22:54:b:d0:90"), "TP-Link Systems Inc");
+    // first entry of the file and an unassigned prefix
+    assert.equal(await lookupVendor("00:00:00:00:00:01"), "XEROX CORPORATION");
+    assert.equal(await lookupVendor("02:00:00:00:00:01"), undefined);
   });
 
-  it("returns undefined for placeholders", () => {
-    assert.equal(lookupVendor("unknown"), undefined);
+  it("returns undefined for placeholders", async () => {
+    assert.equal(await lookupVendor("unknown"), undefined);
   });
 });
 
