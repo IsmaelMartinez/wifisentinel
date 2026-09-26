@@ -166,10 +166,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: dashboard/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+
+      # The dashboard's ESLint config resolves from the root install, because
+      # typescript-eslint cannot load the dashboard's TypeScript 7.
+      - name: Install root dependencies
+        run: npm ci
 
       - name: Install dashboard dependencies
         run: cd dashboard && npm ci
+
+      - name: Lint dashboard
+        run: cd dashboard && npm run lint
+
+      - name: Typecheck dashboard
+        run: cd dashboard && npm run typecheck
 
       - name: Build dashboard
         run: cd dashboard && npm run build

@@ -6,6 +6,7 @@ import { RiskBadge } from "@/components/risk-badge";
 import { GradeBadge } from "@/components/grade-badge";
 import { EmptyState } from "@/components/empty-state";
 import { getScans, getScan } from "@/lib/store";
+import { scoreTone, toneClasses } from "@/lib/score-tone";
 
 const personaNames: Record<string, string> = {
   "red-team": "Red Team",
@@ -110,7 +111,7 @@ export default function OverviewPage() {
             <div className="flex items-end gap-1 h-16">
               {[...entries].reverse().map((e) => {
                 const height = Math.max(4, (e.securityScore / 10) * 64);
-                const color = e.securityScore >= 8 ? "bg-teal-500" : e.securityScore >= 5 ? "bg-amber-500" : "bg-red-500";
+                const color = toneClasses[scoreTone(e.securityScore)].bg;
                 const label = `Score ${e.securityScore.toFixed(1)} on ${new Date(e.timestamp).toLocaleDateString()}`;
                 return (
                   <div
@@ -132,29 +133,23 @@ export default function OverviewPage() {
             <CardTitle className="text-base">RF Summary</CardTitle>
           </CardHeader>
           <CardContent className="text-sm space-y-1">
-            {rfSummary ? (
-              <>
-                <p>
-                  Channel {rfSummary.channelMap.currentChannel} &middot;
-                  Saturation: <span className={
-                    rfSummary.channelMap.currentSaturation <= 30 ? "text-teal-400" :
-                    rfSummary.channelMap.currentSaturation <= 60 ? "text-yellow-400" : "text-red-400"
-                  }>{rfSummary.channelMap.currentSaturation}%</span>
-                </p>
-                {rfSummary.channelMap.recommendedChannel !== rfSummary.channelMap.currentChannel && (
-                  <p className="text-yellow-400">
-                    Consider channel {rfSummary.channelMap.recommendedChannel}
-                  </p>
-                )}
-                <p>
-                  Rogue APs: <span className={
-                    rfSummary.rogueAPs.riskLevel === "clear" ? "text-teal-400" : "text-red-400"
-                  }>{rfSummary.rogueAPs.riskLevel}</span>
-                </p>
-              </>
-            ) : (
-              <p className="text-muted-foreground">No RF data available</p>
+            <p>
+              Channel {rfSummary.channelMap.currentChannel} &middot;
+              Saturation: <span className={
+                rfSummary.channelMap.currentSaturation <= 30 ? "text-teal-400" :
+                rfSummary.channelMap.currentSaturation <= 60 ? "text-yellow-400" : "text-red-400"
+              }>{rfSummary.channelMap.currentSaturation}%</span>
+            </p>
+            {rfSummary.channelMap.recommendedChannel !== rfSummary.channelMap.currentChannel && (
+              <p className="text-yellow-400">
+                Consider channel {rfSummary.channelMap.recommendedChannel}
+              </p>
             )}
+            <p>
+              Rogue APs: <span className={
+                rfSummary.rogueAPs.riskLevel === "clear" ? "text-teal-400" : "text-red-400"
+              }>{rfSummary.rogueAPs.riskLevel}</span>
+            </p>
           </CardContent>
         </Card>
       </div>

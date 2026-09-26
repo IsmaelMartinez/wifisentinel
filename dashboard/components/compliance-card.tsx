@@ -1,24 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GradeBadge } from "@/components/grade-badge";
-
-interface Finding {
-  id: string;
-  title: string;
-  severity: string;
-  status: string;
-  description: string;
-  recommendation: string;
-  evidence?: string;
-}
-
-interface StandardScore {
-  standard: string;
-  name: string;
-  score: number;
-  grade: string;
-  findings: Finding[];
-  summary: string;
-}
+import { scoreTone, toneClasses } from "@/lib/score-tone";
+import type { StandardScore } from "@wifisentinel/analyser/standards/types.js";
 
 const statusIcon: Record<string, string> = {
   pass: "text-green-400",
@@ -54,9 +37,7 @@ export function ComplianceCard({ standard }: { standard: StandardScore }) {
       <CardContent>
         <div className="w-full bg-zinc-700 rounded-full h-2 mb-4">
           <div
-            className={`h-2 rounded-full ${
-              standard.score >= 80 ? "bg-green-500" : standard.score >= 60 ? "bg-yellow-500" : "bg-red-500"
-            }`}
+            className={`h-2 rounded-full ${toneClasses[scoreTone(standard.score, "compliance")].bg}`}
             style={{ width: `${standard.score}%` }}
           />
         </div>

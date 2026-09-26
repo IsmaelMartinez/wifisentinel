@@ -1,13 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ResponsiveContainer } from "recharts";
-
-interface ChannelInfo {
-  channel: number;
-  saturationScore: number;
-  networkCount: number;
-  overlapCount: number;
-}
+import type { ChannelInfo } from "@wifisentinel/analyser/rf/types.js";
 
 function barColor(score: number, isCurrent: boolean): string {
   if (isCurrent) return "#3b82f6"; // blue for current
@@ -40,7 +34,7 @@ export function ChannelChart({
           contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px" }}
           labelStyle={{ color: "#fafafa" }}
           formatter={(value, _name, props) => {
-            const item = (props as any).payload;
+            const item = props.payload;
             return [`${value ?? 0}% (${item.networks} direct, ${item.overlap} overlap)`, "Saturation"];
           }}
         />

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getScan } from "@/lib/store";
 import { renderHtmlReport } from "@wifisentinel/reporter/html.reporter.js";
-import { analyseRF } from "@wifisentinel/analyser/rf/index.js";
 
 export async function GET(
   _request: NextRequest,
@@ -10,9 +9,6 @@ export async function GET(
   try {
     const { id } = await params;
     const stored = getScan(id);
-    if (!stored.rfAnalysis) {
-      stored.rfAnalysis = analyseRF(stored.scan);
-    }
     const html = renderHtmlReport(stored);
     const date = stored.scan.meta.timestamp.split("T")[0];
 
