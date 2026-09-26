@@ -209,7 +209,7 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
 
   // Step 3: If no servers found yet and we have nslookup, try to get server from it
   if (servers.length === 0 && hasNslookup) {
-    const nsResult = run("nslookup", [TEST_DOMAIN]);
+    const nsResult = run(bin("nslookup"), [TEST_DOMAIN]);
     if (nsResult.exitCode === 0 || nsResult.stdout.length > 0) {
       servers = parseNslookupServer(nsResult.stdout);
     }
@@ -249,7 +249,7 @@ export async function scanDns(gateway: string, options: DnsScanOptions = {}): Pr
     }
   } else if (hasNslookup) {
     // Minimal hijack check with nslookup
-    const hijackResult = run("nslookup", [HIJACK_TEST_DOMAIN]);
+    const hijackResult = run(bin("nslookup"), [HIJACK_TEST_DOMAIN]);
     if (hijackResult.exitCode === 0 || hijackResult.stdout.length > 0) {
       const lines = hijackResult.stdout.split("\n");
       // Skip server/address header lines — only look at the answer section
