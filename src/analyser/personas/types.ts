@@ -92,12 +92,28 @@ export function consensusRating(ratings: RiskRating[]): RiskRating {
   let bestCount = 0;
   for (const rating of RISK_ORDER) {
     const count = counts.get(rating) ?? 0;
-    if (count > bestCount || (count === bestCount && count > 0)) {
+    // Strictly greater: RISK_ORDER runs most-severe first, so the first
+    // rating to reach a tied count is the more severe one and keeps it.
+    if (count > bestCount) {
       best = rating;
       bestCount = count;
     }
   }
   return best;
+}
+
+/**
+ * Fallback priority action when none of a persona's mapped actions apply:
+ * the recommendation of its most severe insight, so the action always
+ * addresses something the persona actually found.
+ */
+export function fallbackActions(insights: Insight[]): string[] {
+  const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
+  for (const severity of severityOrder) {
+    const top = insights.find((i) => i.severity === severity);
+    if (top) return [top.recommendation];
+  }
+  return [];
 }
 
 /** Deduplicate and order actions by frequency across personas. */

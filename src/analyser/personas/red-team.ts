@@ -1,7 +1,7 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isWeakSecurity, securityFamily } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import { fallbackActions, riskFromInsights } from "./types.js";
 
 const PERSONA_ID = "red-team" as const;
 const DISPLAY_NAME = "Red Team";
@@ -50,7 +50,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
   }
 
   // --- Weak encryption / insecure wifi security ---
-  if (isWeakSecurity(result.wifi.security)) {
+  if (classifySecurity(result.wifi.security).weak) {
     insights.push({
       id: "rt-weak-wifi-encryption",
       title: "Weak or absent Wi-Fi encryption enables passive interception",
@@ -234,7 +234,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
 
   // --- Nearby networks as targets ---
   const openNearby = result.wifi.nearbyNetworks.filter(
-    (n) => securityFamily(n.security) === "open",
+    (n) => classifySecurity(n.security).family === "open",
   );
   if (openNearby.length > 0) {
     insights.push({
@@ -341,9 +341,7 @@ function deriveActions(
   if (ids.has("rt-cameras-entry-point"))
     actions.push("Isolate IoT and camera devices on a separate VLAN");
 
-  if (actions.length === 0 && insights.length > 0) {
-    actions.push("Review and close unnecessary open ports on network hosts");
-  }
+  if (actions.length === 0) return fallbackActions(insights);
 
   return actions.slice(0, 5);
 }

@@ -1,10 +1,11 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { securityMode, supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import {
   type Finding,
   type StandardScore,
   computeGrade,
   computeScore,
+  wpaTierStatus,
 } from "./types.js";
 
 const STANDARD = "nist-800-153" as const;
@@ -48,13 +49,8 @@ function checkClientIsolation(result: NetworkScanResult): Finding {
 }
 
 function checkEncryptionStrength(result: NetworkScanResult): Finding {
-  const isWpa3 = supportsWpa3(result.wifi.security);
-  const isWpa2 = supportsWpa2(result.wifi.security);
-
-  let status: Finding["status"];
-  if (isWpa3) status = "pass";
-  else if (isWpa2) status = "partial";
-  else status = "fail";
+  const { wpaTier } = classifySecurity(result.wifi.security);
+  const status = wpaTierStatus(wpaTier);
 
   return {
     id: "NIST-W-2.1",
@@ -64,15 +60,18 @@ function checkEncryptionStrength(result: NetworkScanResult): Finding {
     status,
     description:
       "NIST recommends the strongest available encryption. WPA3 provides simultaneous authentication of equals (SAE).",
-    recommendation: isWpa3
-      ? "No action needed."
-      : "Migrate to WPA3. If devices lack WPA3 support, use WPA2 with AES-CCMP only.",
+    recommendation:
+      wpaTier === "wpa3"
+        ? "No action needed."
+        : wpaTier === "unknown"
+          ? "Security mode was not reported — confirm the access point uses WPA3, or WPA2 at minimum."
+          : "Migrate to WPA3. If devices lack WPA3 support, use WPA2 with AES-CCMP only.",
     evidence: `Protocol: ${result.wifi.security}`,
   };
 }
 
 function checkKeyManagement(result: NetworkScanResult): Finding {
-  const mode = securityMode(result.wifi.security);
+  const { mode } = classifySecurity(result.wifi.security);
   const hasEnterprise = mode === "Enterprise";
   const hasPersonal = mode === "Personal";
 
@@ -212,22 +211,22 @@ function checkIcmpRedirects(result: NetworkScanResult): Finding {
 }
 
 function checkLogging(result: NetworkScanResult): Finding {
-  const hasOtel = !!result.meta.toolchain["otel"];
-  const hasTshark = !!result.meta.toolchain["tshark"];
+  // Toolchain keys are capability names; packetAnalysis resolves to tshark or
+  // tcpdump, either of which can record traffic for forensic review.
+  const captureTool = result.meta.toolchain["packetAnalysis"] ?? null;
 
   return {
     id: "NIST-W-5.1",
     standard: STANDARD,
     title: "Security logging capability",
     severity: "medium",
-    status: hasOtel || hasTshark ? "pass" : "partial",
+    status: captureTool ? "pass" : "partial",
     description:
       "Comprehensive logging supports incident response and forensic analysis of security events.",
-    recommendation:
-      hasOtel || hasTshark
-        ? "No action needed — logging infrastructure is available."
-        : "Set up OTEL telemetry and traffic capture for comprehensive security logging.",
-    evidence: `OTEL: ${hasOtel ? "available" : "not available"}, tshark: ${hasTshark ? "available" : "not available"}`,
+    recommendation: captureTool
+      ? "No action needed — packet capture is available for security logging."
+      : "Install tshark or tcpdump so network traffic can be captured for security logging.",
+    evidence: `Packet capture tool: ${captureTool ?? "not available"}`,
   };
 }
 

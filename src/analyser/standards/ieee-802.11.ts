@@ -1,24 +1,24 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { supportsWpa2, supportsWpa3 } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import {
   type Finding,
   type StandardScore,
   computeGrade,
   computeScore,
+  wpaTierStatus,
 } from "./types.js";
+import { wifiGeneration } from "./protocol.js";
 
 const STANDARD = "ieee-802.11" as const;
 
 function checkProtocolCompliance(result: NetworkScanResult): Finding {
-  const proto = result.wifi.protocol.toLowerCase();
-  const isAx = proto.includes("ax") || proto.includes("wifi 6") || proto.includes("802.11ax");
-  const isAc = proto.includes("ac") || proto.includes("wifi 5") || proto.includes("802.11ac");
-  const isN = proto.includes("n") || proto.includes("wifi 4") || proto.includes("802.11n");
+  // Wi-Fi 6 (ax) and 7 (be) pass; Wi-Fi 4/5 (n/ac) are partial; a/b/g fail.
+  const generation = wifiGeneration(result.wifi.protocol);
 
   let status: Finding["status"];
-  if (isAx) status = "pass";
-  else if (isAc) status = "partial";
-  else if (isN) status = "partial";
+  if (generation === undefined) status = "not-applicable";
+  else if (generation >= 6) status = "pass";
+  else if (generation >= 4) status = "partial";
   else status = "fail";
 
   return {
@@ -30,7 +30,7 @@ function checkProtocolCompliance(result: NetworkScanResult): Finding {
     description:
       "Modern 802.11ax (Wi-Fi 6) or 802.11ac (Wi-Fi 5) provides better performance, security, and spectrum efficiency.",
     recommendation:
-      status === "pass"
+      status === "pass" || status === "not-applicable"
         ? "No action needed."
         : "Upgrade to an 802.11ax (Wi-Fi 6) capable access point and client adapter.",
     evidence: `Protocol: ${result.wifi.protocol}`,
@@ -177,22 +177,24 @@ function checkSignalStrength(result: NetworkScanResult): Finding {
 }
 
 function checkSecurityProtocol(result: NetworkScanResult): Finding {
-  const isWpa3 = supportsWpa3(result.wifi.security);
-  const isWpa2 = supportsWpa2(result.wifi.security);
+  const { wpaTier } = classifySecurity(result.wifi.security);
 
   return {
     id: "IEEE-4.1",
     standard: STANDARD,
     title: "Security protocol compliance",
     severity: "high",
-    status: isWpa3 ? "pass" : isWpa2 ? "partial" : "fail",
+    status: wpaTierStatus(wpaTier),
     description:
       "IEEE 802.11 mandates robust security. WPA3 (802.11-2020) is the current standard; WPA2 remains acceptable.",
-    recommendation: isWpa3
-      ? "No action needed."
-      : isWpa2
-        ? "Plan migration to WPA3 for enhanced security."
-        : "Immediately upgrade to WPA2 or WPA3.",
+    recommendation:
+      wpaTier === "wpa3"
+        ? "No action needed."
+        : wpaTier === "wpa2"
+          ? "Plan migration to WPA3 for enhanced security."
+          : wpaTier === "unknown"
+            ? "Security mode was not reported — confirm the access point uses WPA3, or WPA2 at minimum."
+            : "Immediately upgrade to WPA2 or WPA3.",
     evidence: `Security: ${result.wifi.security}`,
   };
 }

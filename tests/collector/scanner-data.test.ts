@@ -160,6 +160,12 @@ describe("client isolation target", () => {
     assert.equal(pickIsolationTarget(parseArp(MACOS_ARP)), undefined);
   });
 
+  it("returns undefined when the local IP is unknown, since macOS lists this host as a permanent ARP entry", () => {
+    const own = parseArp("? (192.168.1.23) at a6:2c:10:3b:5f:f5 on en0 ifscope permanent [ethernet]");
+    assert.equal(pickIsolationTarget(own, "192.168.1.1", "unknown"), undefined);
+    assert.equal(pickIsolationTarget(own, "192.168.1.1"), undefined);
+  });
+
   it("returns undefined when only the gateway is known", () => {
     const arp = MACOS_ARP.split("\n").filter((l) => !l.includes("192.168.1.23") && !l.includes("192.168.1.40")).join("\n");
     assert.equal(pickIsolationTarget(parseArp(arp), "192.168.1.1"), undefined);

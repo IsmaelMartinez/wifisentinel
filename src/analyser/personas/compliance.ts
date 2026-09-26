@@ -1,5 +1,5 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isWeakSecurity } from "../../collector/schema/security.js";
+import { classifySecurity } from "../security.js";
 import type { Insight, PersonaAnalysis } from "./types.js";
 import { riskFromInsights } from "./types.js";
 
@@ -14,7 +14,7 @@ export function analyseAsCompliance(
   const insights: Insight[] = [];
 
   // --- Encryption controls ---
-  if (isWeakSecurity(result.wifi.security)) {
+  if (classifySecurity(result.wifi.security).weak) {
     insights.push({
       id: "co-weak-encryption",
       title:
@@ -98,25 +98,6 @@ export function analyseAsCompliance(
         ...unknownDevices.map((d) => d.ip),
       ],
       references: ["CIS-W-2.1", "NIST-800-153-2.1"],
-    });
-  }
-
-  // --- Audit trail / logging ---
-  const hasOtel = Object.keys(result.meta.toolchain).some((k) =>
-    k.toLowerCase().includes("otel"),
-  );
-  if (!hasOtel) {
-    insights.push({
-      id: "co-no-audit-logging",
-      title: "No OpenTelemetry instrumentation detected — audit trail gap",
-      severity: "medium",
-      category: "audit-trail",
-      description: `Compliance frameworks require adequate audit logging for security events. Without OTEL or equivalent instrumentation, there is no verifiable audit trail for incident investigation or regulatory review.`,
-      technicalDetail: `Toolchain entries: ${Object.keys(result.meta.toolchain).join(", ")}. No OTEL-related tooling detected.`,
-      recommendation:
-        "Implement OpenTelemetry instrumentation for security-relevant events. Configure log export to a tamper-evident store.",
-      affectedAssets: [result.meta.hostname],
-      references: ["NIST-800-153-6.2"],
     });
   }
 
@@ -260,8 +241,6 @@ function deriveActions(insights: Insight[]): string[] {
     );
   if (ids.has("co-dns-integrity-compromised"))
     actions.push("Remediate DNS interception to restore data integrity controls");
-  if (ids.has("co-no-audit-logging"))
-    actions.push("Implement audit logging with OpenTelemetry instrumentation");
 
   return actions.slice(0, 5);
 }
