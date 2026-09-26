@@ -2,7 +2,7 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { parsePositiveInt } from "./options.js";
-import { listScans, loadScan } from "../store/index.js";
+import { listScans, loadScans } from "../store/index.js";
 import { buildPresenceReport, normaliseMac } from "../analyser/devices/tracker.js";
 import type { DeviceTimeline, PresenceReport } from "../analyser/devices/types.js";
 import { pad } from "../reporter/render-helpers.js";
@@ -127,7 +127,7 @@ export function registerDevicesCommand(program: Command): void {
         return;
       }
 
-      let stored = entries.map((e) => loadScan(e.scanId));
+      let stored = loadScans(entries);
 
       if (opts.since) {
         const parsed = new Date(opts.since);

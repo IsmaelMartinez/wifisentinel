@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { parsePositiveInt } from "./options.js";
-import { listScans } from "../store/index.js";
+import { listScans, rebuildIndex } from "../store/index.js";
 import { pad } from "../reporter/render-helpers.js";
 
 function riskColor(risk: string): (s: string) => string {
@@ -24,7 +24,9 @@ export function registerHistoryCommand(program: Command): void {
     .option("-n, --limit <count>", "Number of scans to show", parsePositiveInt, 20)
     .option("--ssid <name>", "Filter by SSID")
     .option("--json", "Output as JSON")
+    .option("--reindex", "Rebuild the scan index from the stored scan files first")
     .action((opts) => {
+      if (opts.reindex) rebuildIndex();
       const entries = listScans({
         limit: opts.limit,
         ssid: opts.ssid,

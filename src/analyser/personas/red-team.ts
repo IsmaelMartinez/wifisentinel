@@ -1,12 +1,25 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
-import { isWeakSecurity, securityFamily } from "../../collector/schema/security.js";
-import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import { classifySecurity } from "../security.js";
+import type { Insight, PersonaAnalysis, PersonaSpec } from "./types.js";
+import { buildPersonaAnalysis } from "./types.js";
 
-const PERSONA_ID = "red-team" as const;
-const DISPLAY_NAME = "Red Team";
-const PERSPECTIVE =
-  "Identifies exploitable weaknesses an attacker would target to gain access, move laterally, and exfiltrate data.";
+export const redTeamSpec: PersonaSpec = {
+  persona: "red-team",
+  displayName: "Red Team",
+  perspective:
+    "Identifies exploitable weaknesses an attacker would target to gain access, move laterally, and exfiltrate data.",
+  actions: {
+    "rt-firewall-disabled": { key: "firewall", text: "Enable the host firewall and stealth mode immediately" },
+    "rt-weak-wifi-encryption": { key: "wifi-encryption", text: "Upgrade Wi-Fi encryption to WPA3 or WPA2-AES" },
+    "rt-active-intrusion-indicators": { key: "intrusion-triage", text: "Investigate and isolate hosts with high-severity intrusion indicators" },
+    "rt-no-client-isolation": { key: "client-isolation", text: "Enable client isolation to prevent lateral movement" },
+    "rt-ip-forwarding": { key: "ip-forwarding", text: "Disable IP forwarding on non-router hosts" },
+    "rt-dns-hijack": { key: "encrypted-dns", text: "Switch to encrypted DNS (DoH/DoT) to prevent interception" },
+    "rt-unencrypted-traffic": { key: "enforce-tls", text: "Eliminate unencrypted traffic flows — enforce TLS everywhere" },
+    "rt-cameras-entry-point": { key: "isolate-iot", text: "Isolate IoT and camera devices on a separate VLAN" },
+  },
+  fallback: true,
+};
 
 export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
   const insights: Insight[] = [];
@@ -26,7 +39,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
         recommendation:
           "Close unnecessary ports and ensure exposed services are patched and hardened. Apply network segmentation to restrict access.",
         affectedAssets: [host.ip, host.mac],
-        references: ["NIST-800-153-4.2", "CIS-W-3.1"],
+        references: ["OWASP-IoT-2"],
       });
     }
   }
@@ -45,12 +58,12 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Bind services to 127.0.0.1 unless network access is required. Use host-based firewall rules to restrict access.",
       affectedAssets: exposed.map((s) => `${s.bindAddress}:${s.port}`),
-      references: ["CIS-W-5.2", "OWASP-IoT-6"],
+      references: ["OWASP-IoT-3"],
     });
   }
 
   // --- Weak encryption / insecure wifi security ---
-  if (isWeakSecurity(result.wifi.security)) {
+  if (classifySecurity(result.wifi.security).weak) {
     insights.push({
       id: "rt-weak-wifi-encryption",
       title: "Weak or absent Wi-Fi encryption enables passive interception",
@@ -61,7 +74,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Upgrade to WPA3-Personal or WPA2-AES at minimum. Disable legacy protocol support on the access point.",
       affectedAssets: [result.wifi.bssid, result.wifi.ssid ?? "(hidden SSID)"],
-      references: ["CIS-W-1.1", "IEEE-802.11-9.4", "NIST-800-153-3.2"],
+      references: ["CIS-W-1.1", "IEEE-4.1", "NIST-W-2.1"],
     });
   }
 
@@ -77,7 +90,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enable AP isolation / client isolation on the wireless access point. Segment IoT and guest devices onto separate VLANs.",
       affectedAssets: result.network.hosts.map((h) => h.ip),
-      references: ["CIS-W-2.3", "NIST-800-153-4.1"],
+      references: ["CIS-W-1.3", "NIST-W-1.2"],
     });
   }
 
@@ -93,7 +106,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enable the host firewall immediately and enable stealth mode to prevent port scan responses.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.1", "NIST-800-153-5.1"],
+      references: ["CIS-W-2.1", "NIST-W-4.2"],
     });
   } else if (!result.security.firewall.stealthMode) {
     insights.push({
@@ -105,7 +118,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       technicalDetail: `Firewall is enabled but stealth mode is off. The host will respond to ICMP echo and closed-port RST packets.`,
       recommendation: "Enable stealth mode in the firewall settings.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.1.1"],
+      references: ["CIS-W-2.2"],
     });
   }
 
@@ -121,7 +134,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Activate the VPN when on untrusted networks. Consider an always-on VPN policy.",
       affectedAssets: [result.meta.hostname],
-      references: ["NIST-800-153-4.3"],
+      references: ["CIS-W-3.1"],
     });
   }
 
@@ -137,7 +150,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Switch to encrypted DNS (DoH/DoT) and verify DNS responses with DNSSEC where possible.",
       affectedAssets: result.network.dns.servers,
-      references: ["CIS-W-4.1", "NIST-800-153-3.3"],
+      references: ["CIS-W-4.1", "CIS-W-4.3"],
     });
   }
 
@@ -178,7 +191,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Disable mDNS/Bonjour on hosts that don't require it. Segment mDNS traffic to trusted VLANs only.",
       affectedAssets: result.traffic.mdnsLeaks.map((m) => m.host),
-      references: ["CIS-W-3.3"],
+      references: ["OWASP-IoT-6"],
     });
   }
 
@@ -194,7 +207,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "If double NAT is unintentional, simplify the topology. If intentional, ensure both routers are hardened.",
       affectedAssets: result.network.topology.hops.map((h) => h.ip),
-      references: ["NIST-800-153-4.1"],
+      references: ["NIST-W-4.1"],
     });
   }
 
@@ -211,7 +224,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Disable IP forwarding unless this host is intentionally functioning as a router.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-5.3", "NIST-800-153-5.2"],
+      references: ["NIST-W-4.3"],
     });
   }
 
@@ -228,13 +241,13 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Isolate cameras on a dedicated VLAN. Change default credentials. Disable UPnP and remote access features.",
       affectedAssets: cameras.map((c) => c.ip),
-      references: ["OWASP-IoT-1", "OWASP-IoT-3"],
+      references: ["OWASP-IoT-1", "CIS-W-5.2"],
     });
   }
 
   // --- Nearby networks as targets ---
   const openNearby = result.wifi.nearbyNetworks.filter(
-    (n) => securityFamily(n.security) === "open",
+    (n) => classifySecurity(n.security).family === "open",
   );
   if (openNearby.length > 0) {
     insights.push({
@@ -249,7 +262,7 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
       affectedAssets: openNearby.map(
         (n) => n.bssid ?? n.ssid ?? "(hidden)",
       ),
-      references: ["IEEE-802.11-12.1", "CIS-W-1.2"],
+      references: ["OWASP-IoT-5"],
     });
   }
 
@@ -277,22 +290,12 @@ export function analyseAsRedTeam(result: NetworkScanResult): PersonaAnalysis {
         affectedAssets: result.intrusionIndicators.suspiciousHosts.map(
           (h) => h.ip,
         ),
-        references: ["NIST-800-153-6.1", "CIS-W-6.1"],
+        references: ["NIST-W-3.2", "CIS-W-5.1"],
       });
     }
   }
 
-  const priorityActions = deriveActions(result, insights);
-
-  return {
-    persona: PERSONA_ID,
-    displayName: DISPLAY_NAME,
-    perspective: PERSPECTIVE,
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildSummary(result, insights),
-    insights,
-    priorityActions,
-  };
+  return buildPersonaAnalysis(redTeamSpec, insights, buildSummary(result, insights));
 }
 
 function buildSummary(
@@ -313,37 +316,4 @@ function buildSummary(
     return `The network has a moderate attack surface with ${insights.length} finding(s). While no critical footholds were identified, the exposed services and configuration gaps provide reconnaissance value and potential entry points for a persistent attacker.`;
   }
   return `The network presents a hardened posture from an attacker's perspective. No significant footholds or lateral movement opportunities were identified in this scan.`;
-}
-
-function deriveActions(
-  result: NetworkScanResult,
-  insights: Insight[],
-): string[] {
-  const actions: string[] = [];
-  const ids = new Set(insights.map((i) => i.id));
-
-  if (ids.has("rt-firewall-disabled"))
-    actions.push("Enable the host firewall and stealth mode immediately");
-  if (ids.has("rt-weak-wifi-encryption"))
-    actions.push("Upgrade Wi-Fi encryption to WPA3 or WPA2-AES");
-  if (ids.has("rt-active-intrusion-indicators"))
-    actions.push(
-      "Investigate and isolate hosts with high-severity intrusion indicators",
-    );
-  if (ids.has("rt-no-client-isolation"))
-    actions.push("Enable client isolation to prevent lateral movement");
-  if (ids.has("rt-ip-forwarding"))
-    actions.push("Disable IP forwarding on non-router hosts");
-  if (ids.has("rt-dns-hijack"))
-    actions.push("Switch to encrypted DNS (DoH/DoT) to prevent interception");
-  if (ids.has("rt-unencrypted-traffic"))
-    actions.push("Eliminate unencrypted traffic flows — enforce TLS everywhere");
-  if (ids.has("rt-cameras-entry-point"))
-    actions.push("Isolate IoT and camera devices on a separate VLAN");
-
-  if (actions.length === 0 && insights.length > 0) {
-    actions.push("Review and close unnecessary open ports on network hosts");
-  }
-
-  return actions.slice(0, 5);
 }

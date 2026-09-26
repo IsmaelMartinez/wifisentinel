@@ -1,5 +1,7 @@
 import { run } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
+import { bin } from "../platform/commands.js";
+import { sleep } from "../util.js";
 
 const COMMON_PORTS: number[] = [
   22, 23, 53, 80, 443, 445, 548, 554, 3000, 5000, 7547, 8080, 8443, 8554, 9100,
@@ -29,10 +31,14 @@ interface PortResult {
   state: string;
 }
 
+export function openPortsOnly(results: PortResult[]): PortResult[] {
+  return results.filter((r) => r.state === "open");
+}
+
 function scanHostPort(ip: string, port: number): PortResult {
   const service = PORT_SERVICE_MAP[port] ?? `port-${port}`;
   // nc -z: zero-I/O mode (scan only), -w 2: 2-second timeout
-  const result = run("/usr/bin/nc", ["-z", "-w", "2", ip, String(port)], 5_000);
+  const result = run(bin("nc"), ["-z", "-w", "2", ip, String(port)], 5_000);
   const state = result.exitCode === 0 ? "open" : "closed";
   return { port, service, state };
 }
@@ -90,10 +96,6 @@ export function shuffle<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 export interface PortScanOptions {
   stealth?: boolean;
 }
@@ -119,11 +121,12 @@ export async function scanPorts(
       }
       results.push(scanHostPort(host.ip, port));
     }
-    hostPorts.set(host.ip, results);
+    // Only open ports are reported; closed probes are not findings.
+    hostPorts.set(host.ip, openPortsOnly(results));
   }
 
   // 2. Discover local listening services via lsof
-  const lsofResult = run("/usr/sbin/lsof", ["-i", "-P", "-n"], 15_000);
+  const lsofResult = run(bin("lsof"), ["-i", "-P", "-n"], 15_000);
   const lsofEntries = deduplicateLsof(parseLsofOutput(lsofResult.stdout));
 
   const localServices: NetworkScanResult["localServices"] = lsofEntries
