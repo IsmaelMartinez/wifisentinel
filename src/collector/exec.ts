@@ -37,10 +37,11 @@ export function run(
 export function runAsync(
   binary: string,
   args: string[] = [],
-  timeoutMs = 30_000
+  timeoutMs = 30_000,
+  input?: Buffer
 ): Promise<ExecResult> {
   return new Promise((resolve) => {
-    execFileCb(
+    const child = execFileCb(
       binary,
       args,
       { encoding: "utf-8", timeout: timeoutMs },
@@ -52,5 +53,9 @@ export function runAsync(
         });
       }
     );
+    if (input) {
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(input);
+    }
   });
 }
