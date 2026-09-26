@@ -15,7 +15,3 @@ export function getScan(id: string): StoredScan & { rfAnalysis: RFAnalysis } {
   const stored = loadScan(id);
   return { ...stored, rfAnalysis: stored.rfAnalysis ?? analyseRF(stored.scan) };
 }
-
-export function getRFAnalysis(id: string): RFAnalysis {
-  return getScan(id).rfAnalysis;
-}
