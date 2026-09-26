@@ -20,6 +20,9 @@
   "bin": {
     "wifisentinel": "./dist/cli.js"
   },
+  "files": [
+    "dist/"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
