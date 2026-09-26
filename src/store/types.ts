@@ -15,7 +15,7 @@ export const IndexEntry = z.object({
   filename: z.string(),
   // Scan source, so trend consumers can gate or annotate series without
   // loading every scan file. Optional: entries written before these fields
-  // existed stay valid (`wifisentinel rebuild-index` backfills them).
+  // existed stay valid (`wifisentinel history --reindex` backfills them).
   platform: z.string().optional(),
   partial: z.boolean().optional(),
 });

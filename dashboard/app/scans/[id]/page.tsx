@@ -151,43 +151,37 @@ export default async function ScanDetailPage({
 
         {/* RF Tab */}
         <TabsContent value="rf" className="space-y-4 mt-4" aria-label="RF intelligence">
-          {rfAnalysis ? (
-            <>
-              <Card>
-                <CardHeader><CardTitle className="text-base">Channel Saturation</CardTitle></CardHeader>
-                <CardContent>
-                  <ChannelChart
-                    channels={rfAnalysis.channelMap.channels}
-                    currentChannel={rfAnalysis.channelMap.currentChannel}
-                  />
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {rfAnalysis.channelMap.recommendationReason}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-base">Rogue AP Detection</CardTitle></CardHeader>
-                <CardContent>
-                  {rfAnalysis.rogueAPs.findings.length === 0 ? (
-                    <p className="text-teal-400">No rogue APs detected.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {rfAnalysis.rogueAPs.findings.map((f, i) => (
-                        <div key={i} className="text-sm">
-                          <span className={f.severity === "high" ? "text-red-400" : "text-amber-400"}>
-                            [{f.severity.toUpperCase()}]
-                          </span>{" "}
-                          {f.description}
-                        </div>
-                      ))}
+          <Card>
+            <CardHeader><CardTitle className="text-base">Channel Saturation</CardTitle></CardHeader>
+            <CardContent>
+              <ChannelChart
+                channels={rfAnalysis.channelMap.channels}
+                currentChannel={rfAnalysis.channelMap.currentChannel}
+              />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {rfAnalysis.channelMap.recommendationReason}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base">Rogue AP Detection</CardTitle></CardHeader>
+            <CardContent>
+              {rfAnalysis.rogueAPs.findings.length === 0 ? (
+                <p className="text-teal-400">No rogue APs detected.</p>
+              ) : (
+                <div className="space-y-2">
+                  {rfAnalysis.rogueAPs.findings.map((f, i) => (
+                    <div key={i} className="text-sm">
+                      <span className={f.severity === "high" ? "text-red-400" : "text-amber-400"}>
+                        [{f.severity.toUpperCase()}]
+                      </span>{" "}
+                      {f.description}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <p className="text-muted-foreground">No RF analysis data for this scan.</p>
-          )}
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

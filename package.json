@@ -20,13 +20,16 @@
   "bin": {
     "wifisentinel": "./dist/cli.js"
   },
+  "files": [
+    "dist/"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "scan": "tsx src/cli.ts scan",
     "typecheck": "tsc -p tsconfig.check.json",
-    "dashboard": "cd dashboard && npx next dev --hostname 127.0.0.1",
-    "test": "find tests -name '*.test.ts' | xargs node --import tsx --test",
+    "dashboard": "cd dashboard && npx next dev --webpack --hostname 127.0.0.1",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "lint": "eslint src/ tests/"
   },
   "dependencies": {
@@ -44,7 +47,6 @@
     "listr2": "^11.1.0",
     "log-update": "^8.0.0",
     "oui-data": "^2.1.23",
-    "sparkly": "^6.0.1",
     "terminal-link": "^5.0.0",
     "zod": "^4.6.5"
   },
@@ -57,7 +59,7 @@
     "typescript-eslint": "^8.70.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "overrides": {
     "@opentelemetry/otlp-transformer": {

@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { CrtRecon, CrtEntry } from "./schema.js";
 
 interface CrtShEntry {
@@ -30,9 +30,9 @@ function extractSubdomains(entries: CrtShEntry[], domain: string): string[] {
   return [...seen].sort();
 }
 
-export function scanCrt(domain: string): CrtRecon {
+export async function scanCrt(domain: string): Promise<CrtRecon> {
   const url = `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`;
-  const result = run("curl", ["-s", "--max-time", "15", url], 20_000);
+  const result = await runAsync("curl", ["-s", "--max-time", "15", url], 20_000);
 
   if (result.exitCode !== 0 || !result.stdout) {
     return { domain, entries: [], uniqueSubdomains: [] };

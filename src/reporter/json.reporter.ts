@@ -1,21 +1,14 @@
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
-import { scoreAllStandards } from "../analyser/standards/index.js";
-import { analyseAllPersonas } from "../analyser/personas/index.js";
+import type { ComplianceReport } from "../analyser/standards/types.js";
+import type { FullAnalysis } from "../analyser/personas/types.js";
 
 export function renderJsonReport(
   result: NetworkScanResult,
-  options?: { pretty?: boolean },
+  computed: { compliance: ComplianceReport; analysis: FullAnalysis },
 ): string {
-  const compliance = scoreAllStandards(result);
-  const analysis = analyseAllPersonas(result);
-
-  const combined = {
-    scan: result,
-    compliance,
-    analysis,
-  };
-
-  return options?.pretty !== false
-    ? JSON.stringify(combined, null, 2)
-    : JSON.stringify(combined);
+  return JSON.stringify(
+    { scan: result, compliance: computed.compliance, analysis: computed.analysis },
+    null,
+    2,
+  );
 }

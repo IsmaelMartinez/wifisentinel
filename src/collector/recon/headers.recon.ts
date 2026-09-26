@@ -1,4 +1,4 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { HeadersRecon, HeaderCheck } from "./schema.js";
 
 interface HeaderSpec {
@@ -93,9 +93,9 @@ function scoreToGrade(score: number): "A" | "B" | "C" | "D" | "F" {
   return "F";
 }
 
-export function scanHeaders(domain: string): HeadersRecon {
+export async function scanHeaders(domain: string): Promise<HeadersRecon> {
   const url = `https://${domain}`;
-  const result = run("curl", ["-sI", "-L", "--proto", "=https", "--max-redirs", "3", "--max-time", "10", url], 15_000);
+  const result = await runAsync("curl", ["-sI", "-L", "--proto", "=https", "--max-redirs", "3", "--max-time", "10", url], 15_000);
 
   if (result.exitCode !== 0 && !result.stdout) {
     return {

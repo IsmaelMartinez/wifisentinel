@@ -122,7 +122,7 @@
   - [x] CLI-side `wifisentinel import <file>` command with relaxed schema for `meta.platform: "android"`
   - [x] JVM unit tests for the `LocalAnalyser` rules (pure, no emulator)
   - [x] JVM unit tests for `LocalScanner`/`HostProbe` mapping (pure `WifiMapping` WiFi/network helpers + `HostMerge` merge-by-IP/subnet helpers, no device)
-  - [ ] Tests: emulator instrumentation smoke test (Room + scan pipeline on a real device/emulator)
+  - [x] Tests: emulator instrumentation tests (Compose smoke test, Room DAO test, scan-to-history end-to-end), run by the `android-instrumented` CI job
 
 ## Phase 7: Continuous Monitoring (IN PROGRESS)
 
@@ -139,4 +139,4 @@
 These are exploratory ideas that are on-hold — no implementation has landed and they are not on the active roadmap.
 
 - [ ] LG webOS TV controller (SSAP over `wss://…:3001`) — discovered via the scanner's host discovery, originally planned as a scriptable remote. No code in the repo.
-- [ ] Curated UK IPTV playlist — `public/uk-freeview-plus.m3u` is checked in, but no CLI command consumes it.
+- [ ] Curated UK IPTV playlist — explored, but nothing in the CLI or dashboard consumes one.

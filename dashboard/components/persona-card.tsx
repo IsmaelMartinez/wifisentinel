@@ -4,25 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RiskBadge } from "@/components/risk-badge";
 import { ChevronDown, ChevronRight } from "lucide-react";
-
-interface Insight {
-  id: string;
-  title: string;
-  severity: string;
-  description: string;
-  technicalDetail: string;
-  recommendation: string;
-  affectedAssets: string[];
-}
-
-interface PersonaAnalysis {
-  persona: string;
-  displayName: string;
-  riskRating: string;
-  executiveSummary: string;
-  insights: Insight[];
-  priorityActions: string[];
-}
+import type { PersonaAnalysis } from "@wifisentinel/analyser/personas/types.js";
 
 const severityColor: Record<string, string> = {
   critical: "text-red-500",

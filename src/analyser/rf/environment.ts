@@ -1,9 +1,6 @@
 // src/analyser/rf/environment.ts
 import type { NetworkScanResult, NearbyNetwork } from "../../collector/schema/scan-result.js";
-import {
-  securityChanged,
-  isWeakerSecurity,
-} from "../../collector/schema/security.js";
+import { isSecurityDowngrade, securityChanged } from "../security.js";
 import type { EnvironmentChange, EnvironmentAnalysis } from "./types.js";
 
 /**
@@ -65,13 +62,13 @@ export function detectEnvironmentChanges(
     // a macOS "WPA2 Personal" reading of the same AP stays quiet instead of
     // flagging every shared AP.
     if (securityChanged(current_net.security, baseline_net.security)) {
-      const isDowngrade = isWeakerSecurity(current_net.security, baseline_net.security);
+      const downgraded = isSecurityDowngrade(baseline_net.security, current_net.security);
       changes.push({
         type: "security_change",
         ssid: current_net.ssid,
         bssid: current_net.bssid,
         detail: `Security changed: ${baseline_net.security} -> ${current_net.security}`,
-        severity: isDowngrade ? "high" : "medium",
+        severity: downgraded ? "high" : "medium",
       });
     }
 

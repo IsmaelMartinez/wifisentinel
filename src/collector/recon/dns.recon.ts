@@ -1,10 +1,13 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { DnsRecon, DnsRecord } from "./schema.js";
+import { mapLimit } from "../util.js";
 
 const DOMAIN_REGEX = /^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*\.?$/;
 const HOSTNAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9.-]{0,253}[a-zA-Z0-9])?$/;
 
 const RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "SOA", "CNAME"] as const;
+
+const DIG_CONCURRENCY = 8;
 
 const SUBDOMAIN_PREFIXES = [
   "www",
@@ -45,37 +48,34 @@ function parseDigRecords(output: string, type: string): DnsRecord[] {
   return records;
 }
 
-function queryRecords(domain: string, type: string): DnsRecord[] {
-  const result = run("dig", ["+noall", "+answer", domain, type], 10_000);
+async function queryRecords(domain: string, type: string): Promise<DnsRecord[]> {
+  const result = await runAsync("dig", ["+noall", "+answer", domain, type], 10_000);
   if (result.exitCode !== 0) return [];
   return parseDigRecords(result.stdout, type);
 }
 
-function discoverSubdomains(
+async function discoverSubdomains(
   domain: string
-): Array<{ name: string; ips: string[] }> {
-  const found: Array<{ name: string; ips: string[] }> = [];
-  for (const prefix of SUBDOMAIN_PREFIXES) {
+): Promise<Array<{ name: string; ips: string[] }>> {
+  const results = await mapLimit(SUBDOMAIN_PREFIXES, DIG_CONCURRENCY, async (prefix) => {
     const fqdn = `${prefix}.${domain}`;
-    const result = run("dig", ["+short", fqdn, "A"], 5_000);
-    if (result.exitCode !== 0 || !result.stdout) continue;
+    const result = await runAsync("dig", ["+short", fqdn, "A"], 5_000);
+    if (result.exitCode !== 0 || !result.stdout) return null;
 
     const ips = result.stdout
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith(";") && /^[\d.]+$/.test(l));
 
-    if (ips.length > 0) {
-      found.push({ name: fqdn, ips });
-    }
-  }
-  return found;
+    return ips.length > 0 ? { name: fqdn, ips } : null;
+  });
+  return results.filter((r): r is { name: string; ips: string[] } => r !== null);
 }
 
-function attemptZoneTransfer(
+async function attemptZoneTransfer(
   domain: string,
   nameservers: string[]
-): { attempted: boolean; vulnerable: boolean; server?: string } {
+): Promise<{ attempted: boolean; vulnerable: boolean; server?: string }> {
   if (nameservers.length === 0) {
     return { attempted: false, vulnerable: false };
   }
@@ -84,7 +84,7 @@ function attemptZoneTransfer(
     // Strip trailing dot from NS record value
     const server = ns.replace(/\.$/, "");
     if (!HOSTNAME_REGEX.test(server)) continue;
-    const result = run("dig", ["axfr", `@${server}`, domain], 15_000);
+    const result = await runAsync("dig", ["axfr", `@${server}`, domain], 15_000);
 
     // A successful zone transfer contains record lines (not just SOA or error)
     if (result.exitCode === 0 && result.stdout) {
@@ -101,25 +101,25 @@ function attemptZoneTransfer(
   return { attempted: true, vulnerable: false };
 }
 
-export function scanDns(domain: string, options?: { zoneTransfer?: boolean }): DnsRecon {
+export async function scanDns(domain: string, options?: { zoneTransfer?: boolean }): Promise<DnsRecon> {
   if (!DOMAIN_REGEX.test(domain)) {
     return { domain, records: [], subdomains: [], zoneTransfer: { attempted: false, vulnerable: false }, nameservers: [] };
   }
 
-  const records: DnsRecord[] = [];
-
-  for (const type of RECORD_TYPES) {
-    records.push(...queryRecords(domain, type));
-  }
+  const records: DnsRecord[] = (
+    await Promise.all(RECORD_TYPES.map((type) => queryRecords(domain, type)))
+  ).flat();
 
   const nameservers = records
     .filter((r) => r.type === "NS")
     .map((r) => r.value);
 
-  const subdomains = discoverSubdomains(domain);
-  const zoneTransfer = options?.zoneTransfer
-    ? attemptZoneTransfer(domain, nameservers)
-    : { attempted: false, vulnerable: false };
+  const [subdomains, zoneTransfer] = await Promise.all([
+    discoverSubdomains(domain),
+    options?.zoneTransfer
+      ? attemptZoneTransfer(domain, nameservers)
+      : { attempted: false, vulnerable: false },
+  ]);
 
   return {
     domain,

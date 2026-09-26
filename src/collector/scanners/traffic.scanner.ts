@@ -1,4 +1,5 @@
-import { run, runAsync } from "../exec.js";
+import { runAsync } from "../exec.js";
+import { resolveCapability } from "../tool-resolver.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 
 type TrafficResult = NonNullable<NetworkScanResult["traffic"]>;
@@ -6,7 +7,8 @@ type TrafficResult = NonNullable<NetworkScanResult["traffic"]>;
 export interface TrafficScanOptions {
   interface: string;
   duration?: number;
-  tool?: "tshark" | "tcpdump";
+  /** Resolved packetAnalysis tool name; resolved on demand when omitted. */
+  tool?: string;
 }
 
 // Well-known plaintext-by-default destination ports.
@@ -244,28 +246,16 @@ export function parseTcpdumpOutput(output: string): Omit<TrafficResult, "duratio
   };
 }
 
-function detectTool(override?: "tshark" | "tcpdump"): "tshark" | "tcpdump" | null {
-  const probe = (bin: string) => {
-    const r = run(bin, ["-v"]);
-    return (
-      r.exitCode === 0 ||
-      /tshark|tcpdump/i.test(r.stderr) ||
-      /tshark|tcpdump/i.test(r.stdout)
-    );
-  };
-  if (override) {
-    return probe(override) ? override : null;
-  }
-  if (probe("tshark")) return "tshark";
-  if (probe("tcpdump")) return "tcpdump";
-  return null;
+function pickTool(tool: string | undefined): "tshark" | "tcpdump" | null {
+  const name = tool ?? resolveCapability("packetAnalysis")?.name;
+  return name === "tshark" || name === "tcpdump" ? name : null;
 }
 
 export async function scanTraffic(
   options: TrafficScanOptions
 ): Promise<TrafficResult | undefined> {
   const duration = Math.max(1, options.duration ?? 8);
-  const tool = detectTool(options.tool);
+  const tool = pickTool(options.tool);
   if (!tool) return undefined;
 
   const started = Date.now();

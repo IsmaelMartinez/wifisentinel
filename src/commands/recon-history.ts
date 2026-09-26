@@ -1,16 +1,19 @@
 import chalk from "chalk";
 import type { Command } from "commander";
-import { listRecons } from "../store/recon-store.js";
+import { parsePositiveInt } from "./options.js";
+import { listRecons, rebuildReconIndex } from "../store/recon-store.js";
 import { pad } from "../reporter/render-helpers.js";
 
 export function registerReconHistoryCommand(program: Command): void {
   program
     .command("recon-history")
     .description("List past reconnaissance scans")
-    .option("-n, --limit <count>", "Number of recons to show", "20")
+    .option("-n, --limit <count>", "Number of recons to show", parsePositiveInt, 20)
     .option("--json", "Output as JSON")
+    .option("--reindex", "Rebuild the recon index from the stored recon files first")
     .action((opts) => {
-      const entries = listRecons({ limit: parseInt(opts.limit, 10) });
+      if (opts.reindex) rebuildReconIndex();
+      const entries = listRecons({ limit: opts.limit });
 
       if (entries.length === 0) {
         console.log(chalk.dim("No recon scans found. Run 'wifisentinel recon <domain>' to record one."));

@@ -1,15 +1,26 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
+import type { ArpEntry } from "../platform/arp.js";
+import { bin, singlePingArgs } from "../platform/commands.js";
+
+export interface SecurityPostureOptions {
+  gatewayIp?: string;
+  localIp?: string;
+  /** The scan-wide ARP table, used to pick a client-isolation test peer. */
+  arpEntries?: ArpEntry[];
+  /** macOS network service name for networksetup (e.g. "Wi-Fi"). */
+  service?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseEnabled(output: string): boolean {
+export function parseEnabled(output: string): boolean {
   return /enabled/i.test(output);
 }
 
-function parseSysctlBool(output: string): boolean {
+export function parseSysctlBool(output: string): boolean {
   // e.g. "net.inet.ip.forwarding: 0"  or  "net.inet.ip.forwarding: 1"
   const match = output.match(/:\s*(\d+)/);
   return match ? match[1] !== "0" : false;
@@ -19,13 +30,13 @@ function parseSysctlBool(output: string): boolean {
 // Firewall
 // ---------------------------------------------------------------------------
 
-function scanFirewall(): NetworkScanResult["security"]["firewall"] {
+async function scanFirewall(): Promise<NetworkScanResult["security"]["firewall"]> {
   const base = "/usr/libexec/ApplicationFirewall/socketfilterfw";
 
-  const globalState = run(base, ["--getglobalstate"]).stdout;
-  const stealthOut = run(base, ["--getstealthmode"]).stdout;
-  const allowSigned = run(base, ["--getallowsigned"]).stdout;
-  const allowDownloaded = run(base, ["--getallowsignedapp"]).stdout;
+  const globalState = (await runAsync(base, ["--getglobalstate"])).stdout;
+  const stealthOut = (await runAsync(base, ["--getstealthmode"])).stdout;
+  const allowSigned = (await runAsync(base, ["--getallowsigned"])).stdout;
+  const allowDownloaded = (await runAsync(base, ["--getallowsignedapp"])).stdout;
 
   return {
     enabled: parseEnabled(globalState),
@@ -39,27 +50,33 @@ function scanFirewall(): NetworkScanResult["security"]["firewall"] {
 // VPN
 // ---------------------------------------------------------------------------
 
-function scanVpn(): NetworkScanResult["security"]["vpn"] {
-  // scutil --nc list shows configured VPN connections and their state
-  const ncList = run("/usr/sbin/scutil", ["--nc", "list"]).stdout;
-
-  // A connected entry looks like:
-  //   * (Connected)    <UUID>  "My VPN"   [VPNType]
+/**
+ * Parse `scutil --nc list`. A connected entry looks like:
+ *   * (Connected)    <UUID> PPP --> L2TP  "My VPN"   [PPP:L2TP]
+ * Returns null when no VPN service is configured.
+ */
+export function parseNcList(ncList: string): NetworkScanResult["security"]["vpn"] | null {
   const connectedMatch = ncList.match(/\(Connected\)[^\n]*"([^"]+)"/i);
   if (connectedMatch) {
     return { installed: true, active: true, provider: connectedMatch[1] };
   }
-
   // Any entry (connected or not) means VPN is installed
-  const hasAny = /\(Connected\)|\(Disconnected\)|\(Connecting\)/i.test(ncList);
-  if (hasAny) {
+  if (/\(Connected\)|\(Disconnected\)|\(Connecting\)/i.test(ncList)) {
     return { installed: true, active: false };
   }
+  return null;
+}
+
+async function scanVpn(): Promise<NetworkScanResult["security"]["vpn"]> {
+  // scutil --nc list shows configured VPN connections and their state
+  const ncList = (await runAsync(bin("scutil"), ["--nc", "list"])).stdout;
+  const fromNc = parseNcList(ncList);
+  if (fromNc) return fromNc;
 
   // Also check networksetup for VPN-named services as a fallback
-  const services = run("/usr/sbin/networksetup", [
+  const services = (await runAsync(bin("networksetup"), [
     "-listallnetworkservices",
-  ]).stdout;
+  ])).stdout;
   const vpnService = services
     .split("\n")
     .find((line) => /vpn|wireguard|tunnel/i.test(line));
@@ -75,36 +92,41 @@ function scanVpn(): NetworkScanResult["security"]["vpn"] {
 // Proxy
 // ---------------------------------------------------------------------------
 
-function scanProxy(): NetworkScanResult["security"]["proxy"] {
-  const out = run("/usr/sbin/networksetup", ["-getwebproxy", "Wi-Fi"]).stdout;
+/**
+ * Parse `networksetup -getwebproxy <service>`:
+ *   Enabled: Yes
+ *   Server: proxy.example.com
+ *   Port: 8080
+ * A disabled proxy prints an empty "Server:" and "Port: 0"; match within the
+ * line only so the empty value does not swallow the next line.
+ */
+export function parseWebProxy(out: string): NetworkScanResult["security"]["proxy"] {
+  const enabledMatch = out.match(/^Enabled:[ \t]*(\S+)/im);
+  const serverMatch = out.match(/^Server:[ \t]*(\S+)/im);
+  const portMatch = out.match(/^Port:[ \t]*(\d+)/im);
 
-  // Output format:
-  //   Enabled: Yes
-  //   Server: proxy.example.com
-  //   Port: 8080
-  const enabledMatch = out.match(/^Enabled:\s*(\S+)/im);
-  const serverMatch = out.match(/^Server:\s*(\S+)/im);
-  const portMatch = out.match(/^Port:\s*(\d+)/im);
-
-  const enabled =
-    enabledMatch ? /yes/i.test(enabledMatch[1]) : false;
+  const enabled = enabledMatch ? /yes/i.test(enabledMatch[1]) : false;
   const server = serverMatch ? serverMatch[1] : undefined;
   const port = portMatch ? parseInt(portMatch[1], 10) : undefined;
 
   return {
     enabled,
     ...(server ? { server } : {}),
-    ...(port !== undefined && !isNaN(port) ? { port } : {}),
+    ...(port ? { port } : {}),
   };
+}
+
+async function scanProxy(service: string): Promise<NetworkScanResult["security"]["proxy"]> {
+  return parseWebProxy((await runAsync(bin("networksetup"), ["-getwebproxy", service])).stdout);
 }
 
 // ---------------------------------------------------------------------------
 // Kernel params
 // ---------------------------------------------------------------------------
 
-function scanKernelParams(): NetworkScanResult["security"]["kernelParams"] {
-  const forwarding = run("/usr/sbin/sysctl", ["net.inet.ip.forwarding"]).stdout;
-  const redirect = run("/usr/sbin/sysctl", ["net.inet.ip.redirect"]).stdout;
+async function scanKernelParams(): Promise<NetworkScanResult["security"]["kernelParams"]> {
+  const forwarding = (await runAsync(bin("sysctl"), ["net.inet.ip.forwarding"])).stdout;
+  const redirect = (await runAsync(bin("sysctl"), ["net.inet.ip.redirect"])).stdout;
 
   return {
     ipForwarding: parseSysctlBool(forwarding),
@@ -116,32 +138,34 @@ function scanKernelParams(): NetworkScanResult["security"]["kernelParams"] {
 // Client isolation
 // ---------------------------------------------------------------------------
 
-function scanClientIsolation(knownHostIp?: string): boolean | null {
-  // If no known host IP was supplied, try to find one from the ARP table
-  let targetIp = knownHostIp;
+/**
+ * Pick a peer to test client isolation against: the first unicast ARP entry
+ * that is neither the gateway nor this machine. The gateway always answers
+ * even with isolation on, so pinging it would report isolation as off.
+ * Without a known gateway and local IP (bootstrap reports "unknown") neither
+ * can be safely excluded — macOS lists this host as a permanent ARP entry —
+ * so no target is returned.
+ */
+export function pickIsolationTarget(
+  arpEntries: ArpEntry[],
+  gatewayIp?: string,
+  localIp?: string,
+): string | undefined {
+  const ipv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+  if (!gatewayIp || !ipv4.test(gatewayIp) || !localIp || !ipv4.test(localIp)) return undefined;
+  return arpEntries.find((e) => e.ip !== gatewayIp && e.ip !== localIp)?.ip;
+}
 
-  if (!targetIp) {
-    const arpOut = run("/usr/sbin/arp", ["-a"]).stdout;
-    // Lines look like:  hostname (192.168.1.1) at aa:bb:cc:dd:ee:ff ...
-    const arpMatch = arpOut.match(/\((\d{1,3}(?:\.\d{1,3}){3})\)/);
-    if (arpMatch) {
-      targetIp = arpMatch[1];
-    }
-  }
+async function scanClientIsolation(options: SecurityPostureOptions): Promise<boolean | null> {
+  const targetIp = pickIsolationTarget(options.arpEntries ?? [], options.gatewayIp, options.localIp);
 
   if (!targetIp) {
     // Cannot determine isolation without a peer to ping
     return null;
   }
 
-  // ping -c 1 -W 2000 (2 s timeout, 1 packet)
-  const pingResult = run("/sbin/ping", [
-    "-c",
-    "1",
-    "-W",
-    "2000",
-    targetIp,
-  ]);
+  // One packet, 2 s wait
+  const pingResult = await runAsync(bin("ping"), singlePingArgs(targetIp));
 
   // If ping succeeds (exit 0) the host is reachable → no client isolation
   // If ping fails the host is unreachable → client isolation may be active
@@ -152,19 +176,19 @@ function scanClientIsolation(knownHostIp?: string): boolean | null {
 // Linux helpers
 // ---------------------------------------------------------------------------
 
-function scanFirewallLinux(): NetworkScanResult["security"]["firewall"] {
+async function scanFirewallLinux(): Promise<NetworkScanResult["security"]["firewall"]> {
   let enabled = false;
   let stealthMode = false;
 
   // Try ufw first
-  const ufwResult = run("ufw", ["status"]);
+  const ufwResult = await runAsync("ufw", ["status"]);
   if (ufwResult.exitCode === 0 && /Status:\s*active/i.test(ufwResult.stdout)) {
     enabled = true;
     // Check for ICMP echo drop rule (stealth mode equivalent)
     stealthMode = /DENY.*icmp/i.test(ufwResult.stdout);
   } else {
     // Fallback: iptables
-    const iptResult = run("iptables", ["-L", "-n"]);
+    const iptResult = await runAsync("iptables", ["-L", "-n"]);
     if (iptResult.exitCode === 0) {
       // If there are rules beyond the default ACCEPT policies, firewall is active
       const lines = iptResult.stdout.split("\n").filter(
@@ -183,13 +207,13 @@ function scanFirewallLinux(): NetworkScanResult["security"]["firewall"] {
   };
 }
 
-function scanVpnLinux(): NetworkScanResult["security"]["vpn"] {
+async function scanVpnLinux(): Promise<NetworkScanResult["security"]["vpn"]> {
   // Check for tun0/wg0 interfaces
-  const linkResult = run("ip", ["link"]);
+  const linkResult = await runAsync("ip", ["link"]);
   const hasTun = /tun\d+|wg\d+/i.test(linkResult.stdout);
 
   // Check for running VPN processes
-  const pgrepResult = run("pgrep", ["-l", "openvpn|wireguard"]);
+  const pgrepResult = await runAsync("pgrep", ["-l", "openvpn|wireguard"]);
   const hasProcess = pgrepResult.exitCode === 0 && pgrepResult.stdout.trim().length > 0;
 
   if (hasTun || hasProcess) {
@@ -227,9 +251,9 @@ function scanProxyLinux(): NetworkScanResult["security"]["proxy"] {
   return { enabled: false };
 }
 
-function scanKernelParamsLinux(): NetworkScanResult["security"]["kernelParams"] {
-  const forwarding = run("sysctl", ["net.ipv4.ip_forward"]).stdout;
-  const redirect = run("sysctl", ["net.ipv4.conf.all.accept_redirects"]).stdout;
+async function scanKernelParamsLinux(): Promise<NetworkScanResult["security"]["kernelParams"]> {
+  const forwarding = (await runAsync("sysctl", ["net.ipv4.ip_forward"])).stdout;
+  const redirect = (await runAsync("sysctl", ["net.ipv4.conf.all.accept_redirects"])).stdout;
 
   return {
     ipForwarding: parseSysctlBool(forwarding),
@@ -237,12 +261,14 @@ function scanKernelParamsLinux(): NetworkScanResult["security"]["kernelParams"] 
   };
 }
 
-async function scanSecurityPostureLinux(): Promise<NetworkScanResult["security"]> {
-  const firewall = scanFirewallLinux();
-  const vpn = scanVpnLinux();
+async function scanSecurityPostureLinux(options: SecurityPostureOptions): Promise<NetworkScanResult["security"]> {
+  const [firewall, vpn, kernelParams, clientIsolation] = await Promise.all([
+    scanFirewallLinux(),
+    scanVpnLinux(),
+    scanKernelParamsLinux(),
+    scanClientIsolation(options),
+  ]);
   const proxy = scanProxyLinux();
-  const kernelParams = scanKernelParamsLinux();
-  const clientIsolation = null;
 
   return { firewall, vpn, proxy, kernelParams, clientIsolation };
 }
@@ -252,17 +278,19 @@ async function scanSecurityPostureLinux(): Promise<NetworkScanResult["security"]
 // ---------------------------------------------------------------------------
 
 export async function scanSecurityPosture(
-  knownHostIp?: string
+  options: SecurityPostureOptions = {}
 ): Promise<NetworkScanResult["security"]> {
   if (process.platform === "linux") {
-    return scanSecurityPostureLinux();
+    return scanSecurityPostureLinux(options);
   }
 
-  const firewall = scanFirewall();
-  const vpn = scanVpn();
-  const proxy = scanProxy();
-  const kernelParams = scanKernelParams();
-  const clientIsolation = scanClientIsolation(knownHostIp);
+  const [firewall, vpn, proxy, kernelParams, clientIsolation] = await Promise.all([
+    scanFirewall(),
+    scanVpn(),
+    scanProxy(options.service ?? "Wi-Fi"),
+    scanKernelParams(),
+    scanClientIsolation(options),
+  ]);
 
   return { firewall, vpn, proxy, kernelParams, clientIsolation };
 }

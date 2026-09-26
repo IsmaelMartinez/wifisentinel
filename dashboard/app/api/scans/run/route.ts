@@ -48,8 +48,6 @@ export async function POST(request: NextRequest) {
   const command = watch ? "watch" : "scan";
   const args = ["src/cli.ts", command, "--events"];
 
-  if (!watch) args.push("--no-save");
-
   if (skipPorts) args.push("--skip-ports");
   if (skipSpeed || stealth) args.push("--skip-speed");
   if (skipTraffic || stealth) args.push("--skip-traffic");

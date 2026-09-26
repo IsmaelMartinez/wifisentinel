@@ -13,27 +13,25 @@ import {
   type SpanOptions,
 } from "@opentelemetry/api";
 
-const SERVICE_NAME = "wifisentinel";
-const SERVICE_VERSION = "0.1.0";
+import { SERVICE_NAME, SERVICE_VERSION } from "./service.js";
 
 let sdk: NodeSDK | null = null;
 
 export function initTracing(exportType: "console" | "otlp" | "none"): void {
+  // Only an explicit "console" or "otlp" starts an SDK. "none" (or an unvalidated CLI
+  // value such as a typo) keeps the API's no-op tracer, so nothing is exported; an SDK
+  // without an exporter would fall back to its OTLP env default.
+  if (exportType !== "console" && exportType !== "otlp") return;
+
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: SERVICE_NAME,
     [ATTR_SERVICE_VERSION]: SERVICE_VERSION,
   });
 
-  const sdkOptions: ConstructorParameters<typeof NodeSDK>[0] = { resource };
-
-  if (exportType === "console") {
-    sdkOptions.traceExporter = new ConsoleSpanExporter();
-  } else if (exportType === "otlp") {
-    sdkOptions.traceExporter = new OTLPTraceExporter();
-  }
-  // "none": no exporter set — traces are dropped
-
-  sdk = new NodeSDK(sdkOptions);
+  sdk = new NodeSDK({
+    resource,
+    traceExporter: exportType === "console" ? new ConsoleSpanExporter() : new OTLPTraceExporter(),
+  });
   sdk.start();
 }
 

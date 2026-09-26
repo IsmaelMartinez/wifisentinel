@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import chalk from "chalk";
 import type { Command } from "commander";
@@ -13,19 +14,115 @@ function getPlistPath(): string {
   return join(homedir(), "Library", "LaunchAgents", `${PLIST_LABEL}.plist`);
 }
 
-function getBinaryPath(): string {
-  // Resolve from package.json bin entry
-  const distCli = join(process.cwd(), "dist", "cli.js");
-  if (existsSync(distCli)) return distCli;
-  // Fallback: try global install
-  try {
-    return execFileSync("which", ["wifisentinel"], {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return distCli; // best guess
+/**
+ * Resolve this package's own compiled CLI entry point. Under tsx this module
+ * is `src/commands/schedule.ts`, so point at the built `dist/cli.js`; once
+ * compiled it is `dist/commands/schedule.js`, a sibling of `dist/cli.js`.
+ */
+export function getBinaryPath(moduleUrl: string = import.meta.url): string {
+  const relative = moduleUrl.endsWith(".ts") ? "../../dist/cli.js" : "../cli.js";
+  return fileURLToPath(new URL(relative, moduleUrl));
+}
+
+export function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** POSIX single-quote a value for a shell command line. */
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+const CRON_QUOTED: Record<string, string> = {
+  // Close the single-quoted run, emit an escaped quote, reopen.
+  "'": "'\\''",
+  // Emit backslashes outside the quotes as `\\` so a path backslash can never
+  // sit directly before a `%` and swallow cron's `\%` escape.
+  "\\": "'\\\\'",
+  // Cron turns an unescaped `%` into a newline before the shell runs (quotes
+  // don't help); it unescapes `\%` back to `%`.
+  "%": "\\%",
+};
+
+/** Shell-quote a value for a crontab command line, escaping for cron too. */
+export function cronQuote(value: string): string {
+  return `'${value.replace(/['\\%]/g, (c) => CRON_QUOTED[c])}'`;
+}
+
+export interface ScheduleTarget {
+  nodePath: string;
+  binaryPath: string;
+  logPath: string;
+  intervalHours: number;
+}
+
+export function buildPlist(t: ScheduleTarget): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${PLIST_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${xmlEscape(t.nodePath)}</string>
+    <string>${xmlEscape(t.binaryPath)}</string>
+    <string>scan</string>
+    <string>--analyse</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>${t.intervalHours * 3600}</integer>
+  <key>StandardErrorPath</key>
+  <string>${xmlEscape(t.logPath)}</string>
+  <key>StandardOutPath</key>
+  <string>/dev/null</string>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>`;
+}
+
+/**
+ * Cron's hour step restarts at midnight, so only divisors of 24 give an even
+ * interval that matches launchd's StartInterval.
+ */
+export function buildCronLine(t: ScheduleTarget): string {
+  const n = t.intervalHours;
+  if (!Number.isInteger(n) || n < 1 || 24 % n !== 0) {
+    throw new Error(
+      `Interval ${n}h does not divide 24; cron supports 1, 2, 3, 4, 6, 8, 12 or 24.`,
+    );
   }
+  // Crontab is line-based, so a line break in a path would end the entry.
+  for (const p of [t.nodePath, t.binaryPath, t.logPath]) {
+    if (/[\r\n]/.test(p)) throw new Error(`Cannot schedule a path containing a line break: ${JSON.stringify(p)}`);
+  }
+  const hours = n === 24 ? "0" : `*/${n}`;
+  return `0 ${hours} * * * ${cronQuote(t.nodePath)} ${cronQuote(t.binaryPath)} scan --analyse > /dev/null 2>> ${cronQuote(t.logPath)}`;
+}
+
+/** Parse `--interval`; undefined unless it is a whole number of hours ≥ 1 (no `1.5` or `6foo`). */
+export function parseIntervalHours(raw: string): number | undefined {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
+}
+
+function resolveTarget(intervalHours: number): ScheduleTarget {
+  const binaryPath = getBinaryPath();
+  if (!existsSync(binaryPath)) {
+    throw new Error(`CLI entry point not found at ${binaryPath}; run "npm run build" first.`);
+  }
+  return {
+    nodePath: getNodePath(),
+    binaryPath,
+    logPath: join(homedir(), ".wifisentinel", "schedule.log"),
+    intervalHours,
+  };
 }
 
 function getNodePath(): string {
@@ -40,33 +137,7 @@ function getNodePath(): string {
 }
 
 function enableMacOS(intervalHours: number): void {
-  const nodePath = getNodePath();
-  const binaryPath = getBinaryPath();
-  const intervalSeconds = intervalHours * 3600;
-
-  const plist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${PLIST_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${nodePath}</string>
-    <string>${binaryPath}</string>
-    <string>scan</string>
-    <string>--analyse</string>
-  </array>
-  <key>StartInterval</key>
-  <integer>${intervalSeconds}</integer>
-  <key>StandardErrorPath</key>
-  <string>${join(homedir(), ".wifisentinel", "schedule.log")}</string>
-  <key>StandardOutPath</key>
-  <string>/dev/null</string>
-  <key>RunAtLoad</key>
-  <true/>
-</dict>
-</plist>`;
+  const plist = buildPlist(resolveTarget(intervalHours));
 
   const plistPath = getPlistPath();
   writeFileSync(plistPath, plist, "utf-8");
@@ -84,10 +155,7 @@ function enableMacOS(intervalHours: number): void {
 }
 
 function enableLinux(intervalHours: number): void {
-  const binaryPath = getBinaryPath();
-  const nodePath = getNodePath();
-  const cronExpr = `0 */${intervalHours} * * *`;
-  const cronLine = `${cronExpr} ${nodePath} ${binaryPath} scan --analyse > /dev/null 2>> ${join(homedir(), ".wifisentinel", "schedule.log")}`;
+  const cronLine = buildCronLine(resolveTarget(intervalHours));
   const marker = "# wifisentinel-scheduled-scan";
 
   let existing = "";
@@ -191,15 +259,20 @@ export function registerScheduleCommand(program: Command): void {
     .description("Enable periodic scanning")
     .option("-i, --interval <hours>", "Scan interval in hours", "6")
     .action((opts) => {
-      const interval = parseInt(opts.interval, 10);
-      if (isNaN(interval) || interval < 1) {
+      const interval = parseIntervalHours(opts.interval);
+      if (interval === undefined) {
         console.error(chalk.red("Interval must be a positive integer (hours)."));
         process.exit(1);
       }
-      if (process.platform === "darwin") {
-        enableMacOS(interval);
-      } else {
-        enableLinux(interval);
+      try {
+        if (process.platform === "darwin") {
+          enableMacOS(interval);
+        } else {
+          enableLinux(interval);
+        }
+      } catch (err) {
+        console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+        process.exit(1);
       }
     });
 

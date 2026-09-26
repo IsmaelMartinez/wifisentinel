@@ -29,6 +29,17 @@ describe("normaliseMac", () => {
     assert.equal(normaliseMac("AA:BB:CC:DD:EE:01"), "aa:bb:cc:dd:ee:01");
     assert.equal(normaliseMac("aa:bb:cc:dd:ee:01"), "aa:bb:cc:dd:ee:01");
   });
+
+  it("zero-pads octets so padded and unpadded MACs share a device key", () => {
+    assert.equal(normaliseMac("0:1b:63:a:b:c"), "00:1b:63:0a:0b:0c");
+    const report = buildPresenceReport([
+      makeScan("s1", "2025-01-01T10:00:00Z", [{ ip: "192.168.1.5", mac: "0:1b:63:a:b:c" }]),
+      makeScan("s2", "2025-01-01T11:00:00Z", [{ ip: "192.168.1.5", mac: "00:1b:63:0a:0b:0c" }]),
+    ]);
+    assert.equal(report.devices.length, 1);
+    assert.equal(report.devices[0].mac, "00:1b:63:0a:0b:0c");
+    assert.equal(report.devices[0].scanCount, 2);
+  });
 });
 
 describe("buildPresenceReport", () => {
@@ -257,7 +268,7 @@ describe("isTrackableMac", () => {
 
   it("accepts leading-zero-stripped octets from macOS/BSD arp", () => {
     // `arp -a` prints octets < 0x10 without the leading zero, e.g.
-    // "48:22:54:b:d0:90"; normaliseMac does not zero-pad.
+    // "48:22:54:b:d0:90"; raw arp output is still accepted.
     assert.equal(isTrackableMac("48:22:54:b:d0:90"), true);
     assert.equal(isTrackableMac("0:c:29:1:2:3"), true);
   });

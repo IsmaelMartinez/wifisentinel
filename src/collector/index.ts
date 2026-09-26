@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
-import { run } from "./exec.js";
 import {
   resolveAllTools,
   toolchainSummary,
@@ -8,7 +7,7 @@ import {
 import type { NetworkScanResult } from "./schema/scan-result.js";
 import { scanWifi } from "./scanners/wifi.scanner.js";
 import { scanDns } from "./scanners/dns.scanner.js";
-import { scanHosts } from "./scanners/host-discovery.scanner.js";
+import { discoverArpTable, scanHosts } from "./scanners/host-discovery.scanner.js";
 import { scanPorts } from "./scanners/port.scanner.js";
 import { scanSecurityPosture } from "./scanners/security-posture.scanner.js";
 import { scanConnections } from "./scanners/connection.scanner.js";
@@ -23,123 +22,8 @@ import {
   recordToolResolution,
 } from "../telemetry/metrics.js";
 import { lookupVendor } from "./oui-lookup.js";
+import { detectNetwork } from "./platform/bootstrap.js";
 import { ScanEventEmitter } from "./scan-events.js";
-
-interface NetworkBootstrap {
-  interface: string;
-  ip: string;
-  subnet: string;
-  gateway: { ip: string; mac: string };
-  broadcastAddr: string;
-}
-
-function detectNetworkDarwin(): NetworkBootstrap {
-  const ifconfigResult = run("ifconfig", ["en0"]);
-  const inetMatch = ifconfigResult.stdout.match(
-    /inet (\d+\.\d+\.\d+\.\d+) netmask (0x[0-9a-f]+) broadcast (\d+\.\d+\.\d+\.\d+)/
-  );
-  const ip = inetMatch?.[1] ?? "unknown";
-  const broadcastAddr = inetMatch?.[3] ?? "255.255.255.255";
-
-  const maskHex = inetMatch?.[2] ?? "0xffffff00";
-  const maskNum = parseInt(maskHex, 16);
-  const cidrBits = maskNum.toString(2).split("1").length - 1;
-  const subnet = `${ip.split(".").slice(0, 3).join(".")}.0/${cidrBits}`;
-
-  // Use networksetup for reliable gateway detection (works even with VPN active)
-  const nsInfoResult = run("networksetup", ["-getinfo", "Wi-Fi"]);
-  let gatewayIp = "unknown";
-  const routerMatch = nsInfoResult.stdout.match(/Router:\s+(\d+\.\d+\.\d+\.\d+)/);
-  if (routerMatch) {
-    gatewayIp = routerMatch[1];
-  } else {
-    // Fallback: parse netstat for en0 specifically
-    const routeResult = run("netstat", ["-rn"]);
-    const en0Default = routeResult.stdout
-      .split("\n")
-      .find((l) => l.startsWith("default") && l.includes("en0"));
-    const gwMatch = en0Default?.match(/default\s+(\d+\.\d+\.\d+\.\d+)/);
-    if (gwMatch) gatewayIp = gwMatch[1];
-  }
-
-  const arpResult = run("arp", ["-n", gatewayIp]);
-  const macMatch = arpResult.stdout.match(
-    /([0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2})/i
-  );
-  const gatewayMac = macMatch?.[1] ?? "unknown";
-
-  return {
-    interface: "en0",
-    ip,
-    subnet,
-    gateway: { ip: gatewayIp, mac: gatewayMac },
-    broadcastAddr,
-  };
-}
-
-function detectNetworkLinux(): NetworkBootstrap {
-  // Find default interface and gateway from ip route
-  const routeResult = run("ip", ["route", "show", "default"]);
-  let iface = "wlan0";
-  let gatewayIp = "unknown";
-
-  const routeMatch = routeResult.stdout.match(
-    /default via (\d+\.\d+\.\d+\.\d+) dev (\S+)/
-  );
-  if (routeMatch) {
-    gatewayIp = routeMatch[1];
-    iface = routeMatch[2];
-  } else {
-    // Fallback: find a wireless interface via iw dev
-    const iwResult = run("iw", ["dev"]);
-    const ifaceMatch = iwResult.stdout.match(/Interface\s+(\S+)/);
-    if (ifaceMatch) iface = ifaceMatch[1];
-  }
-
-  // Get IP and CIDR from ip addr
-  const addrResult = run("ip", ["-o", "-4", "addr", "show", iface]);
-  let ip = "unknown";
-  let cidrBits = 24;
-  const addrMatch = addrResult.stdout.match(/inet (\d+\.\d+\.\d+\.\d+)\/(\d+)/);
-  if (addrMatch) {
-    ip = addrMatch[1];
-    cidrBits = parseInt(addrMatch[2], 10);
-  }
-
-  const subnet = `${ip.split(".").slice(0, 3).join(".")}.0/${cidrBits}`;
-
-  // Compute broadcast from IP and CIDR
-  const ipParts = ip.split(".").map(Number);
-  const hostBits = 32 - cidrBits;
-  const ipNum =
-    ((ipParts[0] << 24) | (ipParts[1] << 16) | (ipParts[2] << 8) | ipParts[3]) >>> 0;
-  const broadcastNum = (ipNum | ((1 << hostBits) - 1)) >>> 0;
-  const broadcastAddr = ip === "unknown"
-    ? "255.255.255.255"
-    : `${(broadcastNum >>> 24) & 0xff}.${(broadcastNum >>> 16) & 0xff}.${(broadcastNum >>> 8) & 0xff}.${broadcastNum & 0xff}`;
-
-  // Gateway MAC via arp
-  const arpResult = run("arp", ["-n", gatewayIp]);
-  const macMatch = arpResult.stdout.match(
-    /([0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2})/i
-  );
-  const gatewayMac = macMatch?.[1] ?? "unknown";
-
-  return {
-    interface: iface,
-    ip,
-    subnet,
-    gateway: { ip: gatewayIp, mac: gatewayMac },
-    broadcastAddr,
-  };
-}
-
-function detectNetwork(): NetworkBootstrap {
-  if (process.platform === "linux") {
-    return detectNetworkLinux();
-  }
-  return detectNetworkDarwin();
-}
 
 export interface ScanOptions {
   timeout?: number;
@@ -173,10 +57,24 @@ export async function collectNetworkScan(
       return resolved;
     });
 
-    // Step 2: Network bootstrap
-    const bootstrap = await withSpan("network-bootstrap", {}, async () => {
-      return detectNetwork();
-    });
+    // Step 2: Network bootstrap, including the single ARP table read shared
+    // by host discovery, client isolation and intrusion detection.
+    const { bootstrap, arpEntries } = await withSpan(
+      "network-bootstrap",
+      { "tool.resolved": tools.get("hostDiscovery")?.name ?? "none" },
+      async () => {
+        const net = await detectNetwork();
+        const arpEntries = await discoverArpTable({
+          stealth: options.stealth,
+          broadcastAddr: net.broadcastAddr,
+        });
+        const gatewayMac = arpEntries.find((e) => e.ip === net.gatewayIp)?.mac ?? "unknown";
+        return {
+          bootstrap: { ...net, gateway: { ip: net.gatewayIp, mac: gatewayMac } },
+          arpEntries,
+        };
+      },
+    );
 
     emitter?.bootstrapComplete(bootstrap.gateway.ip, bootstrap.ip, bootstrap.subnet);
 
@@ -200,7 +98,7 @@ export async function collectNetworkScan(
           withSpan(
             "wifi-scan",
             { "tool.resolved": tools.get("wifiAnalysis")?.name ?? "none" },
-            () => scanWifi()
+            () => scanWifi(bootstrap.interface)
           ).then((r) => {
             emitter?.scannerComplete("wifi", `${r.protocol}, ${r.band}, ch${r.channel}, ${r.security}`);
             return r;
@@ -208,12 +106,23 @@ export async function collectNetworkScan(
           withSpan(
             "dns-audit",
             { "tool.resolved": tools.get("dnsAudit")?.name ?? "none" },
-            () => scanDns(bootstrap.gateway.ip, { stealth: options.stealth })
+            () =>
+              scanDns(bootstrap.gateway.ip, {
+                stealth: options.stealth,
+                tool: tools.get("dnsAudit")?.name,
+              })
           ).then((r) => {
             emitter?.scannerComplete("dns", `${r.servers.length} servers, DNSSEC ${r.dnssecSupported ? "on" : "off"}`);
             return r;
           }),
-          withSpan("security-posture", {}, () => scanSecurityPosture()).then((r) => {
+          withSpan("security-posture", {}, () =>
+            scanSecurityPosture({
+              gatewayIp: bootstrap.gateway.ip,
+              localIp: bootstrap.ip,
+              arpEntries,
+              service: bootstrap.service,
+            })
+          ).then((r) => {
             emitter?.scannerComplete("security", `firewall ${r.firewall.enabled ? "on" : "off"}, VPN ${r.vpn.active ? "active" : "inactive"}`);
             return r;
           }),
@@ -233,14 +142,10 @@ export async function collectNetworkScan(
     emitter?.scannerStart("host-discovery");
     const { hosts, topology } = await withSpan(
       "host-discovery",
-      { "tool.resolved": tools.get("hostDiscovery")?.name ?? "none" },
+      // ARP ran during bootstrap; this stage runs traceroute for topology.
+      { "tool.resolved": options.stealth ? "none" : tools.get("traceroute")?.name ?? "none" },
       () =>
-        scanHosts(
-          bootstrap.interface,
-          bootstrap.subnet,
-          bootstrap.broadcastAddr,
-          { stealth: options.stealth, gatewayIp: bootstrap.gateway.ip },
-        )
+        scanHosts(arpEntries, { stealth: options.stealth, gatewayIp: bootstrap.gateway.ip })
     );
     for (const host of hosts) {
       emitter?.hostFound(host.ip, host.mac);
@@ -278,7 +183,7 @@ export async function collectNetworkScan(
           }
         }
 
-        // Emit port:found for each open port
+        // Emit port:found for each open port (hostPorts only carries open ports)
         for (const host of hosts) {
           for (const port of host.ports ?? []) {
             emitter?.portFound(host.ip, port.port, port.service);
@@ -298,7 +203,7 @@ export async function collectNetworkScan(
             return r;
           }),
           withSpan("intrusion-detection", {}, () =>
-            scanForIntrusions(bootstrap.gateway.ip, bootstrap.gateway.mac)
+            scanForIntrusions(bootstrap.gateway.ip, bootstrap.gateway.mac, arpEntries)
           ).then((r) => {
             emitter?.scannerComplete("intrusion-detection", `${r?.arpAnomalies?.length ?? 0} ARP anomalies`);
             return r;
@@ -326,6 +231,7 @@ export async function collectNetworkScan(
                   scanTraffic({
                     interface: bootstrap.interface,
                     duration: options.trafficDuration,
+                    tool: tools.get("packetAnalysis")?.name,
                   })
               ).then((r) => {
                 emitter?.scannerComplete(
@@ -360,7 +266,7 @@ export async function collectNetworkScan(
     // Step 7: Look up gateway vendor
     const gatewayVendor = options.skipVendorLookup
       ? undefined
-      : lookupVendor(bootstrap.gateway.mac);
+      : await lookupVendor(bootstrap.gateway.mac);
 
     const duration = Date.now() - startTime;
     recordScanDuration("total", duration);

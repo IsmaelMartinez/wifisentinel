@@ -1,7 +1,6 @@
 import type { ReconResult } from "../collector/recon/schema.js";
-import { analyseReconAllPersonas } from "../analyser/recon-personas.js";
+import type { FullReconAnalysis } from "../analyser/recon-personas.js";
 
-export function renderReconJsonReport(result: ReconResult): string {
-  const analysis = analyseReconAllPersonas(result);
+export function renderReconJsonReport(result: ReconResult, analysis: FullReconAnalysis): string {
   return JSON.stringify({ recon: result, analysis }, null, 2);
 }

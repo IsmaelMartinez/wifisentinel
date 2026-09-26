@@ -9,13 +9,9 @@ export function getScans(options?: { limit?: number; ssid?: string }): IndexEntr
   return listScans(options);
 }
 
-export function getScan(id: string): StoredScan {
-  return loadScan(id);
-}
-
-export function getRFAnalysis(id: string): RFAnalysis {
+// Scans saved before RF analysis was added have no `rfAnalysis`; recompute it
+// here so every caller sees one.
+export function getScan(id: string): StoredScan & { rfAnalysis: RFAnalysis } {
   const stored = loadScan(id);
-  if (stored.rfAnalysis) return stored.rfAnalysis;
-  // Recompute for scans saved before RF analysis was added
-  return analyseRF(stored.scan);
+  return { ...stored, rfAnalysis: stored.rfAnalysis ?? analyseRF(stored.scan) };
 }

@@ -1,9 +1,11 @@
 import type { ReconResult } from "../collector/recon/schema.js";
-import type { Insight, PersonaAnalysis, RiskRating } from "./personas/types.js";
+import type { Grade } from "./standards/types.js";
+import type { Insight, PersonaAnalysis, PersonaSpec, RiskRating } from "./personas/types.js";
 import {
-  riskFromInsights,
+  buildPersonaAnalysis,
   consensusRating,
   consensusActions,
+  keyedActionsFor,
 } from "./personas/types.js";
 
 export interface FullReconAnalysis {
@@ -11,22 +13,18 @@ export interface FullReconAnalysis {
   timestamp: string;
   domain: string;
   analyses: PersonaAnalysis[];
-  consensusRating: string;
+  consensusRating: RiskRating;
   consensusActions: string[];
-  overallGrade: string;
+  overallGrade: Grade;
 }
 
 // ---------------------------------------------------------------------------
-// Grade helpers
+// Shared lookups
 // ---------------------------------------------------------------------------
 
-const GRADE_VALUES: Record<string, number> = { A: 4, B: 3, C: 2, D: 1, F: 0 };
+const GRADE_VALUES: Record<Grade, number> = { A: 4, B: 3, C: 2, D: 1, F: 0 };
 
-function gradeToNumber(grade: string): number {
-  return GRADE_VALUES[grade] ?? 0;
-}
-
-function numberToGrade(n: number): string {
+function numberToGrade(n: number): Grade {
   if (n >= 3.5) return "A";
   if (n >= 2.5) return "B";
   if (n >= 1.5) return "C";
@@ -34,9 +32,32 @@ function numberToGrade(n: number): string {
   return "F";
 }
 
+function header(r: ReconResult, name: string) {
+  return r.headers.headers.find((h) => h.header === name);
+}
+
+function certValid(r: ReconResult): boolean {
+  return r.tls.certificate.daysUntilExpiry > 0 && !r.tls.certificate.selfSigned;
+}
+
 // ---------------------------------------------------------------------------
 // Red Team
 // ---------------------------------------------------------------------------
+
+const redTeamSpec: PersonaSpec = {
+  persona: "red-team",
+  displayName: "Red Team",
+  perspective:
+    "Identifies exploitable weaknesses in the domain's external attack surface that an attacker would target.",
+  actions: {
+    "rr-zone-transfer": { key: "zone-transfer", text: "Restrict DNS zone transfers to authorised secondaries" },
+    "rr-weak-tls": { key: "tls", text: "Upgrade TLS configuration to grade B or above" },
+    "rr-exposed-subdomains": { key: "subdomains", text: "Restrict access to dev/staging/admin subdomains" },
+    "rr-missing-hsts": { key: "hsts", text: "Deploy HSTS with adequate max-age" },
+    "rr-missing-csp": { key: "csp", text: "Implement a Content-Security-Policy header" },
+    "rr-cert-expiring": { key: "certificate", text: "Renew the expiring TLS certificate" },
+  },
+};
 
 function analyseRedTeam(r: ReconResult): PersonaAnalysis {
   const insights: Insight[] = [];
@@ -73,7 +94,7 @@ function analyseRedTeam(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  const hsts = r.headers.headers.find((h) => h.header === "Strict-Transport-Security");
+  const hsts = header(r, "Strict-Transport-Security");
   if (!hsts || hsts.status !== "pass") {
     insights.push({
       id: "rr-missing-hsts",
@@ -90,7 +111,7 @@ function analyseRedTeam(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  const csp = r.headers.headers.find((h) => h.header === "Content-Security-Policy");
+  const csp = header(r, "Content-Security-Policy");
   if (!csp || csp.status !== "pass") {
     insights.push({
       id: "rr-missing-csp",
@@ -139,16 +160,7 @@ function analyseRedTeam(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  return {
-    persona: "red-team",
-    displayName: "Red Team",
-    perspective:
-      "Identifies exploitable weaknesses in the domain's external attack surface that an attacker would target.",
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildRedTeamSummary(insights, r.meta.domain),
-    insights,
-    priorityActions: deriveRedTeamActions(insights),
-  };
+  return buildPersonaAnalysis(redTeamSpec, insights, buildRedTeamSummary(insights, r.meta.domain));
 }
 
 function buildRedTeamSummary(insights: Insight[], domain: string): string {
@@ -166,26 +178,28 @@ function buildRedTeamSummary(insights: Insight[], domain: string): string {
   return `${domain} presents a hardened external posture. No significant attack vectors were identified.`;
 }
 
-function deriveRedTeamActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  const ids = new Set(insights.map((i) => i.id));
-  if (ids.has("rr-zone-transfer")) actions.push("Restrict DNS zone transfers to authorised secondaries");
-  if (ids.has("rr-weak-tls")) actions.push("Upgrade TLS configuration to grade B or above");
-  if (ids.has("rr-exposed-subdomains")) actions.push("Restrict access to dev/staging/admin subdomains");
-  if (ids.has("rr-missing-hsts")) actions.push("Deploy HSTS with adequate max-age");
-  if (ids.has("rr-missing-csp")) actions.push("Implement a Content-Security-Policy header");
-  if (ids.has("rr-cert-expiring")) actions.push("Renew the expiring TLS certificate");
-  return actions.slice(0, 5);
-}
-
 // ---------------------------------------------------------------------------
 // Blue Team
 // ---------------------------------------------------------------------------
 
+const blueTeamSpec: PersonaSpec = {
+  persona: "blue-team",
+  displayName: "Blue Team",
+  perspective:
+    "Evaluates defensive controls and detection capabilities protecting the domain's external surface.",
+  actions: {
+    "rb-hsts": { key: "hsts" },
+    "rb-csp": { key: "csp" },
+    "rb-header-coverage": { key: "headers" },
+    "rb-dnssec": { key: "dnssec" },
+    "rb-cert-chain": { key: "certificate" },
+  },
+};
+
 function analyseBlueTeam(r: ReconResult): PersonaAnalysis {
   const insights: Insight[] = [];
 
-  const hsts = r.headers.headers.find((h) => h.header === "Strict-Transport-Security");
+  const hsts = header(r, "Strict-Transport-Security");
   insights.push({
     id: "rb-hsts",
     title: hsts?.status === "pass" ? "HSTS is properly configured" : "HSTS is not adequately configured",
@@ -202,7 +216,7 @@ function analyseBlueTeam(r: ReconResult): PersonaAnalysis {
     references: ["OWASP-Transport"],
   });
 
-  const csp = r.headers.headers.find((h) => h.header === "Content-Security-Policy");
+  const csp = header(r, "Content-Security-Policy");
   insights.push({
     id: "rb-csp",
     title: csp?.status === "pass" ? "CSP is deployed" : "CSP is not deployed",
@@ -252,33 +266,24 @@ function analyseBlueTeam(r: ReconResult): PersonaAnalysis {
     references: ["NIST-800-81"],
   });
 
-  const certValid = r.tls.certificate.daysUntilExpiry > 0 && !r.tls.certificate.selfSigned;
+  const certOk = certValid(r);
   insights.push({
     id: "rb-cert-chain",
-    title: certValid ? "Certificate chain is valid" : "Certificate chain has issues",
-    severity: certValid ? "info" : "high",
+    title: certOk ? "Certificate chain is valid" : "Certificate chain has issues",
+    severity: certOk ? "info" : "high",
     category: "tls",
-    description: certValid
+    description: certOk
       ? "The TLS certificate is valid, not self-signed, and has a healthy expiry window."
       : "The certificate is self-signed or expired, which will cause trust warnings and may indicate a compromised certificate chain.",
     technicalDetail: `Issuer: ${r.tls.certificate.issuer}, expiry: ${r.tls.certificate.validTo}, days remaining: ${r.tls.certificate.daysUntilExpiry}, self-signed: ${r.tls.certificate.selfSigned}.`,
-    recommendation: certValid
+    recommendation: certOk
       ? "Continue monitoring certificate expiry."
       : "Replace the certificate with one from a trusted CA and ensure it is not expired.",
     affectedAssets: [r.tls.domain],
     references: ["PCI-DSS-4.1"],
   });
 
-  return {
-    persona: "blue-team",
-    displayName: "Blue Team",
-    perspective:
-      "Evaluates defensive controls and detection capabilities protecting the domain's external surface.",
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildBlueTeamSummary(insights, r.meta.domain),
-    insights,
-    priorityActions: deriveBlueTeamActions(insights),
-  };
+  return buildPersonaAnalysis(blueTeamSpec, insights, buildBlueTeamSummary(insights, r.meta.domain));
 }
 
 function buildBlueTeamSummary(insights: Insight[], domain: string): string {
@@ -289,19 +294,22 @@ function buildBlueTeamSummary(insights: Insight[], domain: string): string {
   return `${domain} has ${failing.length} defensive gap(s) that should be addressed to strengthen the external security posture.`;
 }
 
-function deriveBlueTeamActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  for (const i of insights) {
-    if (i.severity !== "info") {
-      actions.push(i.recommendation);
-    }
-  }
-  return actions.slice(0, 5);
-}
-
 // ---------------------------------------------------------------------------
 // Compliance
 // ---------------------------------------------------------------------------
+
+const complianceSpec: PersonaSpec = {
+  persona: "compliance",
+  displayName: "Compliance",
+  perspective:
+    "Assesses the domain against PCI-DSS, OWASP, and industry compliance requirements for external-facing services.",
+  actions: {
+    "rc-tls-version": { key: "tls" },
+    "rc-hsts": { key: "hsts" },
+    "rc-headers-completeness": { key: "headers" },
+    "rc-cert-validity": { key: "certificate" },
+  },
+};
 
 function analyseCompliance(r: ReconResult): PersonaAnalysis {
   const insights: Insight[] = [];
@@ -323,7 +331,7 @@ function analyseCompliance(r: ReconResult): PersonaAnalysis {
     references: ["PCI-DSS-4.1"],
   });
 
-  const hsts = r.headers.headers.find((h) => h.header === "Strict-Transport-Security");
+  const hsts = header(r, "Strict-Transport-Security");
   const hstsOk = hsts?.status === "pass";
   insights.push({
     id: "rc-hsts",
@@ -361,33 +369,24 @@ function analyseCompliance(r: ReconResult): PersonaAnalysis {
     references: ["OWASP-Headers"],
   });
 
-  const certValid = r.tls.certificate.daysUntilExpiry > 0 && !r.tls.certificate.selfSigned;
+  const certOk = certValid(r);
   insights.push({
     id: "rc-cert-validity",
-    title: certValid ? "TLS certificate is valid" : "TLS certificate validity issue",
-    severity: certValid ? "info" : "high",
+    title: certOk ? "TLS certificate is valid" : "TLS certificate validity issue",
+    severity: certOk ? "info" : "high",
     category: "compliance",
-    description: certValid
+    description: certOk
       ? "The certificate is issued by a trusted CA and is within its validity period."
       : "An expired or self-signed certificate violates compliance requirements for trusted transport.",
     technicalDetail: `Valid to: ${r.tls.certificate.validTo}, self-signed: ${r.tls.certificate.selfSigned}, days remaining: ${r.tls.certificate.daysUntilExpiry}.`,
-    recommendation: certValid
+    recommendation: certOk
       ? "Monitor certificate expiry and renew proactively."
       : "Replace the certificate with a valid one from a trusted CA.",
     affectedAssets: [r.tls.domain],
     references: ["PCI-DSS-4.1"],
   });
 
-  return {
-    persona: "compliance",
-    displayName: "Compliance",
-    perspective:
-      "Assesses the domain against PCI-DSS, OWASP, and industry compliance requirements for external-facing services.",
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildComplianceSummary(insights, r.meta.domain),
-    insights,
-    priorityActions: deriveComplianceActions(insights),
-  };
+  return buildPersonaAnalysis(complianceSpec, insights, buildComplianceSummary(insights, r.meta.domain));
 }
 
 function buildComplianceSummary(insights: Insight[], domain: string): string {
@@ -398,19 +397,23 @@ function buildComplianceSummary(insights: Insight[], domain: string): string {
   return `${domain} has ${nonCompliant.length} compliance gap(s) across PCI-DSS and OWASP requirements that require remediation.`;
 }
 
-function deriveComplianceActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  for (const i of insights) {
-    if (i.severity !== "info") {
-      actions.push(i.recommendation);
-    }
-  }
-  return actions.slice(0, 5);
-}
-
 // ---------------------------------------------------------------------------
 // Net Engineer
 // ---------------------------------------------------------------------------
+
+const netEngineerSpec: PersonaSpec = {
+  persona: "net-engineer",
+  displayName: "Net Engineer",
+  perspective:
+    "Evaluates DNS configuration quality, redundancy, and operational best practices for the domain.",
+  actions: {
+    "rn-mx": { key: "mx" },
+    "rn-spf": { key: "spf" },
+    "rn-ns-redundancy": { key: "ns-redundancy" },
+    "rn-ttl-low": { key: "ttl-low" },
+    "rn-ttl-high": { key: "ttl-high" },
+  },
+};
 
 function analyseNetEngineer(r: ReconResult): PersonaAnalysis {
   const insights: Insight[] = [];
@@ -503,16 +506,7 @@ function analyseNetEngineer(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  return {
-    persona: "net-engineer",
-    displayName: "Net Engineer",
-    perspective:
-      "Evaluates DNS configuration quality, redundancy, and operational best practices for the domain.",
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildNetEngineerSummary(insights, r.meta.domain),
-    insights,
-    priorityActions: deriveNetEngineerActions(insights),
-  };
+  return buildPersonaAnalysis(netEngineerSpec, insights, buildNetEngineerSummary(insights, r.meta.domain));
 }
 
 function buildNetEngineerSummary(insights: Insight[], domain: string): string {
@@ -523,24 +517,27 @@ function buildNetEngineerSummary(insights: Insight[], domain: string): string {
   return `${domain} DNS configuration has ${issues.length} issue(s) affecting reliability or email deliverability.`;
 }
 
-function deriveNetEngineerActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  for (const i of insights) {
-    if (i.severity !== "info") {
-      actions.push(i.recommendation);
-    }
-  }
-  return actions.slice(0, 5);
-}
-
 // ---------------------------------------------------------------------------
 // Privacy
 // ---------------------------------------------------------------------------
 
+const privacySpec: PersonaSpec = {
+  persona: "privacy",
+  displayName: "Privacy",
+  perspective:
+    "Assesses information leakage and privacy exposure from the domain's external configuration.",
+  actions: {
+    "rp-server-leak": { key: "server-header" },
+    "rp-referrer-policy": { key: "referrer-policy" },
+    "rp-permissions-policy": { key: "permissions-policy" },
+    "rp-whois-exposed": { key: "whois" },
+  },
+};
+
 function analysePrivacy(r: ReconResult): PersonaAnalysis {
   const insights: Insight[] = [];
 
-  const server = r.headers.headers.find((h) => h.header === "Server");
+  const server = header(r, "Server");
   if (server?.present && server.status === "fail") {
     insights.push({
       id: "rp-server-leak",
@@ -556,7 +553,7 @@ function analysePrivacy(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  const referrer = r.headers.headers.find((h) => h.header === "Referrer-Policy");
+  const referrer = header(r, "Referrer-Policy");
   if (!referrer || referrer.status !== "pass") {
     insights.push({
       id: "rp-referrer-policy",
@@ -572,7 +569,7 @@ function analysePrivacy(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  const permissions = r.headers.headers.find((h) => h.header === "Permissions-Policy");
+  const permissions = header(r, "Permissions-Policy");
   if (!permissions || permissions.status !== "pass") {
     insights.push({
       id: "rp-permissions-policy",
@@ -607,16 +604,7 @@ function analysePrivacy(r: ReconResult): PersonaAnalysis {
     });
   }
 
-  return {
-    persona: "privacy",
-    displayName: "Privacy",
-    perspective:
-      "Assesses information leakage and privacy exposure from the domain's external configuration.",
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildPrivacySummary(insights, r.meta.domain),
-    insights,
-    priorityActions: derivePrivacyActions(insights),
-  };
+  return buildPersonaAnalysis(privacySpec, insights, buildPrivacySummary(insights, r.meta.domain));
 }
 
 function buildPrivacySummary(insights: Insight[], domain: string): string {
@@ -627,41 +615,31 @@ function buildPrivacySummary(insights: Insight[], domain: string): string {
   return `${domain} has ${insights.length} privacy concern(s)${medCount > 0 ? `, ${medCount} at medium severity` : ""}. Information leakage from headers or WHOIS could aid targeted attacks.`;
 }
 
-function derivePrivacyActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  for (const i of insights) {
-    actions.push(i.recommendation);
-  }
-  return actions.slice(0, 5);
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
+const RECON_PERSONAS: Array<[PersonaSpec, (r: ReconResult) => PersonaAnalysis]> = [
+  [redTeamSpec, analyseRedTeam],
+  [blueTeamSpec, analyseBlueTeam],
+  [complianceSpec, analyseCompliance],
+  [netEngineerSpec, analyseNetEngineer],
+  [privacySpec, analysePrivacy],
+];
+
 export function analyseReconAllPersonas(result: ReconResult): FullReconAnalysis {
-  const analyses: PersonaAnalysis[] = [
-    analyseRedTeam(result),
-    analyseBlueTeam(result),
-    analyseCompliance(result),
-    analyseNetEngineer(result),
-    analysePrivacy(result),
-  ];
-
-  const ratings = analyses.map((a) => a.riskRating) as RiskRating[];
-  const allActions = analyses.map((a) => a.priorityActions);
-
-  const tlsGrade = gradeToNumber(result.tls.grade);
-  const headersGrade = gradeToNumber(result.headers.grade);
-  const overallGrade = numberToGrade((tlsGrade + headersGrade) / 2);
+  const analyses = RECON_PERSONAS.map(([, analyse]) => analyse(result));
+  const gradeAverage = (GRADE_VALUES[result.tls.grade] + GRADE_VALUES[result.headers.grade]) / 2;
 
   return {
     reconId: result.meta.reconId,
     timestamp: result.meta.timestamp,
     domain: result.meta.domain,
     analyses,
-    consensusRating: consensusRating(ratings),
-    consensusActions: consensusActions(allActions),
-    overallGrade,
+    consensusRating: consensusRating(analyses.map((a) => a.riskRating)),
+    consensusActions: consensusActions(
+      analyses.map((a, i) => keyedActionsFor(a.insights, RECON_PERSONAS[i][0])),
+    ),
+    overallGrade: numberToGrade(gradeAverage),
   };
 }

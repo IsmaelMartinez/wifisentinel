@@ -1,4 +1,5 @@
-import { run, runAsync } from "../exec.js";
+import { runAsync } from "../exec.js";
+import { isMulticastMac, normaliseMac } from "../mac.js";
 
 export interface DeauthScanOptions {
   monitorMode?: boolean;
@@ -46,9 +47,9 @@ function parseMacosLogs(output: string): Pick<DeauthResult, "detected" | "frameC
   for (const line of lines) {
     const matches = line.matchAll(MAC_RE);
     for (const m of matches) {
-      const mac = m[1].toLowerCase();
+      const mac = normaliseMac(m[1]);
       // Skip broadcast and multicast MACs
-      if (mac === "ff:ff:ff:ff:ff:ff") continue;
+      if (isMulticastMac(mac)) continue;
       macCounts.set(mac, (macCounts.get(mac) ?? 0) + 1);
     }
   }
@@ -73,8 +74,8 @@ function parseLinuxLogs(output: string): Pick<DeauthResult, "detected" | "frameC
   for (const line of lines) {
     const matches = line.matchAll(MAC_RE);
     for (const m of matches) {
-      const mac = m[1].toLowerCase();
-      if (mac === "ff:ff:ff:ff:ff:ff") continue;
+      const mac = normaliseMac(m[1]);
+      if (isMulticastMac(mac)) continue;
       macCounts.set(mac, (macCounts.get(mac) ?? 0) + 1);
     }
   }
@@ -108,8 +109,8 @@ function parseTcpdumpOutput(output: string): Pick<DeauthResult, "detected" | "fr
       const tokens = srcPart.split(/\s+/);
       const possibleMac = tokens[tokens.length - 1];
       if (possibleMac && /^[0-9a-f]{1,2}(:[0-9a-f]{1,2}){5}$/i.test(possibleMac)) {
-        const mac = possibleMac.toLowerCase();
-        if (mac !== "ff:ff:ff:ff:ff:ff") {
+        const mac = normaliseMac(possibleMac);
+        if (!isMulticastMac(mac)) {
           macCounts.set(mac, (macCounts.get(mac) ?? 0) + 1);
         }
       }
@@ -130,7 +131,7 @@ function parseTcpdumpOutput(output: string): Pick<DeauthResult, "detected" | "fr
 async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
   if (process.platform === "darwin") {
     // macOS: use log show to query the last 5 minutes of Wi-Fi subsystem logs
-    const result = run(
+    const result = await runAsync(
       "log",
       [
         "show",
@@ -151,7 +152,7 @@ async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
   }
 
   // Linux: try journalctl first, fall back to dmesg
-  const journalResult = run(
+  const journalResult = await runAsync(
     "journalctl",
     ["-k", "--no-pager", "--since", "5 minutes ago", "-g", "deauth|disassoc"],
     30_000
@@ -161,7 +162,7 @@ async function scanViaSystemLogs(startTime: number): Promise<DeauthResult> {
 
   if (journalResult.exitCode !== 0 || !logOutput.trim()) {
     // Fallback: dmesg
-    const dmesgResult = run("dmesg", [], 10_000);
+    const dmesgResult = await runAsync("dmesg", [], 10_000);
     logOutput = dmesgResult.stdout;
   }
 

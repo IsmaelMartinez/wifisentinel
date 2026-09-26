@@ -1,6 +1,7 @@
 // src/commands/trend.ts
 import chalk from "chalk";
 import type { Command } from "commander";
+import { parsePositiveInt } from "./options.js";
 import { listScans, type IndexEntry } from "../store/index.js";
 import {
   isKnownSource,
@@ -8,20 +9,7 @@ import {
   sourceCell,
   splitBySource,
 } from "../store/source.js";
-import { pad } from "../reporter/render-helpers.js";
-
-function riskColor(risk: string): (s: string) => string {
-  if (risk === "critical") return chalk.red.bold;
-  if (risk === "high") return chalk.red;
-  if (risk === "medium") return chalk.yellow;
-  return chalk.green;
-}
-
-function gradeColor(grade: string): (s: string) => string {
-  if (grade === "A" || grade === "B") return chalk.green;
-  if (grade === "C" || grade === "D") return chalk.yellow;
-  return chalk.red;
-}
+import { pad, TEAL, AMBER, RED, gradeColor, riskColor } from "../reporter/render-helpers.js";
 
 function computeTrendDirection(entries: IndexEntry[]): string {
   if (entries.length < 2) return "insufficient data";
@@ -33,21 +21,21 @@ function computeTrendDirection(entries: IndexEntry[]): string {
   const avgFirst = firstHalf.reduce((s, e) => s + e.securityScore, 0) / firstHalf.length;
   const avgSecond = secondHalf.reduce((s, e) => s + e.securityScore, 0) / secondHalf.length;
   const delta = avgSecond - avgFirst;
-  if (delta > 0.3) return chalk.green("improving");
-  if (delta < -0.3) return chalk.red("declining");
-  return chalk.yellow("stable");
+  if (delta > 0.3) return TEAL("improving");
+  if (delta < -0.3) return RED("declining");
+  return AMBER("stable");
 }
 
 export function registerTrendCommand(program: Command): void {
   program
     .command("trend")
     .description("Show security score trends over time")
-    .option("-n, --limit <count>", "Number of scans to show", "10")
+    .option("-n, --limit <count>", "Number of scans to show", parsePositiveInt, 10)
     .option("--ssid <name>", "Filter by SSID")
     .option("--json", "Output as JSON")
     .action((opts) => {
       const entries = listScans({
-        limit: parseInt(opts.limit, 10),
+        limit: opts.limit,
         ssid: opts.ssid,
       });
 
@@ -116,7 +104,7 @@ export function registerTrendCommand(program: Command): void {
       const trend = computeTrendDirection(scored);
 
       console.log(chalk.dim("─".repeat(60)));
-      console.log(`Avg: ${chalk.bold(avg)}  Best: ${chalk.green(best)}  Worst: ${chalk.red(worst)}  Trend: ${trend}`);
+      console.log(`Avg: ${chalk.bold(avg)}  Best: ${TEAL(best)}  Worst: ${RED(worst)}  Trend: ${trend}`);
       const note = partialTrendNote(full.length, partial.length);
       if (note) console.log(chalk.dim(note));
       if (unsourcedExcluded > 0) {

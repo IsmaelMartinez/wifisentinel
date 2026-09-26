@@ -58,6 +58,19 @@ describe("detectEnvironmentChanges", () => {
     assert.ok(result.summary.includes("security change(s)"));
   });
 
+  it("flags WPA3 -> WPA2 as a downgrade", () => {
+    const baseline = makeWifi([
+      { ssid: "Net", bssid: "AA:BB:CC:DD:EE:01", security: "WPA3 Personal", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const current = makeWifi([
+      { ssid: "Net", bssid: "AA:BB:CC:DD:EE:01", security: "WPA2 Personal", channel: 6, signal: -50, noise: -90 },
+    ]);
+    const result = detectEnvironmentChanges(current, baseline, META);
+    const secChange = result.changes.find(c => c.type === "security_change");
+    assert.ok(secChange);
+    assert.equal(secChange.severity, "high");
+  });
+
   it("flags a security upgrade as medium severity", () => {
     const baseline = makeWifi([
       { ssid: "Net", bssid: "AA:BB:CC:DD:EE:01", security: "WPA2 Personal", channel: 6, signal: -50, noise: -90 },

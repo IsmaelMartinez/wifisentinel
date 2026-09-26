@@ -1,57 +1,31 @@
 import chalk from "chalk";
 import type { NetworkScanResult } from "../collector/schema/scan-result.js";
-import { scoreAllStandards } from "../analyser/standards/index.js";
 import type { ComplianceReport, FindingStatus } from "../analyser/standards/types.js";
-import { analyseAllPersonas } from "../analyser/personas/index.js";
-import type { FullAnalysis, PersonaId } from "../analyser/personas/types.js";
-import { W, hRule, sectionHeader, row, scoreBar, link } from "./render-helpers.js";
+import type { FullAnalysis, PersonaAnalysis } from "../analyser/personas/types.js";
+import type { RFAnalysis } from "../analyser/rf/types.js";
+import {
+  W,
+  TEAL,
+  RED,
+  AMBER,
+  hRule,
+  sectionHeader,
+  row,
+  scoreBar,
+  link,
+  gradeColor,
+  riskColor,
+  severityColor,
+  personaAccent,
+  statusIcon,
+} from "./render-helpers.js";
 import { renderTerminalReport } from "./terminal.reporter.js";
 
-const TEAL = chalk.hex("#4ec9b0");
-const RED = chalk.hex("#f44747");
-const AMBER = chalk.hex("#cca700");
-const BLUE = chalk.hex("#569cd6");
-
-// ─── Colour helpers ───────────────────────────────────────────────────────
-
-function gradeColor(grade: string): (s: string) => string {
-  if (grade === "A" || grade === "B") return TEAL;
-  if (grade === "C" || grade === "D") return AMBER;
-  return RED;
-}
-
-function findingSeverityColor(severity: string): (s: string) => string {
-  if (severity === "critical") return RED.bold as (s: string) => string;
-  if (severity === "high") return RED;
-  if (severity === "medium") return AMBER;
-  if (severity === "low") return chalk.dim;
-  return chalk.dim;
-}
-
-function riskColor(rating: string): (s: string) => string {
-  if (rating === "critical") return RED.bold as (s: string) => string;
-  if (rating === "high") return RED;
-  if (rating === "medium") return AMBER;
-  if (rating === "low") return TEAL;
-  return chalk.dim;
-}
-
-function personaAccent(persona: PersonaId): (s: string) => string {
-  const map: Record<PersonaId, (s: string) => string> = {
-    "red-team": RED,
-    "blue-team": BLUE,
-    "compliance": TEAL,
-    "net-engineer": AMBER,
-    "privacy": chalk.magenta,
-  };
-  return map[persona] ?? chalk.white;
-}
-
-function statusIcon(status: FindingStatus): string {
-  if (status === "pass") return TEAL("✔");
-  if (status === "fail") return RED("✘");
-  if (status === "partial") return AMBER("◐");
-  return chalk.dim("—"); // not-applicable
+/** Persona output shared by the network (FullAnalysis) and recon analyses. */
+export interface PersonaReport {
+  analyses: PersonaAnalysis[];
+  consensusRating: string;
+  consensusActions: string[];
 }
 
 // ─── Compliance renderers ─────────────────────────────────────────────────
@@ -100,7 +74,7 @@ export function renderComplianceDetails(report: ComplianceReport): string {
       if (group.length === 0) continue;
 
       for (const finding of group) {
-        const sev = findingSeverityColor(finding.severity);
+        const sev = severityColor(finding.severity);
         lines.push(row(`  ${statusIcon(finding.status)}  ${sev(`[${finding.severity.toUpperCase()}]`)} ${finding.title}`));
         lines.push(row(chalk.dim(`     ${finding.description}`)));
         if (finding.status !== "pass" && finding.status !== "not-applicable") {
@@ -124,7 +98,7 @@ export function renderComplianceDetails(report: ComplianceReport): string {
 
 // ─── Persona renderers ───────────────────────────────────────────────────
 
-export function renderPersonaSummary(analysis: FullAnalysis): string {
+export function renderPersonaSummary(analysis: PersonaReport): string {
   const rc = riskColor(analysis.consensusRating);
   const lines: string[] = [
     sectionHeader("PERSONA ANALYSIS SUMMARY"),
@@ -136,7 +110,7 @@ export function renderPersonaSummary(analysis: FullAnalysis): string {
   if (analysis.consensusActions.length > 0) {
     lines.push(row(chalk.bold("  Priority Actions (consensus):")));
     for (const action of analysis.consensusActions.slice(0, 8)) {
-      lines.push(row(`    ${chalk.yellow("→")} ${action}`));
+      lines.push(row(`    ${AMBER("→")} ${action}`));
     }
     lines.push(row(""));
   }
@@ -152,7 +126,7 @@ export function renderPersonaSummary(analysis: FullAnalysis): string {
   return lines.join("\n");
 }
 
-export function renderPersonaDetails(analysis: FullAnalysis): string {
+export function renderPersonaDetails(analysis: PersonaReport): string {
   const severityOrder = ["critical", "high", "medium", "low", "info"];
   const lines: string[] = [
     sectionHeader("PERSONA ANALYSIS DETAILS"),
@@ -174,7 +148,7 @@ export function renderPersonaDetails(analysis: FullAnalysis): string {
     );
 
     for (const insight of sorted) {
-      const sev = findingSeverityColor(insight.severity);
+      const sev = severityColor(insight.severity);
       lines.push(row(`  ${sev(`[${insight.severity.toUpperCase()}]`)} ${chalk.bold(insight.title)}`));
       lines.push(row(chalk.dim(`    ${insight.description}`)));
       if (insight.technicalDetail) {
@@ -206,17 +180,15 @@ export function renderPersonaDetails(analysis: FullAnalysis): string {
 
 export function renderFullAnalysisReport(
   result: NetworkScanResult,
-  compliance: ComplianceReport,
-  analysis: FullAnalysis,
+  computed: { compliance: ComplianceReport; analysis: FullAnalysis; rfAnalysis: RFAnalysis },
   verbose = false,
 ): string {
+  const { compliance, analysis } = computed;
+  // The scan report ends with ╚═╝ from the scorecard; the analysis sections
+  // follow it.
   const sections: string[] = [
-    renderTerminalReport(result),
+    renderTerminalReport(result, computed.rfAnalysis),
   ];
-
-  // Remove the closing box border from the scan report so we can continue
-  // Actually, the scan report ends with ╚═╝ from the scorecard. We'll just
-  // append the analysis sections after it.
 
   sections.push(renderComplianceSummary(compliance));
   sections.push(renderPersonaSummary(analysis));
@@ -230,15 +202,4 @@ export function renderFullAnalysisReport(
   sections.push(chalk.cyan(hRule("╚", "═", "╝")));
 
   return sections.filter(Boolean).join("\n");
-}
-
-// ─── Main export ──────────────────────────────────────────────────────────
-
-export function renderAnalysisReport(
-  result: NetworkScanResult,
-  options?: { verbose?: boolean },
-): string {
-  const compliance = scoreAllStandards(result);
-  const analysis = analyseAllPersonas(result);
-  return renderFullAnalysisReport(result, compliance, analysis, options?.verbose);
 }

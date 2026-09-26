@@ -1,31 +1,21 @@
 import chalk from "chalk";
 import type { Command } from "commander";
-import { listScans } from "../store/index.js";
-import { pad } from "../reporter/render-helpers.js";
-
-function riskColor(risk: string): (s: string) => string {
-  if (risk === "critical") return chalk.red.bold;
-  if (risk === "high") return chalk.red;
-  if (risk === "medium") return chalk.yellow;
-  return chalk.green;
-}
-
-function gradeColor(grade: string): (s: string) => string {
-  if (grade === "A" || grade === "B") return chalk.green;
-  if (grade === "C" || grade === "D") return chalk.yellow;
-  return chalk.red;
-}
+import { parsePositiveInt } from "./options.js";
+import { listScans, rebuildIndex } from "../store/index.js";
+import { pad, gradeColor, riskColor } from "../reporter/render-helpers.js";
 
 export function registerHistoryCommand(program: Command): void {
   program
     .command("history")
     .description("List past network scans")
-    .option("-n, --limit <count>", "Number of scans to show", "20")
+    .option("-n, --limit <count>", "Number of scans to show", parsePositiveInt, 20)
     .option("--ssid <name>", "Filter by SSID")
     .option("--json", "Output as JSON")
+    .option("--reindex", "Rebuild the scan index from the stored scan files first")
     .action((opts) => {
+      if (opts.reindex) rebuildIndex();
       const entries = listScans({
-        limit: parseInt(opts.limit, 10),
+        limit: opts.limit,
         ssid: opts.ssid,
       });
 

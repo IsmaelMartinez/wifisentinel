@@ -1,7 +1,5 @@
 import chalk from "chalk";
-
-const RED = chalk.hex("#f44747");
-const AMBER = chalk.hex("#cca700");
+import { AMBER, RED } from "./render-helpers.js";
 
 interface HostNode {
   ip: string;

@@ -1,41 +1,9 @@
-import { run } from "../exec.js";
+import { runAsync } from "../exec.js";
 import type { NetworkScanResult } from "../schema/scan-result.js";
 import { lookupVendor } from "../oui-lookup.js";
-
-interface ArpEntry {
-  ip: string;
-  mac: string;
-  iface: string;
-}
-
-function parseArpOutput(output: string): ArpEntry[] {
-  const entries: ArpEntry[] = [];
-  // Format: ? (192.168.68.1) at 48:22:54:b:d0:90 on en0 ifscope [ethernet]
-  const lineRe = /\S+\s+\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]+)\s+on\s+(\S+)/;
-
-  for (const line of output.split("\n")) {
-    const match = line.match(lineRe);
-    if (!match) continue;
-    const [, ip, mac, iface] = match;
-    // Skip incomplete entries where mac is "ff:ff:ff:ff:ff:ff" or "(incomplete)"
-    if (mac === "ff:ff:ff:ff:ff:ff" || line.includes("(incomplete)")) continue;
-    entries.push({ ip, mac, iface });
-  }
-
-  return entries;
-}
-
-function deduplicateByIp(entries: ArpEntry[]): ArpEntry[] {
-  const map = new Map<string, ArpEntry>();
-  for (const entry of entries) {
-    map.set(entry.ip, entry);
-  }
-  return Array.from(map.values());
-}
-
-function lookupMacVendor(mac: string): string | undefined {
-  return lookupVendor(mac);
-}
+import { readArpTable, type ArpEntry } from "../platform/arp.js";
+import { bin, broadcastPingArgs } from "../platform/commands.js";
+import { isPrivateIp } from "../util.js";
 
 interface TopologyHop {
   ip: string;
@@ -43,17 +11,9 @@ interface TopologyHop {
   latencyMs: number;
 }
 
-function isPrivateIp(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts[0] === 10) return true;
-  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-  if (parts[0] === 192 && parts[1] === 168) return true;
-  return false;
-}
-
-function parseTraceroute(output: string): TopologyHop[] {
+export function parseTraceroute(output: string): TopologyHop[] {
   const hops: TopologyHop[] = [];
-  // Typical macOS traceroute line:
+  // Typical traceroute line (macOS and Linux):
   //  1  192.168.68.1 (192.168.68.1)  3.210 ms  2.875 ms  3.011 ms
   //  2  * * *
   const lineRe = /^\s*(\d+)\s+(?:\*|(\S+)\s+\((\d+\.\d+\.\d+\.\d+)\)\s+([\d.]+)\s+ms)/;
@@ -73,59 +33,56 @@ function parseTraceroute(output: string): TopologyHop[] {
   return hops;
 }
 
+export interface ArpDiscoveryOptions {
+  stealth?: boolean;
+  broadcastAddr: string;
+}
+
+/**
+ * Read the ARP table once for the whole scan. Outside stealth mode a
+ * broadcast ping first stimulates replies (active — visible on the network).
+ */
+export async function discoverArpTable(options: ArpDiscoveryOptions): Promise<ArpEntry[]> {
+  if (!options.stealth) {
+    await runAsync(bin("ping"), broadcastPingArgs(options.broadcastAddr), 10_000);
+  }
+  return readArpTable();
+}
+
 export interface HostScanOptions {
   stealth?: boolean;
   gatewayIp?: string;
 }
 
 export async function scanHosts(
-  iface: string,
-  subnet: string,
-  broadcastAddr: string,
+  arpEntries: ArpEntry[],
   options: HostScanOptions = {},
 ): Promise<{
   hosts: NetworkScanResult["network"]["hosts"];
   topology: NetworkScanResult["network"]["topology"];
 }> {
-  // 1. Initial ARP table read (passive — no network traffic)
-  const initialArp = run("/usr/sbin/arp", ["-a"]);
-  let arpEntries = parseArpOutput(initialArp.stdout);
-
-  if (!options.stealth) {
-    // 2. Broadcast ping to stimulate ARP responses (active — visible on network)
-    run("/sbin/ping", ["-c", "2", "-t", "1", broadcastAddr], 10_000);
-
-    // 3. Re-read ARP after broadcast ping
-    const refreshedArp = run("/usr/sbin/arp", ["-a"]);
-    arpEntries = deduplicateByIp([...arpEntries, ...parseArpOutput(refreshedArp.stdout)]);
-  }
-
-  // 4. Vendor lookups from local OUI database (no network traffic)
-  const hosts: NetworkScanResult["network"]["hosts"] = [];
-  for (const entry of arpEntries) {
-    const vendor = lookupMacVendor(entry.mac);
-    hosts.push({
+  // Vendor lookups from local OUI database (no network traffic)
+  const hosts: NetworkScanResult["network"]["hosts"] = await Promise.all(
+    arpEntries.map(async (entry) => ({
       ip: entry.ip,
       mac: entry.mac,
-      vendor,
-    });
-  }
+      vendor: await lookupVendor(entry.mac),
+    })),
+  );
 
   let hops: TopologyHop[] = [];
   let doubleNat = false;
 
   if (!options.stealth) {
-    // 5. Topology: traceroute to 8.8.8.8 with max 5 hops (active — UDP probes)
-    const traceResult = run("/usr/sbin/traceroute", ["-m", "5", "-q", "1", "8.8.8.8"], 30_000);
+    // Topology: traceroute to 8.8.8.8 with max 5 hops (active — UDP probes)
+    const traceResult = await runAsync(bin("traceroute"), ["-m", "5", "-q", "1", "8.8.8.8"], 30_000);
     hops = parseTraceroute(traceResult.stdout);
 
-    // 6. Double NAT detection: hop 2 (index 1) is also a private IP
+    // Double NAT detection: hop 2 (index 1) is also a private IP
     doubleNat = hops.length >= 2 && isPrivateIp(hops[1].ip);
-  } else {
+  } else if (options.gatewayIp) {
     // Stealth: use gateway IP from bootstrap (already known, no network traffic)
-    if (options.gatewayIp) {
-      hops = [{ ip: options.gatewayIp, latencyMs: 0 }];
-    }
+    hops = [{ ip: options.gatewayIp, latencyMs: 0 }];
   }
 
   return {
