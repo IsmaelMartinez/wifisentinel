@@ -22,7 +22,7 @@ Multi-persona WiFi and network security analyser with compliance scoring, RF int
 
 ## Requirements
 
-- Node.js >= 20
+- Node.js >= 22
 - macOS or Linux (WiFi scanning uses platform-native tools)
 
 Optional system tools (used when available, gracefully degraded otherwise):
@@ -283,7 +283,7 @@ npm run typecheck           # tsc --noEmit
 npm run lint                # eslint
 ```
 
-CI runs typecheck, build, lint, and tests on Node 20 and 22, plus a dashboard build, on every PR.
+CI runs typecheck, build, lint, and tests on Node 22 and 24, plus a dashboard build, on every PR.
 
 ### Areas for contribution
 
