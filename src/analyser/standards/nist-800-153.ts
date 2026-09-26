@@ -2,236 +2,198 @@ import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
 import { classifySecurity } from "../security.js";
 import {
   type Finding,
+  type FindingSpec,
   type StandardScore,
-  computeGrade,
-  computeScore,
+  UNKNOWN_SECURITY_FIX,
+  buildStandardScore,
+  finding,
   wpaTierStatus,
 } from "./types.js";
 
 const STANDARD = "nist-800-153" as const;
+const check = (spec: FindingSpec): Finding => finding(STANDARD, spec);
 
 function checkMacRandomisation(result: NetworkScanResult): Finding {
-  return {
+  const randomised = result.wifi.macRandomised;
+  return check({
     id: "NIST-W-1.1",
-    standard: STANDARD,
     title: "MAC address randomisation",
     severity: "medium",
-    status: result.wifi.macRandomised ? "pass" : "fail",
+    status: randomised ? "pass" : "fail",
     description:
       "MAC randomisation prevents tracking across networks by using a different address on each connection.",
-    recommendation: result.wifi.macRandomised
-      ? "No action needed."
-      : "Enable private/random Wi-Fi address in the OS network settings.",
-    evidence: `MAC randomised: ${result.wifi.macRandomised}`,
-  };
+    fix: "Enable private/random Wi-Fi address in the OS network settings.",
+    evidence: `MAC randomised: ${randomised}`,
+  });
 }
 
 function checkClientIsolation(result: NetworkScanResult): Finding {
   const isolation = result.security.clientIsolation;
-  return {
+  return check({
     id: "NIST-W-1.2",
-    standard: STANDARD,
     title: "Wireless client isolation",
     severity: "medium",
-    status:
-      isolation === null ? "not-applicable" : isolation ? "pass" : "fail",
+    status: isolation === null ? "not-applicable" : isolation ? "pass" : "fail",
     description:
       "Client isolation limits the attack surface by preventing direct communication between wireless clients.",
-    recommendation:
-      isolation === true
-        ? "No action needed."
-        : "Enable client isolation on the access point.",
+    fix: "Enable client isolation on the access point.",
     evidence:
       isolation === null
         ? "Status unknown"
         : `Client isolation: ${isolation ? "enabled" : "disabled"}`,
-  };
+  });
 }
 
 function checkEncryptionStrength(result: NetworkScanResult): Finding {
   const { wpaTier } = classifySecurity(result.wifi.security);
-  const status = wpaTierStatus(wpaTier);
-
-  return {
+  return check({
     id: "NIST-W-2.1",
-    standard: STANDARD,
     title: "Encryption protocol strength",
     severity: "critical",
-    status,
+    status: wpaTierStatus(wpaTier),
     description:
       "NIST recommends the strongest available encryption. WPA3 provides simultaneous authentication of equals (SAE).",
-    recommendation:
-      wpaTier === "wpa3"
-        ? "No action needed."
-        : wpaTier === "unknown"
-          ? "Security mode was not reported — confirm the access point uses WPA3, or WPA2 at minimum."
-          : "Migrate to WPA3. If devices lack WPA3 support, use WPA2 with AES-CCMP only.",
+    fix:
+      wpaTier === "unknown"
+        ? UNKNOWN_SECURITY_FIX
+        : "Migrate to WPA3. If devices lack WPA3 support, use WPA2 with AES-CCMP only.",
     evidence: `Protocol: ${result.wifi.security}`,
-  };
+  });
 }
 
 function checkKeyManagement(result: NetworkScanResult): Finding {
   const { mode } = classifySecurity(result.wifi.security);
-  const hasEnterprise = mode === "Enterprise";
-  const hasPersonal = mode === "Personal";
-
-  return {
+  return check({
     id: "NIST-W-2.2",
-    standard: STANDARD,
     title: "Key management approach",
     severity: "medium",
-    status: hasEnterprise ? "pass" : hasPersonal ? "partial" : "fail",
+    status: mode === "Enterprise" ? "pass" : mode === "Personal" ? "partial" : "fail",
     description:
       "Enterprise authentication (802.1X/EAP) provides individual credentials and stronger key management than pre-shared keys.",
-    recommendation: hasEnterprise
-      ? "No action needed."
-      : "Consider migrating to WPA-Enterprise with RADIUS for environments with multiple users.",
+    fix: "Consider migrating to WPA-Enterprise with RADIUS for environments with multiple users.",
     evidence: `Security mode: ${result.wifi.security}`,
-  };
+  });
 }
 
 function checkIntrusionDetection(result: NetworkScanResult): Finding {
   const hasIntrusion = !!result.intrusionIndicators;
-
-  return {
+  return check({
     id: "NIST-W-3.1",
-    standard: STANDARD,
     title: "Intrusion detection capability",
     severity: "high",
     status: hasIntrusion ? "pass" : "fail",
     description:
       "Wireless networks should be monitored for intrusion attempts, rogue access points, and anomalous activity.",
-    recommendation: hasIntrusion
-      ? "No action needed — intrusion monitoring is active."
-      : "Enable network intrusion detection. Run scans regularly with full monitoring.",
+    ok: "No action needed — intrusion monitoring is active.",
+    fix: "Enable network intrusion detection. Run scans regularly with full monitoring.",
     evidence: hasIntrusion
       ? `ARP monitoring: active, scan detection: active`
       : "Intrusion detection not available in this scan",
-  };
+  });
 }
 
 function checkArpMonitoring(result: NetworkScanResult): Finding {
   const indicators = result.intrusionIndicators;
   if (!indicators) {
-    return {
+    return check({
       id: "NIST-W-3.2",
-      standard: STANDARD,
       title: "ARP spoofing monitoring",
       severity: "high",
       status: "not-applicable",
       description: "ARP monitoring was not performed during this scan.",
-      recommendation: "Run the scan with intrusion detection enabled.",
-    };
+      fix: "Run the scan with intrusion detection enabled.",
+    });
   }
   const anomalyCount = indicators.arpAnomalies.length;
-  return {
+  return check({
     id: "NIST-W-3.2",
-    standard: STANDARD,
     title: "ARP spoofing monitoring",
     severity: "high",
     status: anomalyCount === 0 ? "pass" : "fail",
     description:
       "ARP spoofing is a common attack vector on wireless LANs. Continuous monitoring detects and mitigates this threat.",
-    recommendation:
-      anomalyCount === 0
-        ? "No anomalies detected."
-        : "Investigate ARP anomalies and consider deploying Dynamic ARP Inspection (DAI).",
+    ok: "No anomalies detected.",
+    fix: "Investigate ARP anomalies and consider deploying Dynamic ARP Inspection (DAI).",
     evidence: `ARP anomalies detected: ${anomalyCount}`,
-  };
+  });
 }
 
 function checkDoubleNat(result: NetworkScanResult): Finding {
   const doubleNat = result.network.topology.doubleNat;
-  return {
+  return check({
     id: "NIST-W-4.1",
-    standard: STANDARD,
     title: "Network architecture — double NAT",
     severity: "medium",
     status: doubleNat ? "fail" : "pass",
     description:
       "Double NAT creates routing complexity and can interfere with VPN, IPsec, and other security mechanisms.",
-    recommendation: doubleNat
-      ? "Eliminate double NAT by configuring one device as a bridge or placing it in the DMZ."
-      : "No action needed.",
+    fix: "Eliminate double NAT by configuring one device as a bridge or placing it in the DMZ.",
     evidence: `Double NAT: ${doubleNat ? "detected" : "not detected"}, hops: ${result.network.topology.hops.length}`,
-  };
+  });
 }
 
 function checkGatewaySecurity(result: NetworkScanResult): Finding {
   const gw = result.network.gateway;
   const firewallEnabled = result.security.firewall.enabled;
-
-  return {
+  return check({
     id: "NIST-W-4.2",
-    standard: STANDARD,
     title: "Gateway security posture",
     severity: "high",
     status: firewallEnabled ? "pass" : "fail",
     description:
       "The network gateway should have firewall protection enabled to control inbound and outbound traffic.",
-    recommendation: firewallEnabled
-      ? "No action needed."
-      : "Enable firewall on the host and ensure the gateway has its own firewall enabled.",
+    fix: "Enable firewall on the host and ensure the gateway has its own firewall enabled.",
     evidence: `Gateway: ${gw.ip} (${gw.vendor ?? "unknown vendor"}), host firewall: ${firewallEnabled ? "enabled" : "disabled"}`,
-  };
+  });
 }
 
 function checkIpForwarding(result: NetworkScanResult): Finding {
   const forwarding = result.security.kernelParams.ipForwarding;
-  return {
+  return check({
     id: "NIST-W-4.3",
-    standard: STANDARD,
     title: "IP forwarding disabled",
     severity: "high",
     status: forwarding ? "fail" : "pass",
     description:
       "IP forwarding on endpoint devices can allow the device to be used as a router, facilitating man-in-the-middle attacks.",
-    recommendation: forwarding
-      ? "Disable IP forwarding unless this device is intentionally acting as a router."
-      : "No action needed.",
+    fix: "Disable IP forwarding unless this device is intentionally acting as a router.",
     evidence: `IP forwarding: ${forwarding ? "enabled" : "disabled"}`,
-  };
+  });
 }
 
 function checkIcmpRedirects(result: NetworkScanResult): Finding {
   const redirects = result.security.kernelParams.icmpRedirects;
-  return {
+  return check({
     id: "NIST-W-4.4",
-    standard: STANDARD,
     title: "ICMP redirects disabled",
     severity: "medium",
     status: redirects ? "fail" : "pass",
     description:
       "ICMP redirects can be exploited to reroute traffic through an attacker-controlled host.",
-    recommendation: redirects
-      ? "Disable ICMP redirect acceptance in kernel/network settings."
-      : "No action needed.",
+    fix: "Disable ICMP redirect acceptance in kernel/network settings.",
     evidence: `ICMP redirects: ${redirects ? "accepted" : "rejected"}`,
-  };
+  });
 }
 
 function checkLogging(result: NetworkScanResult): Finding {
   // Toolchain keys are capability names; packetAnalysis resolves to tshark or
   // tcpdump, either of which can record traffic for forensic review.
   const captureTool = result.meta.toolchain["packetAnalysis"] ?? null;
-
-  return {
+  return check({
     id: "NIST-W-5.1",
-    standard: STANDARD,
     title: "Security logging capability",
     severity: "medium",
     status: captureTool ? "pass" : "partial",
     description:
       "Comprehensive logging supports incident response and forensic analysis of security events.",
-    recommendation: captureTool
-      ? "No action needed — packet capture is available for security logging."
-      : "Install tshark or tcpdump so network traffic can be captured for security logging.",
+    ok: "No action needed — packet capture is available for security logging.",
+    fix: "Install tshark or tcpdump so network traffic can be captured for security logging.",
     evidence: `Packet capture tool: ${captureTool ?? "not available"}`,
-  };
+  });
 }
 
 export function scoreNist800153(result: NetworkScanResult): StandardScore {
-  const findings: Finding[] = [
+  return buildStandardScore(STANDARD, "NIST SP 800-153 — Guidelines for Securing WLANs", "2012", [
     checkMacRandomisation(result),
     checkClientIsolation(result),
     checkEncryptionStrength(result),
@@ -243,22 +205,5 @@ export function scoreNist800153(result: NetworkScanResult): StandardScore {
     checkIpForwarding(result),
     checkIcmpRedirects(result),
     checkLogging(result),
-  ];
-
-  const score = computeScore(findings);
-  const passing = findings.filter((f) => f.status === "pass").length;
-  const applicable = findings.filter(
-    (f) => f.status !== "not-applicable"
-  ).length;
-
-  return {
-    standard: STANDARD,
-    name: "NIST SP 800-153 — Guidelines for Securing WLANs",
-    version: "2012",
-    score,
-    maxScore: 100,
-    grade: computeGrade(score),
-    findings,
-    summary: `${passing}/${applicable} applicable controls passed (score: ${score}/100).`,
-  };
+  ]);
 }

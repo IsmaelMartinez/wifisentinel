@@ -1,12 +1,24 @@
 import type { NetworkScanResult } from "../../collector/schema/scan-result.js";
 import { classifySecurity } from "../security.js";
-import type { Insight, PersonaAnalysis } from "./types.js";
-import { riskFromInsights } from "./types.js";
+import type { Insight, PersonaAnalysis, PersonaSpec } from "./types.js";
+import { buildPersonaAnalysis } from "./types.js";
 
-const PERSONA_ID = "privacy" as const;
-const DISPLAY_NAME = "Privacy Advocate";
-const PERSPECTIVE =
-  "Evaluates the privacy implications of the network configuration, identifying tracking risks, data leaks, and surveillance exposure.";
+export const privacySpec: PersonaSpec = {
+  persona: "privacy",
+  displayName: "Privacy Advocate",
+  perspective:
+    "Evaluates the privacy implications of the network configuration, identifying tracking risks, data leaks, and surveillance exposure.",
+  actions: {
+    "pr-dns-intercepted": { key: "encrypted-dns", text: "Enable encrypted DNS (DoH/DoT) to stop DNS interception" },
+    "pr-camera-surveillance": { key: "camera-review", text: "Identify and verify consent for all detected surveillance cameras" },
+    "pr-weak-wifi-privacy": { key: "wifi-encryption", text: "Upgrade Wi-Fi encryption to WPA3 or use a VPN as a compensating control" },
+    "pr-mac-not-randomised": { key: "mac-randomisation", text: "Enable MAC address randomisation to prevent cross-network tracking" },
+    "pr-dns-not-encrypted": { key: "encrypted-dns", text: "Switch to encrypted DNS to hide browsing activity from observers" },
+    "pr-mdns-exposure": { key: "disable-mdns", text: "Disable mDNS to stop broadcasting device information" },
+    "pr-vpn-inactive": { key: "vpn", text: "Activate VPN to encrypt traffic and prevent ISP observation" },
+    "pr-unencrypted-traffic": { key: "enforce-tls", text: "Eliminate unencrypted traffic flows to prevent data exposure" },
+  },
+};
 
 export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
   const insights: Insight[] = [];
@@ -24,7 +36,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enable MAC address randomisation in the operating system's Wi-Fi settings. This prevents cross-network tracking via probe request fingerprinting.",
       affectedAssets: [result.meta.hostname],
-      references: ["IEEE-802.11-11.1"],
+      references: ["NIST-W-1.1", "OWASP-IoT-6"],
     });
   }
 
@@ -41,7 +53,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Disable mDNS/Bonjour on devices that don't require local discovery. Use firewall rules to block mDNS (port 5353) egress.",
       affectedAssets: leaks.map((m) => m.host),
-      references: ["CIS-W-3.3"],
+      references: ["OWASP-IoT-6"],
     });
   }
 
@@ -58,7 +70,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enable DNS over HTTPS (DoH) or DNS over TLS (DoT) on the system resolver. Use a privacy-respecting DNS provider.",
       affectedAssets: result.network.dns.servers,
-      references: ["CIS-W-4.1", "NIST-800-153-3.3"],
+      references: ["CIS-W-4.3"],
     });
   }
 
@@ -91,7 +103,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Enforce HTTPS/TLS on all connections. Use browser extensions like HTTPS Everywhere. Block cleartext protocols at the firewall.",
       affectedAssets: flows.map((u) => `${u.dest}:${u.port}`),
-      references: ["CIS-W-3.2", "NIST-800-153-3.2"],
+      references: ["CIS-W-3.2", "OWASP-IoT-7"],
     });
   }
 
@@ -108,7 +120,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Identify the owner and purpose of each camera. Verify consent and data retention policies. Ensure cameras are not accessible from the internet.",
       affectedAssets: cameras.map((c) => c.ip),
-      references: ["OWASP-IoT-1"],
+      references: ["CIS-W-5.2"],
     });
   }
 
@@ -125,7 +137,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Physically identify each unknown device. Remove any that are not authorised. Implement network access control to prevent rogue devices.",
       affectedAssets: unknownDevices.map((d) => d.ip),
-      references: ["CIS-W-2.1"],
+      references: ["OWASP-IoT-8"],
     });
   }
 
@@ -145,7 +157,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Disable Wi-Fi scanning when not actively connecting. Review which applications have location permissions based on Wi-Fi.",
       affectedAssets: [result.meta.hostname],
-      references: ["IEEE-802.11-11.2"],
+      references: [],
     });
   }
 
@@ -162,7 +174,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Activate the VPN to encrypt all traffic and prevent ISP metadata collection. Choose a provider with a verified no-logs policy.",
       affectedAssets: [result.meta.hostname],
-      references: ["NIST-800-153-4.3"],
+      references: ["CIS-W-3.1"],
     });
   }
 
@@ -179,7 +191,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Bind services to 127.0.0.1 unless network access is explicitly needed. Review which processes genuinely need to be reachable.",
       affectedAssets: exposed.map((s) => `${s.bindAddress}:${s.port}`),
-      references: ["CIS-W-5.2"],
+      references: ["OWASP-IoT-3"],
     });
   }
 
@@ -197,7 +209,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
         recommendation:
           "Enable DNSSEC validation on the resolver. Use DoH/DoT to prevent query observation.",
         affectedAssets: [...new Set(nonSecure.map((q) => q.server))],
-        references: ["CIS-W-4.1"],
+        references: ["CIS-W-4.2"],
       });
     }
   }
@@ -215,7 +227,7 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Upgrade to WPA3 immediately. In the meantime, use a VPN to encrypt all traffic within the weak wireless link.",
       affectedAssets: [result.wifi.bssid, result.meta.hostname],
-      references: ["CIS-W-1.1", "IEEE-802.11-9.4"],
+      references: ["CIS-W-1.1", "IEEE-4.1"],
     });
   }
 
@@ -232,21 +244,11 @@ export function analyseAsPrivacy(result: NetworkScanResult): PersonaAnalysis {
       recommendation:
         "Request client isolation from the network administrator. Use a VPN as a compensating control.",
       affectedAssets: [result.meta.hostname],
-      references: ["CIS-W-2.3"],
+      references: ["CIS-W-1.3"],
     });
   }
 
-  const priorityActions = deriveActions(insights);
-
-  return {
-    persona: PERSONA_ID,
-    displayName: DISPLAY_NAME,
-    perspective: PERSPECTIVE,
-    riskRating: riskFromInsights(insights),
-    executiveSummary: buildSummary(insights),
-    insights,
-    priorityActions,
-  };
+  return buildPersonaAnalysis(privacySpec, insights, buildSummary(insights));
 }
 
 function buildSummary(insights: Insight[]): string {
@@ -269,34 +271,4 @@ function buildSummary(insights: Insight[]): string {
     return `The privacy posture has ${insights.length} finding(s) that could improve data minimisation and reduce the exposure surface. While no critical data leaks were identified, the current configuration reveals more information than necessary.`;
   }
   return `The privacy posture is strong. MAC randomisation, encrypted DNS, and VPN usage minimise the exposure surface. No significant tracking or data leak risks were identified.`;
-}
-
-function deriveActions(insights: Insight[]): string[] {
-  const actions: string[] = [];
-  const ids = new Set(insights.map((i) => i.id));
-
-  if (ids.has("pr-dns-intercepted"))
-    actions.push("Enable encrypted DNS (DoH/DoT) to stop DNS interception");
-  if (ids.has("pr-camera-surveillance"))
-    actions.push(
-      "Identify and verify consent for all detected surveillance cameras",
-    );
-  if (ids.has("pr-weak-wifi-privacy"))
-    actions.push(
-      "Upgrade Wi-Fi encryption to WPA3 or use a VPN as a compensating control",
-    );
-  if (ids.has("pr-mac-not-randomised"))
-    actions.push(
-      "Enable MAC address randomisation to prevent cross-network tracking",
-    );
-  if (ids.has("pr-dns-not-encrypted"))
-    actions.push("Switch to encrypted DNS to hide browsing activity from observers");
-  if (ids.has("pr-mdns-exposure"))
-    actions.push("Disable mDNS to stop broadcasting device information");
-  if (ids.has("pr-vpn-inactive"))
-    actions.push("Activate VPN to encrypt traffic and prevent ISP observation");
-  if (ids.has("pr-unencrypted-traffic"))
-    actions.push("Eliminate unencrypted traffic flows to prevent data exposure");
-
-  return actions.slice(0, 5);
 }
