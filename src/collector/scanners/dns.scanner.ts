@@ -14,6 +14,8 @@ export function randomHijackDomain(): string {
 }
 const CLOUDFLARE_DNS = "1.1.1.1";
 const TEST_DOMAIN = "google.com";
+/** A DNSSEC-signed zone: a validating resolver sets the AD flag on answers for it. */
+const DNSSEC_SIGNED_DOMAIN = "cloudflare.com";
 
 /**
  * Parse DNS server IPs from `scutil --dns` output.
@@ -50,14 +52,25 @@ function digShort(server: string, domain: string, type: string, extraFlags: stri
 }
 
 /**
- * Test DNSSEC: dig @server google.com A +dnssec +short
- * DNSSEC is considered supported if RRSIG records appear in the response.
+ * True when dig's header shows the AD (authenticated data) flag, i.e. the
+ * resolver validated the answer with DNSSEC.
+ * Header line: ";; flags: qr rd ra ad; QUERY: 1, ANSWER: 2, ..."
+ */
+export function hasAdFlag(digOutput: string): boolean {
+  const flags = /^;; flags:([^;\n]*);/m.exec(digOutput);
+  if (!flags) return false;
+  return flags[1].trim().split(/\s+/).includes("ad");
+}
+
+/**
+ * Test DNSSEC: query a signed zone with +dnssec and check the resolver sets
+ * the AD flag. An unsigned zone such as google.com never gets AD, so it
+ * cannot be used for this check.
  */
 function testDnssec(server: string): boolean {
-  const result = run("dig", ["@" + server, TEST_DOMAIN, "A", "+dnssec", "+short"]);
+  const result = run("dig", ["@" + server, DNSSEC_SIGNED_DOMAIN, "A", "+dnssec"]);
   if (result.exitCode !== 0) return false;
-  const lines = result.stdout.split("\n").filter((l) => l.trim().length > 0);
-  return lines.some((l) => /^A\s|RRSIG|^\S+\s+\d+\s+IN\s+RRSIG/i.test(l)) || lines.length > 1;
+  return hasAdFlag(result.stdout);
 }
 
 /**

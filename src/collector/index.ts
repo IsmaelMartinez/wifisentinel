@@ -23,6 +23,7 @@ import {
   recordToolResolution,
 } from "../telemetry/metrics.js";
 import { lookupVendor } from "./oui-lookup.js";
+import { normaliseMac } from "./mac.js";
 import { ScanEventEmitter } from "./scan-events.js";
 
 interface NetworkBootstrap {
@@ -66,7 +67,7 @@ function detectNetworkDarwin(): NetworkBootstrap {
   const macMatch = arpResult.stdout.match(
     /([0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2})/i
   );
-  const gatewayMac = macMatch?.[1] ?? "unknown";
+  const gatewayMac = macMatch ? normaliseMac(macMatch[1]) : "unknown";
 
   return {
     interface: "en0",
@@ -123,7 +124,7 @@ function detectNetworkLinux(): NetworkBootstrap {
   const macMatch = arpResult.stdout.match(
     /([0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2}:[0-9a-f]{1,2})/i
   );
-  const gatewayMac = macMatch?.[1] ?? "unknown";
+  const gatewayMac = macMatch ? normaliseMac(macMatch[1]) : "unknown";
 
   return {
     interface: iface,
@@ -213,7 +214,9 @@ export async function collectNetworkScan(
             emitter?.scannerComplete("dns", `${r.servers.length} servers, DNSSEC ${r.dnssecSupported ? "on" : "off"}`);
             return r;
           }),
-          withSpan("security-posture", {}, () => scanSecurityPosture()).then((r) => {
+          withSpan("security-posture", {}, () =>
+            scanSecurityPosture({ gatewayIp: bootstrap.gateway.ip, localIp: bootstrap.ip })
+          ).then((r) => {
             emitter?.scannerComplete("security", `firewall ${r.firewall.enabled ? "on" : "off"}, VPN ${r.vpn.active ? "active" : "inactive"}`);
             return r;
           }),
@@ -278,7 +281,7 @@ export async function collectNetworkScan(
           }
         }
 
-        // Emit port:found for each open port
+        // Emit port:found for each open port (hostPorts only carries open ports)
         for (const host of hosts) {
           for (const port of host.ports ?? []) {
             emitter?.portFound(host.ip, port.port, port.service);

@@ -2,10 +2,12 @@
 import type { StoredScan } from "../../store/types.js";
 import type { DeviceSession, DeviceTimeline, PresenceReport } from "./types.js";
 
-/** Normalise MAC addresses to lowercase colon-separated form for stable keys. */
-export function normaliseMac(mac: string): string {
-  return mac.toLowerCase().replace(/-/g, ":").trim();
-}
+import { normaliseMac } from "../../collector/mac.js";
+
+// Device keys use the collector's normalisation (lowercase, colon-separated,
+// zero-padded) so `0:1b:63:a:b:c` from macOS arp and `00:1b:63:0a:0b:0c`
+// from older or other-platform scans are the same device.
+export { normaliseMac };
 
 const MAC_OCTET = /^[0-9a-f]{1,2}$/;
 
@@ -16,9 +18,8 @@ const MAC_OCTET = /^[0-9a-f]{1,2}$/;
  * phone cannot read ARP), arp's "(incomplete)", and the broadcast/all-zero
  * addresses.
  *
- * Octets are allowed 1–2 hex digits: macOS/BSD `arp` prints them with the
- * leading zero stripped (e.g. `48:22:54:b:d0:90`) and `normaliseMac` doesn't
- * zero-pad, so a strict two-digit form would drop ~a third of real devices.
+ * Octets are allowed 1–2 hex digits so callers may pass raw macOS/BSD `arp`
+ * output (e.g. `48:22:54:b:d0:90`) as well as normalised MACs.
  * Broadcast/all-zero are rejected by value, independent of padding.
  */
 export function isTrackableMac(mac: string): boolean {
