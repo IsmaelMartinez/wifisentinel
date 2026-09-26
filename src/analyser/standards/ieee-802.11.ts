@@ -6,19 +6,18 @@ import {
   computeGrade,
   computeScore,
 } from "./types.js";
+import { wifiGeneration } from "./protocol.js";
 
 const STANDARD = "ieee-802.11" as const;
 
 function checkProtocolCompliance(result: NetworkScanResult): Finding {
-  const proto = result.wifi.protocol.toLowerCase();
-  const isAx = proto.includes("ax") || proto.includes("wifi 6") || proto.includes("802.11ax");
-  const isAc = proto.includes("ac") || proto.includes("wifi 5") || proto.includes("802.11ac");
-  const isN = proto.includes("n") || proto.includes("wifi 4") || proto.includes("802.11n");
+  // Wi-Fi 6 (ax) and 7 (be) pass; Wi-Fi 4/5 (n/ac) are partial; a/b/g fail.
+  const generation = wifiGeneration(result.wifi.protocol);
 
   let status: Finding["status"];
-  if (isAx) status = "pass";
-  else if (isAc) status = "partial";
-  else if (isN) status = "partial";
+  if (generation === undefined) status = "not-applicable";
+  else if (generation >= 6) status = "pass";
+  else if (generation >= 4) status = "partial";
   else status = "fail";
 
   return {
@@ -30,7 +29,7 @@ function checkProtocolCompliance(result: NetworkScanResult): Finding {
     description:
       "Modern 802.11ax (Wi-Fi 6) or 802.11ac (Wi-Fi 5) provides better performance, security, and spectrum efficiency.",
     recommendation:
-      status === "pass"
+      status === "pass" || status === "not-applicable"
         ? "No action needed."
         : "Upgrade to an 802.11ax (Wi-Fi 6) capable access point and client adapter.",
     evidence: `Protocol: ${result.wifi.protocol}`,

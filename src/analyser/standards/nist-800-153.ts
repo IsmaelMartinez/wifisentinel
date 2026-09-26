@@ -212,22 +212,22 @@ function checkIcmpRedirects(result: NetworkScanResult): Finding {
 }
 
 function checkLogging(result: NetworkScanResult): Finding {
-  const hasOtel = !!result.meta.toolchain["otel"];
-  const hasTshark = !!result.meta.toolchain["tshark"];
+  // Toolchain keys are capability names; packetAnalysis resolves to tshark or
+  // tcpdump, either of which can record traffic for forensic review.
+  const captureTool = result.meta.toolchain["packetAnalysis"] ?? null;
 
   return {
     id: "NIST-W-5.1",
     standard: STANDARD,
     title: "Security logging capability",
     severity: "medium",
-    status: hasOtel || hasTshark ? "pass" : "partial",
+    status: captureTool ? "pass" : "partial",
     description:
       "Comprehensive logging supports incident response and forensic analysis of security events.",
-    recommendation:
-      hasOtel || hasTshark
-        ? "No action needed — logging infrastructure is available."
-        : "Set up OTEL telemetry and traffic capture for comprehensive security logging.",
-    evidence: `OTEL: ${hasOtel ? "available" : "not available"}, tshark: ${hasTshark ? "available" : "not available"}`,
+    recommendation: captureTool
+      ? "No action needed — packet capture is available for security logging."
+      : "Install tshark or tcpdump so network traffic can be captured for security logging.",
+    evidence: `Packet capture tool: ${captureTool ?? "not available"}`,
   };
 }
 
