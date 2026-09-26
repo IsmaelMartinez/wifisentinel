@@ -46,7 +46,18 @@ describe("schedule", () => {
       { encoding: "utf-8" },
     ).trimEnd().split("\n");
     assert.deepEqual(argv, [awkward.nodePath, awkward.binaryPath]);
+    assert.ok(
+      line.includes(`${shellQuote(awkward.nodePath)} ${shellQuote(awkward.binaryPath)} scan --analyse`),
+      "node and binary paths are quoted in the command",
+    );
     assert.ok(line.includes(`2>> ${shellQuote(awkward.logPath)}`));
+  });
+
+  it("escapes % in cron paths so cron doesn't split the command", () => {
+    const line = buildCronLine({ ...awkward, binaryPath: "/home/a%b/dist/cli.js" });
+    assert.ok(line.includes("'/home/a\\%b/dist/cli.js'"), line);
+    // Every % in the line must be backslash-escaped.
+    assert.ok(!/(^|[^\\])%/.test(line), line);
   });
 
   it("rejects cron intervals that do not divide 24", () => {

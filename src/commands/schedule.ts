@@ -33,9 +33,18 @@ export function xmlEscape(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/** POSIX single-quote a value for a cron command line. */
+/** POSIX single-quote a value for a shell command line. */
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Shell-quote a value for a crontab command. Cron turns an unescaped `%` into
+ * a newline before the shell sees it (quotes don't help), so escape it as
+ * `\%`, which cron unescapes back to `%`.
+ */
+export function cronQuote(value: string): string {
+  return shellQuote(value).replace(/%/g, "\\%");
 }
 
 export interface ScheduleTarget {
@@ -83,7 +92,7 @@ export function buildCronLine(t: ScheduleTarget): string {
     );
   }
   const hours = n === 24 ? "0" : `*/${n}`;
-  return `0 ${hours} * * * ${shellQuote(t.nodePath)} ${shellQuote(t.binaryPath)} scan --analyse > /dev/null 2>> ${shellQuote(t.logPath)}`;
+  return `0 ${hours} * * * ${cronQuote(t.nodePath)} ${cronQuote(t.binaryPath)} scan --analyse > /dev/null 2>> ${cronQuote(t.logPath)}`;
 }
 
 function resolveTarget(intervalHours: number): ScheduleTarget {
