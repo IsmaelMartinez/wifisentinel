@@ -46,7 +46,7 @@
     "figures": "^6.1.0",
     "listr2": "^11.1.0",
     "log-update": "^8.0.0",
-    "oui-data": "^2.1.23",
+    "oui-data": "^2.1.29",
     "terminal-link": "^5.0.0",
     "zod": "^4.6.5"
   },
