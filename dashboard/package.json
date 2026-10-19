@@ -10,19 +10,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@radix-ui/react-tabs": "^1.2.0",
+    "@radix-ui/react-tabs": "^1.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",
     "d3-selection": "^3.0.0",
-    "geist": "^1.7.2",
-    "lucide-react": "^1.55.0",
-    "next": "^16.4.0",
+    "geist": "^1.8.1",
+    "lucide-react": "^1.58.0",
+    "next": "^16.4.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.7.0",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
