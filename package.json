@@ -34,10 +34,10 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.10.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.300.0",
-    "@opentelemetry/resources": "^3.0.0",
-    "@opentelemetry/sdk-metrics": "^3.0.0",
-    "@opentelemetry/sdk-node": "^0.300.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.301.0",
+    "@opentelemetry/resources": "^3.1.0",
+    "@opentelemetry/sdk-metrics": "^3.1.0",
+    "@opentelemetry/sdk-node": "^0.301.0",
     "@opentelemetry/sdk-trace": "^3.0.0",
     "@opentelemetry/semantic-conventions": "^1.44.0",
     "chalk": "^6.0.1",
@@ -46,7 +46,7 @@
     "figures": "^6.1.0",
     "listr2": "^11.4.0",
     "log-update": "^8.0.0",
-    "oui-data": "^2.1.50",
+    "oui-data": "^2.1.54",
     "terminal-link": "^5.0.0",
     "zod": "^4.6.7"
   },
